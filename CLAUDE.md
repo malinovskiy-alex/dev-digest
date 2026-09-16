@@ -66,6 +66,8 @@ Node >= 22.
 server → `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design`.
 client → `next-best-practices`, `react-best-practices`, `react-testing-library`.
 anywhere → `zod`, `typescript-expert`, `security`. docs → `mermaid-diagram`.
+end of a substantive task → `engineering-insights`, which files what you learned
+into the right `INSIGHTS.md`.
 
 ## Where to write what
 
@@ -78,3 +80,14 @@ anywhere → `zod`, `typescript-expert`, `security`. docs → `mermaid-diagram`.
 
 Never restate README content inside a `CLAUDE.md`. One fact, one home, links
 everywhere else.
+
+## Session protocol
+
+**Before you touch a package**, read its `INSIGHTS.md`. Treat what is there as
+high-confidence guidance unless this session proves otherwise — every entry is
+something that already cost someone time here.
+
+**When a task ends, run `/engineering-insights`.** It appends what this session
+learned to the `INSIGHTS.md` of the package you touched. Skip it only when the
+session taught you nothing worth a cold reader's time. Do not skip it because the
+task ran long.
