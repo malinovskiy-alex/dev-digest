@@ -6,7 +6,12 @@
  * + age, so it gets unit coverage independent of the route's queries.
  */
 import { describe, it, expect } from 'vitest';
-import { deriveReviewStatus, rollupSeverities, STALE_DAYS } from '../src/modules/pulls/status.js';
+import {
+  deriveReviewStatus,
+  latestCostByPr,
+  rollupSeverities,
+  STALE_DAYS,
+} from '../src/modules/pulls/status.js';
 
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 5, 11);
@@ -64,5 +69,31 @@ describe('rollupSeverities', () => {
 
   it('is all-zero for no findings', () => {
     expect(rollupSeverities([])).toEqual({ critical: 0, warning: 0, suggestion: 0 });
+  });
+});
+
+describe('latestCostByPr', () => {
+  it('takes the NEWEST run per PR (rows arrive newest-first)', () => {
+    const byPr = latestCostByPr([
+      { prId: 'pr-1', costUsd: 0.014 },
+      { prId: 'pr-1', costUsd: 0.9 },
+      { prId: 'pr-2', costUsd: 0.003 },
+    ]);
+    expect(byPr.get('pr-1')).toBe(0.014);
+    expect(byPr.get('pr-2')).toBe(0.003);
+  });
+
+  it('keeps an unknown price as null instead of falling through to an older run', () => {
+    const byPr = latestCostByPr([
+      { prId: 'pr-1', costUsd: null },
+      { prId: 'pr-1', costUsd: 0.5 },
+    ]);
+    expect(byPr.has('pr-1')).toBe(true);
+    expect(byPr.get('pr-1')).toBeNull();
+  });
+
+  it('omits a PR with no runs, so the list can render an em dash', () => {
+    expect(latestCostByPr([]).has('pr-1')).toBe(false);
+    expect(latestCostByPr([{ prId: null, costUsd: 0.1 }]).size).toBe(0);
   });
 });
