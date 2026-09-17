@@ -50,10 +50,24 @@ pnpm exec vitest run .it.test                     # integration, needs Docker
 - **Schema** lives in `src/db/schema/<domain>.ts`, re-exported by the
   `src/db/schema.ts` barrel. Every domain table carries `workspace_id` and every
   query scopes by it.
+
+## Naming
+
+- **Files are kebab-case**, named for what they do: `diff-loader.ts`,
+  `run-executor.ts`, `repository.ts`. `index.ts` is a barrel or a registry —
+  re-exports and wiring only, never business logic.
+- **A leading underscore marks a folder or file that is not a module surface**:
+  `src/modules/_shared/`, `src/db/schema/_shared.ts`. Nothing routes through
+  them.
+- **Schema files are one per domain**, named after it: `runs.ts`, `repos.ts`,
+  `repo-intel.ts`.
+- **Migrations keep the generated `NNNN_name.sql` form** and their order in
+  `meta/_journal.json`. Never rename or renumber one that has been applied.
 - **A test that touches Postgres must be named `*.it.test.ts`.** The suffix is
   what splits the suites and drives the two CI workflows; a DB test under any
   other name breaks the hermetic run. Integration tests start a real Postgres
-  via testcontainers and self-skip when Docker is absent.
+  via testcontainers and self-skip when Docker is absent. Everything else is
+  `*.test.ts`. Both live in `server/test/`, not beside the source.
 
 ## Do not touch
 
