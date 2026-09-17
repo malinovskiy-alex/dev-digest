@@ -41,19 +41,19 @@ those files are indexed copies, not source.
 
 ## Codebase Patterns
 
-### 2026-09-16 — a missing feature is often a revert, not a gap
-**Symptom:** per-run cost was specced as new work; it turned out to exist in
-full upstream — `ReviewOutcome.costUsd`, the `PriceBook`, OpenRouter's
-`usage.cost` — and to be dropped only at the last three hops.
-**Cause:** the starter is the finished product with features *removed*, so a
-lesson feature usually has an amputation commit behind it. Here it was
-`d45ab0d` ("feat(reviews): remove per-PR/run cost, keep model pricing"), whose
-migration `0009` dropped `agent_runs.cost_usd`.
-**Rule:** before planning a lesson feature, run
-`git log --all --oneline -S'<symbol>' -- <path>` and read the removal commit.
-It names exactly which layers to restore and which were deliberately kept, and
-it turns a green-field estimate into a targeted revert.
-**Where:** `server/src/db/migrations/0009_complex_runaways.sql`
+### 2026-09-16 — lesson features are built from scratch, never restored from history
+**Symptom:** a lesson feature can be finished quickly by finding the commit that
+removed it from the finished product and reverting it — per-run cost (L01) was
+planned that way off `d45ab0d`.
+**Cause:** the starter is the finished product with features taken out, so the
+removed implementation usually still sits in git history. But the course exists
+so the student builds each feature, and restoring it skips exactly the part the
+lesson is for.
+**Rule:** do not search git history for a removed implementation of the lesson
+feature, and do not revert or copy one. Design it from the lesson brief and the
+current code: read the modules it touches for conventions, then write the
+contract, schema, API and UI yourself.
+**Where:** `README.md` (*What you build in the course*)
 
 ### 2026-09-15 — `@devdigest/shared` exists in two physical copies
 **Symptom:** a contract change works in the API but the client still sends/reads
@@ -124,5 +124,5 @@ whole-file diff means you flipped the endings, not that you edited the file.
   protocol: read the file before touching a package, run the skill when a task
   ends.
 - 2026-09-16 — implemented L01 Run Cost Badge across shared contracts, server
-  and client. The plan came out of reading `d45ab0d` rather than the mockups
-  alone, which cut the work to a targeted revert plus one new PR-list column.
+  and client. The plan leaned on the removal commit `d45ab0d`; that approach is
+  now ruled out for lesson work (see *Codebase Patterns*).
