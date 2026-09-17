@@ -27,6 +27,21 @@ pnpm build
 
 ## Conventions
 
+- **Pages stay thin.** `page.tsx` composes and passes props; feature logic lives
+  in the colocated `_components/`.
+- **No `fetch` in a component.** Data goes through a hook in `src/lib/hooks/*`,
+  which calls `src/lib/api.ts`. Adding an endpoint means adding a hook.
+- **Server components by default.** Add the `use client` directive only for
+  state, effects or browser APIs, and push it as far down the tree as it goes.
+- **User-facing strings go through `next-intl`** (`messages/<locale>/*.json`),
+  never hardcoded into JSX.
+- **Cross-cutting chrome** — nav, breadcrumbs, `g`-then-key shortcuts — lives in
+  `src/components/app-shell`; extend it there rather than per page.
+- **Query by role, label or text, never by class or test id.** Real browser
+  journeys belong in [`../e2e`](../e2e/CLAUDE.md), not here.
+
+## Naming
+
 - **A component is a folder, not a file.** Follow this exactly:
   ```
   _components/<Name>/
@@ -39,19 +54,18 @@ pnpm build
   ```
   Import through `index.ts`, never a deep path. Not every folder needs every
   file — add one when it has content, and never inline it back afterwards.
-- **Pages stay thin.** `page.tsx` composes and passes props; feature logic lives
-  in the colocated `_components/`.
-- **No `fetch` in a component.** Data goes through a hook in `src/lib/hooks/*`,
-  which calls `src/lib/api.ts`. Adding an endpoint means adding a hook.
-- **Server components by default.** Add the `use client` directive only for
-  state, effects or browser APIs, and push it as far down the tree as it goes.
-- **User-facing strings go through `next-intl`** (`messages/<locale>/*.json`),
-  never hardcoded into JSX.
-- **Cross-cutting chrome** — nav, breadcrumbs, `g`-then-key shortcuts — lives in
-  `src/components/app-shell`; extend it there rather than per page.
-- **Tests** are `*.test.tsx` next to the component. Query by role, label or text,
-  never by class or test id. Real browser journeys belong in
-  [`../e2e`](../e2e/CLAUDE.md).
+- **PascalCase for a component, kebab-case for a shared folder.** Feature
+  components live in `_components/<PascalCase>/`; cross-cutting ones in
+  `src/components/<kebab-case>/` — but the component file inside is PascalCase
+  either way (`app-shell/AppShell.tsx`).
+- **The satellite files are always lowercase**: `constants.ts`, `helpers.ts`,
+  `styles.ts`, `index.ts`. Only the component and its test carry the name.
+- **A leading underscore means the folder is not a route.** `_components/` is a
+  Next.js private folder, excluded from routing — feature code goes there, never
+  beside `page.tsx`.
+- **Everything under `src/lib/` is kebab-case** and named for its subject:
+  `github-urls.ts`, `feature-models.ts`, `hooks/repo-intel.ts`.
+- **Tests are `*.test.tsx`, colocated** with the component they cover.
 
 ## Do not touch
 

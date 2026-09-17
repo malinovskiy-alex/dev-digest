@@ -39,12 +39,15 @@ one up front only if you are planning a change there.
 ./scripts/dev.sh     # Postgres (Docker) + API + web. Flags: --no-seed --no-client --db-only
 ```
 
-Every other command runs **from inside the package directory**, never the root.
-Node >= 22.
+`dev.sh` is a bash script and needs `docker` **on `PATH`** — it exits at line 37
+otherwise. On Windows run it from Git Bash, and if Docker Desktop did not add
+itself to `PATH`, add `/c/Program Files/Docker/Docker/resources/bin` first or
+bring the stack up by hand: `docker compose up -d`, then follow
+[server/CLAUDE.md](server/CLAUDE.md) and [client/CLAUDE.md](client/CLAUDE.md).
 
-- **`pnpm`** for `server/` and `client/` — they ship `pnpm-lock.yaml`.
-- `reviewer-core/` and `e2e/` still carry a starter `package-lock.json`. Do not
-  regenerate either lockfile as a side effect of an unrelated change.
+Every other command runs **from inside the package directory**, never the root.
+Node >= 22. **`pnpm`** for `server/` and `client/`; `reviewer-core/` and `e2e/`
+still carry a starter `package-lock.json`.
 
 ## Hard rules
 
@@ -57,6 +60,10 @@ Node >= 22.
   `~/.devdigest/secrets.json` (mode `0600`) behind `SecretsProvider`.
 - **Migrations are not applied on boot.** Run `pnpm db:migrate` yourself.
 - **Docker runs Postgres only.** API and web run on the host.
+- **Never regenerate a lockfile as a side effect.** All four are committed and
+  load-bearing: `server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`,
+  `reviewer-core/package-lock.json`, `e2e/package-lock.json`. A lockfile changes
+  only in a commit whose subject is that dependency change.
 - **An empty table is intentional.** The schema already contains every table the
   finished product needs, including ones no starter code touches.
 - Host is Windows: prefer the Bash tool for POSIX scripts, PowerShell otherwise.

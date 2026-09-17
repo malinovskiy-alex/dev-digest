@@ -35,15 +35,23 @@ pnpm typecheck
 - **`wait` *is* the assertion** — it exits non-zero on timeout, which fails the
   step and the flow. Add an `assert` with `stdoutIncludes` only when you need an
   extra substring check on top of that.
-- **A flow is data, not code.** Numbered `specs/NN-name.flow.json`, run in order
-  against one shared browser session. Keep every step labelled — the label is
-  what a failing CI log shows.
+- **A flow is data, not code.** Flows run in order against one shared browser
+  session. Keep every step labelled — the label is what a failing CI log shows.
 - **Preconditions matter.** Flow `02` follows the home redirect to the *first*
   repo, so the suite assumes a freshly seeded DB holding only the demo repo. CI
   guarantees that; locally, reseed before blaming a failure.
 - Prefer extending an existing flow over adding a near-duplicate. The suite is a
   smoke net, not exhaustive coverage — component-level behaviour belongs in
   [`../client`](../client/CLAUDE.md) tests.
+
+## Naming
+
+- **A flow is `specs/NN-name.flow.json`** — two digits, zero-padded, kebab-case
+  name: `02-repo-pulls-detail.flow.json`. The number is the run order, so a new
+  flow takes the next free one rather than squeezing between two existing flows.
+- **A plan is `specs/*.md`**, alongside the flows it describes.
+- **Step labels are prose, not ids.** They are the only thing a failing CI log
+  shows, so write what the step is doing.
 
 ## Where things live
 

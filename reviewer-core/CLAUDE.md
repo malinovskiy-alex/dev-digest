@@ -55,6 +55,25 @@ pnpm typecheck   # doubles as the build; this package emits no JS
 - Anything expensive and per-chunk goes after `input.checkCancelled?.()`. The
   engine stays agnostic about which cancellation error type the caller throws.
 
+## Naming
+
+- **Files are kebab-case and named for the stage they implement**, not for a
+  pattern: `grounding.ts`, `prompt.ts`, `review/reduce.ts`,
+  `output/to-review.ts`.
+  No `utils.ts`, no `helpers.ts` — if a file needs that name, the stage it
+  belongs to has not been identified yet.
+- **A folder appears only when a stage has more than one file**: `llm/`,
+  `review/`, `output/`. Everything else stays flat at `src/`.
+- **A provider is named after the provider**: `llm/openrouter.ts`. The interface
+  it satisfies lives in `@devdigest/shared`, never here.
+- **`src/index.ts` is the public surface** and holds nothing but re-exports.
+  Anything not exported there is internal, whatever its path.
+- **Tests live in `test/`, not beside the source**, and are named after what
+  they cover: `test/prompt.test.ts`, `test/run.test.ts`,
+  `test/to-review.test.ts`.
+  There is no integration suffix here — the package does no I/O, so every
+  test is hermetic.
+
 ## Where things live
 
 - orchestration, strategy choice → `src/review/run.ts`
