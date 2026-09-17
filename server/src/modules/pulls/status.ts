@@ -53,3 +53,24 @@ export function deriveReviewStatus(args: {
   if (updatedAt && now - updatedAt.getTime() > staleMs) return 'stale';
   return 'reviewed';
 }
+
+/**
+ * Cost of the LATEST completed run per PR, for the list's Cost column.
+ *
+ * `rows` must be newest-first (the caller orders by `ran_at desc`), so the first
+ * row seen for a PR wins — the same one-query + JS-grouping shape the list's
+ * score rollup uses. Only completed runs are passed in, so a failed retry never
+ * blanks a PR that has a good earlier run. A `null` cost stays `null` (unknown
+ * model price is unknown, not free) and still claims the PR, because the run it
+ * belongs to IS the latest one.
+ */
+export function latestCostByPr(
+  rows: { prId: string | null; costUsd: number | null }[],
+): Map<string, number | null> {
+  const byPr = new Map<string, number | null>();
+  for (const r of rows) {
+    if (!r.prId || byPr.has(r.prId)) continue;
+    byPr.set(r.prId, r.costUsd);
+  }
+  return byPr;
+}

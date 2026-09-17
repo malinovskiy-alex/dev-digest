@@ -7,7 +7,7 @@ import * as t from '../../db/schema.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { deriveReviewStatus } from './status.js';
+import { deriveReviewStatus, latestCostByPr } from './status.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -129,6 +129,21 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
+    // Latest COMPLETED run per PR for the list's Cost column. Same shape as the
+    // score rollup above: one IN-query, newest-first, grouped in JS. Only
+    // status='done' rows, so a later failed retry never blanks a PR whose
+    // earlier run did produce a cost.
+    const costByPr =
+      prIds.length > 0
+        ? latestCostByPr(
+            await container.db
+              .select({ prId: t.agentRuns.prId, costUsd: t.agentRuns.costUsd })
+              .from(t.agentRuns)
+              .where(and(inArray(t.agentRuns.prId, prIds), eq(t.agentRuns.status, 'done')))
+              .orderBy(desc(t.agentRuns.ranAt)),
+          )
+        : new Map<string, number | null>();
+
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
@@ -153,6 +168,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        cost_usd: costByPr.get(r.id) ?? null,
       };
     });
   });
