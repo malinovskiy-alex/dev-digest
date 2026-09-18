@@ -1,4 +1,4 @@
-import type { PrStatus } from '@devdigest/shared';
+import type { PrStatus, SeverityCounts } from '@devdigest/shared';
 
 /**
  * PR-list rollup helpers (pure — no DB / `this`, so they unit-test cleanly).
@@ -13,19 +13,27 @@ import type { PrStatus } from '@devdigest/shared';
 /** Open PRs whose current head was reviewed but untouched this long read "stale". */
 export const STALE_DAYS = 7;
 
-export interface SeverityCounts {
-  critical: number;
-  warning: number;
-  suggestion: number;
-}
+/** A PR with no review at all — the list still sends an object, never null. */
+export const EMPTY_SEVERITY_COUNTS: SeverityCounts = {
+  CRITICAL: 0,
+  WARNING: 0,
+  SUGGESTION: 0,
+};
 
-/** Tally finding severities (CRITICAL / WARNING / SUGGESTION) for one review. */
+/**
+ * Tally finding severities (CRITICAL / WARNING / SUGGESTION) for one review.
+ *
+ * Keys match the `Severity` enum verbatim so the client can index by severity
+ * without a mapping table. The explicit three-way check (rather than a dynamic
+ * key bump) is what makes an unknown severity from an older row fall on the
+ * floor instead of inventing a bucket.
+ */
 export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
-  const c: SeverityCounts = { critical: 0, warning: 0, suggestion: 0 };
+  const c: SeverityCounts = { ...EMPTY_SEVERITY_COUNTS };
   for (const r of rows) {
-    if (r.severity === 'CRITICAL') c.critical += 1;
-    else if (r.severity === 'WARNING') c.warning += 1;
-    else if (r.severity === 'SUGGESTION') c.suggestion += 1;
+    if (r.severity === 'CRITICAL') c.CRITICAL += 1;
+    else if (r.severity === 'WARNING') c.WARNING += 1;
+    else if (r.severity === 'SUGGESTION') c.SUGGESTION += 1;
   }
   return c;
 }

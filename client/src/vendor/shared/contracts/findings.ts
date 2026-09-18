@@ -26,6 +26,18 @@ export type FindingKind = z.infer<typeof FindingKind>;
 export const Verdict = z.enum(['request_changes', 'approve', 'comment']);
 export type Verdict = z.infer<typeof Verdict>;
 
+/**
+ * Per-severity findings tally. The keys are the `Severity` enum values verbatim
+ * so a consumer can index by severity without a mapping table. Always all three
+ * keys — an absent severity is a 0, never a missing key.
+ */
+export const SeverityCounts = z.object({
+  CRITICAL: z.number().int(),
+  WARNING: z.number().int(),
+  SUGGESTION: z.number().int(),
+});
+export type SeverityCounts = z.infer<typeof SeverityCounts>;
+
 export const TrifectaComponent = z.enum([
   'private_data_access',
   'untrusted_input',

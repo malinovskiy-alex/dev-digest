@@ -125,6 +125,15 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     const first = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
     expect(first.statusCode).toBe(200);
     expect(first.json().length).toBeGreaterThan(0);
+    // Every row carries the latest review's severity tally for the list's
+    // Findings column — all-zero for a PR nothing has reviewed yet.
+    for (const pr of first.json()) {
+      expect(pr.findings).toEqual({
+        CRITICAL: expect.any(Number),
+        WARNING: expect.any(Number),
+        SUGGESTION: expect.any(Number),
+      });
+    }
     // import again → still idempotent (unique repo_id+number)
     const second = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
     expect(second.json().length).toBe(first.json().length);
