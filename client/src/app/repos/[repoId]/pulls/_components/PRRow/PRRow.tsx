@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
 import { RunCostBadge } from "@/components/run-cost-badge";
-import { SeverityChips } from "@/components/severity-chips";
+import { FindingsCell } from "../FindingsCell";
 import type { PrMeta } from "@/lib/types";
 import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
@@ -56,7 +56,7 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         )}
       </div>
       <div style={s.findingsCell}>
-        <SeverityChips counts={pr.findings} emptyFallback={<span style={s.muted}>—</span>} />
+        <FindingsCell pr={pr} />
       </div>
       <div>
         <Badge dot color={st.c} bg="transparent">

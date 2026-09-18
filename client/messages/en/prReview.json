@@ -96,6 +96,12 @@
       "cost": "Cost",
       "updated": "Updated"
     },
+    "findingsPopover": {
+      "title": "{count} findings in this run",
+      "empty": "No findings in the latest run.",
+      "error": "Couldn’t load findings.",
+      "more": "+{count} more"
+    },
     "filesCount": "{count} files",
     "errorTitle": "Couldn’t load pull requests",
     "errorBody": "The engine returned an error.",
