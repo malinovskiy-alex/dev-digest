@@ -36,10 +36,13 @@ function run(o: Partial<RunSummary>): RunSummary {
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function renderRuns(
+  runs: RunSummary[],
+  severityByRun?: Record<string, Partial<Record<"CRITICAL" | "WARNING" | "SUGGESTION", number>>>,
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages, common }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} severityByRun={severityByRun} onOpenTrace={() => {}} />
     </NextIntlClientProvider>,
   );
 }
@@ -88,5 +91,32 @@ describe("RunHistory — run cost", () => {
     renderRuns([run({ status: "failed", error: "429 quota", score: null, blockers: null })]);
     expect(screen.queryByText(/tok/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — severity chips", () => {
+  it("splits a settled run's findings by severity, keeping the blocker count", () => {
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 2, score: 38 })], {
+      "run-1": { CRITICAL: 2, WARNING: 1 },
+    });
+    expect(screen.getByTitle("2 Critical")).toBeInTheDocument();
+    expect(screen.getByTitle("1 Warning")).toBeInTheDocument();
+    expect(screen.getByText(/2 blockers/)).toBeInTheDocument();
+  });
+
+  it("the chips are a read-out, not a control", () => {
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 0 })], {
+      "run-1": { CRITICAL: 3 },
+    });
+    // The only buttons on a timeline row are the agent name and the icon
+    // actions — never a severity chip.
+    expect(
+      screen.queryAllByRole("button").some((b) => b.getAttribute("aria-pressed") !== null),
+    ).toBe(false);
+  });
+
+  it("falls back to the plain count for a run whose review was deleted", () => {
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 0 })]);
+    expect(screen.getByText(/3 finding/)).toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 import { RunCostBadge } from "@/components/run-cost-badge";
+import { SeverityChips, type SeverityCountMap } from "@/components/severity-chips";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -48,6 +49,14 @@ const rowStyle: React.CSSProperties = {
   textAlign: "left",
 };
 
+const findingsLineStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  color: "var(--text-muted)",
+};
+
 const iconBtnStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -88,12 +97,18 @@ function tsOf(s: string | null | undefined): number {
 export function RunHistory({
   runs,
   commits = [],
+  severityByRun,
   onOpenTrace,
   onGoToReview,
   onDelete,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
+  /** Severity tally per run id, derived from the reviews this tab already
+   *  holds. A run whose review row was deleted has no entry and falls back to
+   *  the plain finding count. Read-only here — the timeline shows, the run card
+   *  below is where you filter. */
+  severityByRun?: Record<string, SeverityCountMap>;
   /** Open the trace + log drawer for a run (the logs icon). */
   onOpenTrace: (runId: string) => void;
   /** Jump to this run's inline review accordion below (clicking the agent name). */
@@ -190,8 +205,11 @@ export function RunHistory({
                 </div>
               )}
               {settled && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {t("runStatus.findings", { count: r.findings_count ?? 0 })}
+                <div style={findingsLineStyle}>
+                  <SeverityChips
+                    counts={severityByRun?.[r.run_id]}
+                    emptyFallback={t("runStatus.findings", { count: r.findings_count ?? 0 })}
+                  />
                   {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
                 </div>
               )}
