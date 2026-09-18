@@ -17,7 +17,7 @@ Docker, and `server-unit.yml` fails on a machine without it.
 **Cause:** the suites are split purely by filename; a test importing
 `test/helpers/pg.ts` under the wrong suffix lands in the unit set.
 **Rule:** anything touching Postgres is `*.it.test.ts`. No exceptions.
-**Where:** `server/README.md`, `.github/workflows/server-unit.yml`
+**Where:** `server/README.md:137`, `.github/workflows/server-unit.yml:98`
 
 ### 2026-09-15 — two API processes on one database fight over run reaping
 **Symptom:** with two API processes on one database, a live run on process A is
@@ -26,7 +26,7 @@ marked failed when process B boots.
 process has no in-flight runs of its own.
 **Rule:** one API per database. Multiple replicas would need heartbeats or
 per-instance scoping first.
-**Where:** `server/src/app.ts`
+**Where:** `server/src/app.ts:75` (the run reaper)
 
 ## Codebase Patterns
 
@@ -41,8 +41,8 @@ number and excludes `dismissed_at`.
 **Rule:** do not "fix" one into the other. If you change either definition, change
 the comment at the other so the next reader finds the disagreement explained
 rather than discovered.
-**Where:** `server/src/modules/pulls/routes.ts` (the severity rollup),
-`client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx`
+**Where:** `server/src/modules/pulls/routes.ts:162` (the severity rollup),
+`client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:56`
 
 ### 2026-09-16 — the PR list shows only the 50 most recently updated PRs
 **Symptom:** a repo with 12 open PRs on GitHub lists 6 of them; the missing ones
@@ -53,14 +53,14 @@ recently closed PRs, the closed ones fill the page and push older open PRs off i
 **Rule:** do not read a missing PR as a sync failure — compare its `updated_at`
 with the oldest PR on page one first. Anything that needs every open PR must
 fetch `state: 'open'` separately, with pagination.
-**Where:** `server/src/adapters/github/octokit.ts` (`listPullRequests`)
+**Where:** `server/src/adapters/github/octokit.ts:36` (`listPullRequests`)
 
 ### 2026-09-15 — modules are encapsulated, so registration order decides behaviour
 **Symptom:** a route ignores the rate limit or misses a security header.
 **Cause:** Fastify plugin encapsulation — a module registered before helmet /
 cors / rate-limit / the error handler does not inherit them.
 **Rule:** anything cross-cutting registers in `buildApp()` above the module loop.
-**Where:** `server/src/app.ts`
+**Where:** `server/src/app.ts:89` (helmet / cors / rate-limit registration)
 
 ## Tool & Library Notes
 
@@ -79,7 +79,7 @@ without PRs.
 **Rule:** on an empty PR list, check the API log for `GitHub PR sync skipped`
 before anything else. The fix is a fresh token in Settings (written to
 `~/.devdigest/secrets.json`); no restart needed, the next list request syncs.
-**Where:** `server/src/modules/pulls/routes.ts` (`GET /repos/:id/pulls`)
+**Where:** `server/src/modules/pulls/routes.ts:37` (`GET /repos/:id/pulls`)
 
 ## Open Questions
 

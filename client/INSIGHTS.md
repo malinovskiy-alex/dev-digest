@@ -14,7 +14,8 @@ breaks every import assumption and makes the diff noisy for reviewers.
 `<Name>.tsx` + `constants.ts` + `helpers.ts` + `styles.ts` + `index.ts` and a
 colocated test. Consistency here is deliberate, not incidental.
 **Rule:** copy the shape of a neighbouring folder before writing anything new.
-**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/`
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/FindingCard.tsx:26`
+and the five sibling files beside it
 
 ## What Doesn't Work
 
@@ -27,7 +28,7 @@ a code review talks about.
 **Rule:** when flattening a finding's `rationale` for display, strip `*` and `~`,
 strip `>` and `#` only at the start of a line, and leave `_` alone. Underscore
 emphasis is rare in these rationales; mangled identifiers are not.
-**Where:** `client/src/lib/finding-format.ts` (`shortRationale`)
+**Where:** `client/src/lib/finding-format.ts:27` (`shortRationale`)
 
 ### 2026-09-16 — a shared component's `common` strings break colocated tests silently
 **Symptom:** after `RunCostBadge` (which calls `useTranslations("common")`) was
@@ -42,8 +43,8 @@ component that renders wrongly.
 namespace, add that namespace to every existing test provider that renders it,
 and assert the rendered string — a passing suite is not evidence here. Watch
 the stderr of `pnpm test`, not just its exit code.
-**Where:** `client/src/components/run-cost-badge/RunCostBadge.tsx`,
-`client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.test.tsx`
+**Where:** `client/src/components/run-cost-badge/RunCostBadge.tsx:30`,
+`client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.test.tsx:44`
 
 ## Codebase Patterns
 
@@ -61,8 +62,8 @@ are all in-tree fixed. Two consequences to handle: close the overlay on `scroll`
 (capture) and `resize`, since a captured rect goes stale; and if anyone ever adds
 a `transform` to a wrapper (a page transition would), fixed overlays inside
 `tableCard` start being clipped again.
-**Where:** `client/src/app/repos/[repoId]/pulls/_components/FindingsPopover/helpers.ts`
-(`panelPosition`), `client/src/app/repos/[repoId]/pulls/styles.ts` (`tableCard`)
+**Where:** `client/src/app/repos/[repoId]/pulls/_components/FindingsPopover/helpers.ts:32`
+(`panelPosition`), `client/src/app/repos/[repoId]/pulls/styles.ts:90` (`tableCard`)
 
 ### 2026-09-17 — a count shown above a filtered list must be taken mid-pipeline
 **Symptom:** with "Hide low confidence" on, the severity pill read `3 WARNING`
@@ -75,7 +76,7 @@ rendered below it, so it has to be counted from the same array. For the same
 reason the active severity is *derived* (`counts[sev] > 0 ? sev : null`) rather
 than stored — hiding low confidence can empty the bucket a stored filter points
 at, stranding the panel on an empty list.
-**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/FindingsPanel.tsx`
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/FindingsPanel.tsx:43`
 
 ### 2026-09-15 — `src/vendor/shared` is a copy, not a link
 **Symptom:** the API returns a field the client types say does not exist.
@@ -83,7 +84,7 @@ at, stranding the panel on an empty list.
 `paths`; nothing keeps the two trees in sync automatically.
 **Rule:** mirror every contract edit into `server/src/vendor/shared` and
 typecheck both packages.
-**Where:** `client/tsconfig.json`
+**Where:** `client/tsconfig.json:22` (`paths`)
 
 ## Tool & Library Notes
 
@@ -97,8 +98,8 @@ test file to collect with `Failed to resolve import`.
 — it would rewrite `client/pnpm-lock.yaml`, and the repo rule is that a lockfile
 changes only in a commit whose subject is that dependency change. For hover
 timing use `vi.useFakeTimers()` + `act(() => vi.advanceTimersByTime(ms))`.
-**Where:** `client/package.json`,
-`client/src/app/repos/[repoId]/pulls/_components/FindingsCell/FindingsCell.test.tsx`
+**Where:** `client/package.json:28`,
+`client/src/app/repos/[repoId]/pulls/_components/FindingsCell/FindingsCell.test.tsx:21`
 
 ## Recurring Errors & Fixes
 
@@ -114,7 +115,7 @@ the shorthand/longhand mix React warns about — the existing comment claiming
 **Rule:** when a style object needs one side to differ, write all four sides
 (`borderTopColor`/`borderRightColor`/`borderBottomColor`/`borderLeftColor`), never
 `borderColor` plus one side. Same for width.
-**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/styles.ts`
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/styles.ts:15`
 
 ## Open Questions
 

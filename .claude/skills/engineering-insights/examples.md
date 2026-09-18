@@ -44,7 +44,7 @@ on: a function, a threshold, a file, a command.
 fresh process has no in-flight runs of its own to compare against.
 **Rule:** one API per database. Replicas would need heartbeats or per-instance
 scoping first — do not scale this out without adding them.
-**Where:** `server/src/app.ts`
+**Where:** `server/src/app.ts:41` (`buildApp`)
 ```
 
 Note what makes it work: the failure is reproducible from the entry alone, and
@@ -60,7 +60,7 @@ or none at all.
 intersect a diff hunk for that file. Each drop is reported through `onEvent` and
 lands in the run trace.
 **Rule:** read the run trace before touching the prompt or switching models.
-**Where:** `reviewer-core/src/grounding.ts`
+**Where:** `reviewer-core/src/grounding.ts:18`
 ```
 
 This is the highest-value entry shape in the file: it redirects a debugging
@@ -92,7 +92,7 @@ old shape, with no type error anywhere.
 `client/src/vendor/shared/` are separate trees, each aliased to the same specifier
 by its own tsconfig `paths`.
 **Rule:** edit both copies in the same commit and typecheck both packages.
-**Where:** `server/tsconfig.json`, `client/tsconfig.json`
+**Where:** `server/tsconfig.json:21`, `client/tsconfig.json:22` (`paths`)
 ```
 
 The `Cause:` explains why an obvious-looking "fix" (make it a workspace package)
@@ -108,7 +108,7 @@ assumption and makes the diff unreviewable.
 `<Name>.tsx` + `constants.ts` + `helpers.ts` + `styles.ts` + `index.ts` plus a
 colocated test. The uniformity is deliberate.
 **Rule:** copy the shape of the nearest sibling folder, then fill it in.
-**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/`
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/FindingCard.tsx:26`
 ```
 
 ### Open Questions
