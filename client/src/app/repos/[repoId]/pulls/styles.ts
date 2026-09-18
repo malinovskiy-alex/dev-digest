@@ -107,6 +107,11 @@ export const s = {
     color: "var(--text-muted)",
     textTransform: "uppercase",
   } satisfies CSSProperties,
+  findingsCell: {
+    display: "flex",
+    alignItems: "center",
+    minWidth: 0,
+  } satisfies CSSProperties,
   headCell: (alignRight: boolean): CSSProperties => ({
     textAlign: alignRight ? "right" : "left",
   }),
