@@ -30,6 +30,20 @@ per-instance scoping first.
 
 ## Codebase Patterns
 
+### 2026-09-17 — the PR list's findings tally and a run's `blockers` count differently
+**Symptom:** a PR shows `1 CRITICAL` in the list's Findings column while its run
+row reports `0 blockers`, and the two look like they should agree.
+**Cause:** they are different metrics. `PrMeta.findings` (via `rollupSeverities`)
+counts every finding of the latest review, dismissed ones included, because the
+PR detail page still renders a dismissed finding — greyed, but present — and the
+column has to match what the reader will see. `agent_runs.blockers` is a CI-gate
+number and excludes `dismissed_at`.
+**Rule:** do not "fix" one into the other. If you change either definition, change
+the comment at the other so the next reader finds the disagreement explained
+rather than discovered.
+**Where:** `server/src/modules/pulls/routes.ts` (the severity rollup),
+`client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx`
+
 ### 2026-09-16 — the PR list shows only the 50 most recently updated PRs
 **Symptom:** a repo with 12 open PRs on GitHub lists 6 of them; the missing ones
 are the open PRs updated longest ago.
@@ -76,3 +90,8 @@ before anything else. The fix is a fresh token in Settings (written to
 - 2026-09-16 — per-run cost (L01): `agent_runs.cost_usd` via migration `0010`,
   served on the runs list, the trace and the PR list. Also priced the current
   Anthropic models in `adapters/llm/pricing.ts`.
+- 2026-09-17 — findings by severity (L02): `PrMeta.findings` on
+  `GET /repos/:id/pulls`, rolled up by the previously dead `rollupSeverities`,
+  whose keys moved to the `Severity` enum casing. Third "latest per PR" rollup in
+  that route, after score and cost — all three share the one-IN-query + JS
+  grouping shape.

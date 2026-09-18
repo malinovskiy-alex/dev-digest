@@ -18,6 +18,17 @@ colocated test. Consistency here is deliberate, not incidental.
 
 ## What Doesn't Work
 
+### 2026-09-17 — stripping markdown emphasis mangles the identifiers in a finding
+**Symptom:** the PR-list hover preview rendered `sk_live_` as `sklive` and
+`__dirname` as `dirname`, so the preview named a symbol that does not exist.
+**Cause:** the flattener stripped `[*_~>#]` wholesale to remove emphasis markers.
+Underscore is a markdown emphasis character, but it is also half the identifiers
+a code review talks about.
+**Rule:** when flattening a finding's `rationale` for display, strip `*` and `~`,
+strip `>` and `#` only at the start of a line, and leave `_` alone. Underscore
+emphasis is rare in these rationales; mangled identifiers are not.
+**Where:** `client/src/lib/finding-format.ts` (`shortRationale`)
+
 ### 2026-09-16 — a shared component's `common` strings break colocated tests silently
 **Symptom:** after `RunCostBadge` (which calls `useTranslations("common")`) was
 dropped into the timeline row, `RunHistory.test.tsx` still passed — while
@@ -36,6 +47,36 @@ the stderr of `pnpm test`, not just its exit code.
 
 ## Codebase Patterns
 
+### 2026-09-17 — overlays are in-tree `position: fixed`; there is no portal anywhere
+**Symptom:** an absolutely-positioned panel inside a PR-list row is clipped — the
+list's `s.tableCard` sets `overflow: hidden`.
+**Cause:** `overflow` clips absolutely-positioned descendants, but not fixed ones:
+a fixed element's containing block is the viewport unless an ancestor sets
+`transform` / `filter` / `perspective` / `will-change` / `contain`. Nothing on
+this page does.
+**Rule:** position an overlay `fixed` from the trigger's `getBoundingClientRect()`
+rather than reaching for `createPortal` — `grep -rn createPortal client/src`
+returns nothing, and `lib/toast.tsx`, `vendor/ui/kit/Drawer.tsx` and `Modal.tsx`
+are all in-tree fixed. Two consequences to handle: close the overlay on `scroll`
+(capture) and `resize`, since a captured rect goes stale; and if anyone ever adds
+a `transform` to a wrapper (a page transition would), fixed overlays inside
+`tableCard` start being clipped again.
+**Where:** `client/src/app/repos/[repoId]/pulls/_components/FindingsPopover/helpers.ts`
+(`panelPosition`), `client/src/app/repos/[repoId]/pulls/styles.ts` (`tableCard`)
+
+### 2026-09-17 — a count shown above a filtered list must be taken mid-pipeline
+**Symptom:** with "Hide low confidence" on, the severity pill read `3 WARNING`
+above a single warning card.
+**Cause:** the tally was computed from the raw `findings` prop, while the cards
+below came from `visibleFindings(findings, hideLow)`.
+**Rule:** in `FindingsPanel` the order is fixed: confidence filter →
+`countBySeverity` → severity filter. The pill's number is a promise about what is
+rendered below it, so it has to be counted from the same array. For the same
+reason the active severity is *derived* (`counts[sev] > 0 ? sev : null`) rather
+than stored — hiding low confidence can empty the bucket a stored filter points
+at, stranding the panel on an empty list.
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/FindingsPanel.tsx`
+
 ### 2026-09-15 — `src/vendor/shared` is a copy, not a link
 **Symptom:** the API returns a field the client types say does not exist.
 **Cause:** the contracts are vendored per package and aliased by tsconfig
@@ -46,11 +87,34 @@ typecheck both packages.
 
 ## Tool & Library Notes
 
-*(nothing yet)*
+### 2026-09-17 — there is no `@testing-library/user-event`; use `fireEvent`
+**Symptom:** `import userEvent from "@testing-library/user-event"` fails the whole
+test file to collect with `Failed to resolve import`.
+**Cause:** the client only has `@testing-library/react` and
+`@testing-library/jest-dom`. Every existing interaction test drives the DOM with
+`fireEvent` (`FindingCard.test.tsx`, `RunTraceDrawer.test.tsx`).
+**Rule:** reach for `fireEvent`, not `userEvent`. Installing it is not a shortcut
+— it would rewrite `client/pnpm-lock.yaml`, and the repo rule is that a lockfile
+changes only in a commit whose subject is that dependency change. For hover
+timing use `vi.useFakeTimers()` + `act(() => vi.advanceTimersByTime(ms))`.
+**Where:** `client/package.json`,
+`client/src/app/repos/[repoId]/pulls/_components/FindingsCell/FindingsCell.test.tsx`
 
 ## Recurring Errors & Fixes
 
-*(nothing yet)*
+### 2026-09-17 — "Updating a style property during rerender (borderColor)"
+**Symptom:** React logs `Updating a style property during rerender (borderColor)
+when a conflicting property is set (borderLeftColor)` to **stderr** while the
+suite stays green. It only appears once something rerenders the component with a
+changed value, so it can sit latent for months.
+**Cause:** `borderColor` and `borderWidth` are themselves shorthands over the four
+sides. Pairing either with a `borderLeft*` longhand in the same style object is
+the shorthand/longhand mix React warns about — the existing comment claiming
+"all-longhand" was wrong.
+**Rule:** when a style object needs one side to differ, write all four sides
+(`borderTopColor`/`borderRightColor`/`borderBottomColor`/`borderLeftColor`), never
+`borderColor` plus one side. Same for width.
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/styles.ts`
 
 ## Open Questions
 
@@ -61,3 +125,9 @@ typecheck both packages.
 - 2026-09-16 — added the Cost column to the PR list, tokens+cost to the
   timeline row and the COST tile back to the run trace (L01). One shared
   component, `src/components/run-cost-badge/`, plus `src/lib/format-cost.ts`.
+- 2026-09-17 — findings by severity (L02): shared `src/components/severity-chips/`
+  drives three surfaces — the PR list's Findings column, the timeline tiles and a
+  clickable filter row in the expanded run card. Plus a hand-built hover popover
+  (`FindingsCell` + `FindingsPopover` + `FindingPreview`) and `lib/finding-format.ts`.
+  The finding action label is now "Reject"; the action kind behind it is still
+  `dismiss`.
