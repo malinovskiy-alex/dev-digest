@@ -15,7 +15,7 @@ import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import {
   deriveReviewStatus,
-  latestCostByPr,
+  totalCostByPr,
   rollupSeverities,
   EMPTY_SEVERITY_COUNTS,
 } from './status.js';
@@ -143,13 +143,14 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
-    // Latest COMPLETED run per PR for the list's Cost column. Same shape as the
-    // score rollup above: one IN-query, newest-first, grouped in JS. Only
-    // status='done' rows, so a later failed retry never blanks a PR whose
-    // earlier run did produce a cost.
+    // TOTAL cost of a PR's completed runs, for the list's Cost column. Same
+    // shape as the score rollup above: one IN-query grouped in JS. Only
+    // status='done' rows, so a failed attempt never adds to the bill. The
+    // column is what reviewing this PR has cost in total, not what the last
+    // run cost — see `totalCostByPr` for why.
     const costByPr =
       prIds.length > 0
-        ? latestCostByPr(
+        ? totalCostByPr(
             await container.db
               .select({ prId: t.agentRuns.prId, costUsd: t.agentRuns.costUsd })
               .from(t.agentRuns)

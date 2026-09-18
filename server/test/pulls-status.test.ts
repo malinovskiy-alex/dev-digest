@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveReviewStatus,
-  latestCostByPr,
+  totalCostByPr,
   rollupSeverities,
   STALE_DAYS,
 } from '../src/modules/pulls/status.js';
@@ -72,28 +72,36 @@ describe('rollupSeverities', () => {
   });
 });
 
-describe('latestCostByPr', () => {
-  it('takes the NEWEST run per PR (rows arrive newest-first)', () => {
-    const byPr = latestCostByPr([
+describe('totalCostByPr', () => {
+  it('sums every completed run of a PR, not just the newest', () => {
+    const byPr = totalCostByPr([
       { prId: 'pr-1', costUsd: 0.014 },
       { prId: 'pr-1', costUsd: 0.9 },
       { prId: 'pr-2', costUsd: 0.003 },
     ]);
-    expect(byPr.get('pr-1')).toBe(0.014);
-    expect(byPr.get('pr-2')).toBe(0.003);
+    expect(byPr.get('pr-1')).toBeCloseTo(0.914, 6);
+    expect(byPr.get('pr-2')).toBeCloseTo(0.003, 6);
   });
 
-  it('keeps an unknown price as null instead of falling through to an older run', () => {
-    const byPr = latestCostByPr([
+  it('adds the priced runs when only some of them have a known price', () => {
+    const byPr = totalCostByPr([
       { prId: 'pr-1', costUsd: null },
       { prId: 'pr-1', costUsd: 0.5 },
+    ]);
+    expect(byPr.get('pr-1')).toBeCloseTo(0.5, 6);
+  });
+
+  it('stays null when no run of the PR has a known price', () => {
+    const byPr = totalCostByPr([
+      { prId: 'pr-1', costUsd: null },
+      { prId: 'pr-1', costUsd: null },
     ]);
     expect(byPr.has('pr-1')).toBe(true);
     expect(byPr.get('pr-1')).toBeNull();
   });
 
   it('omits a PR with no runs, so the list can render an em dash', () => {
-    expect(latestCostByPr([]).has('pr-1')).toBe(false);
-    expect(latestCostByPr([{ prId: null, costUsd: 0.1 }]).size).toBe(0);
+    expect(totalCostByPr([]).has('pr-1')).toBe(false);
+    expect(totalCostByPr([{ prId: null, costUsd: 0.1 }]).size).toBe(0);
   });
 });

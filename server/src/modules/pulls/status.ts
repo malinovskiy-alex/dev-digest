@@ -63,22 +63,34 @@ export function deriveReviewStatus(args: {
 }
 
 /**
- * Cost of the LATEST completed run per PR, for the list's Cost column.
+ * TOTAL cost of a PR's completed runs, for the list's Cost column.
  *
- * `rows` must be newest-first (the caller orders by `ran_at desc`), so the first
- * row seen for a PR wins — the same one-query + JS-grouping shape the list's
- * score rollup uses. Only completed runs are passed in, so a failed retry never
- * blanks a PR that has a good earlier run. A `null` cost stays `null` (unknown
- * model price is unknown, not free) and still claims the PR, because the run it
- * belongs to IS the latest one.
+ * The column answers "what has reviewing this PR cost me?", so it sums every
+ * successful run rather than reporting only the most recent: re-running a
+ * reviewer, or running three of them, all spend real money, and showing only
+ * the last one would understate the bill and shrink after a cheap re-run.
+ * Only completed runs are passed in, so a failed attempt never adds to it.
+ *
+ * A PR with no completed run is absent from the map, so the list renders an em
+ * dash rather than "$0.00" — nothing was spent because nothing ran.
+ *
+ * An unknown price stays unknown rather than counting as free: a PR whose runs
+ * ALL have a null cost maps to `null`. When some runs are priced and some are
+ * not, the sum of the known ones is the honest answer — it is a floor, not a
+ * guess at zero.
  */
-export function latestCostByPr(
+export function totalCostByPr(
   rows: { prId: string | null; costUsd: number | null }[],
 ): Map<string, number | null> {
   const byPr = new Map<string, number | null>();
   for (const r of rows) {
-    if (!r.prId || byPr.has(r.prId)) continue;
-    byPr.set(r.prId, r.costUsd);
+    if (!r.prId) continue;
+    const seen = byPr.get(r.prId);
+    if (seen === undefined) {
+      byPr.set(r.prId, r.costUsd);
+    } else if (r.costUsd != null) {
+      byPr.set(r.prId, (seen ?? 0) + r.costUsd);
+    }
   }
   return byPr;
 }
