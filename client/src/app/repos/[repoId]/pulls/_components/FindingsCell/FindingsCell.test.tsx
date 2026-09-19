@@ -1,10 +1,11 @@
 /**
  * FindingsCell — the hover trigger in the PR list's Findings column.
  *
- * Two things must hold. The chips preview on hover rather than on click, and
- * interacting with them must never navigate: the whole row routes to the PR
- * detail page, and a click that slips through would take the reader somewhere
- * they did not ask to go.
+ * Two things must hold. A click pins the preview open — that is the only way
+ * in on a touchscreen, where there is no hover at all — and interacting with
+ * the chips must never navigate: the whole row routes to the PR detail page,
+ * and a click that slips through would take the reader somewhere they did not
+ * ask to go.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
@@ -16,7 +17,7 @@ const usePrReviews = vi.fn(() => ({ data: [], isLoading: false, isError: false }
 vi.mock("@/lib/hooks/reviews", () => ({ usePrReviews: () => usePrReviews() }));
 
 import { FindingsCell } from "./FindingsCell";
-import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "./constants";
+import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "@/components/findings-popover";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -100,11 +101,42 @@ describe("FindingsCell", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("pins the preview open on a click, so a touch has a way in", () => {
+    const { trigger, onRowClick } = renderCell();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(onRowClick).not.toHaveBeenCalled();
+
+    // A pinned panel is deliberate: the pointer leaving must not take it away.
+    fireEvent.mouseLeave(trigger);
+    tick(CLOSE_DELAY_MS);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("closes a pinned preview on a second click", () => {
+    const { trigger } = renderCell();
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes a pinned preview when the next click lands outside it", () => {
+    const { trigger } = renderCell();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    act(() => void fireEvent.mouseDown(document.body));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("has nothing to preview when the PR has no findings", () => {
     const { trigger } = renderCell(pr({ findings: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 } }));
     expect(screen.getByText("—")).toBeInTheDocument();
     fireEvent.mouseEnter(trigger);
     tick(OPEN_DELAY_MS);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

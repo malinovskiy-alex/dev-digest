@@ -97,10 +97,7 @@
       "updated": "Updated"
     },
     "findingsPopover": {
-      "title": "{count} findings in this run",
-      "empty": "No findings in the latest run.",
-      "error": "Couldn’t load findings.",
-      "more": "+{count} more"
+      "empty": "No findings in the latest run."
     },
     "filesCount": "{count} files",
     "errorTitle": "Couldn’t load pull requests",
@@ -112,6 +109,13 @@
   "timeline": {
     "goToReview": "Jump to this run’s findings below",
     "openTrace": "Open run trace & logs",
-    "deleteRun": "Delete run"
+    "deleteRun": "Delete run",
+    "previewFindings": "Preview this run’s findings"
+  },
+  "findingsPopover": {
+    "title": "{count} findings in this run",
+    "empty": "No findings in this run.",
+    "error": "Couldn’t load findings.",
+    "more": "+{count} more"
   }
 }

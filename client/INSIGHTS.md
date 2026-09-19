@@ -19,6 +19,22 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-09-18 — a hover popover whose click *toggles* can never be opened by clicking
+**Symptom:** clicking the severity chips on the PR timeline dismissed the
+findings panel instead of opening it. Every single click, never the first one
+you expect.
+**Cause:** on a mouse, `mouseenter` always wins the race to `click` — the panel
+is already open by the time the click lands, so a toggle reads the open state
+and closes. The same handler is the only way in on touch, where nothing opens it
+first, so it cannot simply be suppressed.
+**Rule:** give the panel two open modes. A click on a closed panel opens it
+*pinned*; a click on a panel the pointer opened *promotes* it to pinned; only a
+click on an already-pinned panel closes. Pinned survives `mouseleave` and closes
+on a second click, an outside `mousedown`, Escape or scroll.
+**Where:** `src/components/findings-popover/useFindingsPopover.ts:105` (`toggle`),
+`src/components/findings-popover/useFindingsPopover.ts:86` (`scheduleClose`, which
+must bail out while pinned)
+
 ### 2026-09-17 — stripping markdown emphasis mangles the identifiers in a finding
 **Symptom:** the PR-list hover preview rendered `sk_live_` as `sklive` and
 `__dirname` as `dirname`, so the preview named a symbol that does not exist.
@@ -132,3 +148,10 @@ the shorthand/longhand mix React warns about — the existing comment claiming
   (`FindingsCell` + `FindingsPopover` + `FindingPreview`) and `lib/finding-format.ts`.
   The finding action label is now "Reject"; the action kind behind it is still
   `dismiss`.
+- 2026-09-18 — extended the findings preview to the PR detail timeline (L02
+  follow-up): the panel, the finding row and the open/close hook moved to
+  `src/components/findings-popover/`, the PR list's `FindingsPopover` became a
+  thin `usePrReviews` wrapper around it, and `RunFindingsChips` gives every
+  timeline tile the same preview from findings `FindingsTab` already holds. A
+  click now pins the panel open on both surfaces, which is also the touch
+  fallback `client/specs/findings-popover-touch-fallback.md` planned.

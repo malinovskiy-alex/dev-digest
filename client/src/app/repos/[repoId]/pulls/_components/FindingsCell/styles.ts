@@ -3,9 +3,10 @@ import type { CSSProperties } from "react";
 /** Co-located styles for FindingsCell. */
 export const s = {
   cell: { display: "flex", alignItems: "center", minWidth: 0 } satisfies CSSProperties,
-  // A button for keyboard reach, styled as the plain chips it wraps: the
-  // affordance here is the hover, not a pressable control.
-  trigger: {
+  // A button for keyboard reach, styled as the plain chips it wraps. The
+  // pointer cursor appears only when there is something to preview — chips
+  // reading `—` are not a control.
+  trigger: (canPreview: boolean): CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
@@ -14,7 +15,7 @@ export const s = {
     background: "none",
     font: "inherit",
     color: "inherit",
-    cursor: "default",
-  } satisfies CSSProperties,
+    cursor: canPreview ? "pointer" : "default",
+  }),
   muted: { color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

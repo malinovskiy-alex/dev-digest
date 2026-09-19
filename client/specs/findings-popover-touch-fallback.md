@@ -1,7 +1,25 @@
 # A touch fallback for the findings popover
 
-**Status:** not built. Surfaced while building the popover (see
+**Status:** built, but not the way this plan describes — read the deviation
+below before trusting the steps. Surfaced while building the popover (see
 [`../../specs/L02-findings-by-severity.md`](../../specs/L02-findings-by-severity.md)).
+
+## What shipped instead
+
+Nothing branches on `pointerType`. A click **pins** the panel open on every
+input, so the touch path and the mouse path are the same code:
+`src/components/findings-popover/useFindingsPopover.ts`. Steps 2 and 4 of the
+plan below are therefore moot — there is no non-mouse branch, and the delays
+already only apply to the hover path, which touch never reaches.
+
+Step 3 shipped as written: a document `mousedown` listener, registered only
+while a *pinned* panel is open, closing on a target outside both the panel and
+the trigger — and it does check the panel by ref, because the panel renders
+outside the trigger's subtree.
+
+One thing the plan did not anticipate: a click on a panel the pointer had
+already opened must pin it, not toggle it shut. On a mouse, hover always wins
+the race to open, so a plain toggle makes every click read as "dismiss".
 
 **Goal:** make the PR list's findings preview reachable without a mouse pointer.
 

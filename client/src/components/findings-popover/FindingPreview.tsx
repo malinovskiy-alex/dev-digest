@@ -1,11 +1,11 @@
-/* One finding, as it appears inside the PR list's hover popover.
+/* One finding, as it appears inside a findings popover.
 
    Strictly a read-out: no buttons, and no links either. Accepting or rejecting
-   a finding happens on the PR detail page, in the expanded run card — a hover
-   panel that disappears when the pointer leaves is the wrong place to put an
-   action, and any focusable descendant here would also become a stray tab stop
-   between two list rows. FindingPreview lives in its own folder so that "no
-   controls" is a contract a test can hold it to. */
+   a finding happens on the PR detail page, in the expanded run card — a panel
+   that disappears when the pointer leaves is the wrong place to put an action,
+   and any focusable descendant here would also become a stray tab stop between
+   two rows of whatever list the trigger sits in. "No controls" is a contract a
+   test holds it to. */
 "use client";
 
 import { SeverityBadge, CategoryTag, ConfidenceNum, type Severity, type Category } from "@devdigest/ui";
@@ -25,7 +25,7 @@ export function FindingPreview({ f }: FindingPreviewProps) {
       </div>
       <div style={s.main}>
         <div style={s.titleRow}>
-          <span style={s.title}>{f.title}</span>
+          <span style={s.findingTitle}>{f.title}</span>
           <CategoryTag category={f.category as Category} />
         </div>
         <div style={s.metaRow}>

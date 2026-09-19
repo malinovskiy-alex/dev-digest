@@ -3,15 +3,19 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
-import type { RunSummary, PrCommit } from "@devdigest/shared";
+import type { RunSummary, PrCommit, FindingRecord } from "@devdigest/shared";
 import { RunCostBadge } from "@/components/run-cost-badge";
-import { SeverityChips, type SeverityCountMap } from "@/components/severity-chips";
+import { type SeverityCountMap } from "@/components/severity-chips";
+import { RunFindingsChips } from "../RunFindingsChips";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
  * and DB-backed so it survives reload. Showing commits between runs makes it
  * clear which commit each review ran against. Failed runs show their error
  * inline; clicking a run row opens its trace.
+ *
+ * Hovering (or clicking) a run's severity chips previews that run's findings;
+ * see RunFindingsChips.
  *
  * The badge reflects the review OUTCOME, not just the run lifecycle: a finished
  * run that found blockers reads "rejected" (red), never a green "done". Outcome
@@ -98,6 +102,7 @@ export function RunHistory({
   runs,
   commits = [],
   severityByRun,
+  findingsByRun,
   onOpenTrace,
   onGoToReview,
   onDelete,
@@ -109,6 +114,9 @@ export function RunHistory({
    *  the plain finding count. Read-only here — the timeline shows, the run card
    *  below is where you filter. */
   severityByRun?: Record<string, SeverityCountMap>;
+  /** The findings behind those counts, per run id, for the hover preview. Same
+   *  source as `severityByRun`, so the tally and the panel cannot disagree. */
+  findingsByRun?: Record<string, FindingRecord[]>;
   /** Open the trace + log drawer for a run (the logs icon). */
   onOpenTrace: (runId: string) => void;
   /** Jump to this run's inline review accordion below (clicking the agent name). */
@@ -206,7 +214,8 @@ export function RunHistory({
               )}
               {settled && (
                 <div style={findingsLineStyle}>
-                  <SeverityChips
+                  <RunFindingsChips
+                    findings={findingsByRun?.[r.run_id] ?? []}
                     counts={severityByRun?.[r.run_id]}
                     emptyFallback={t("runStatus.findings", { count: r.findings_count ?? 0 })}
                   />

@@ -14,9 +14,9 @@ page has already fetched.
 
 | Screen | What | Interactive? | Empty state |
 |---|---|---|---|
-| Pull Requests list → `Findings` column | compact severity chips, icon + count, for the **latest review** | hover opens a preview popover | `—` |
+| Pull Requests list → `Findings` column | compact severity chips, icon + count, for the **latest review** | hover previews; a click pins the preview open | `—` |
 | …the popover | `N FINDINGS IN THIS RUN` + one read-only row per finding | no — **no buttons, no links** | "No findings in the latest run." |
-| PR detail → Agent runs → Timeline tile | the same chips per run | **no** — the timeline is for scanning | falls back to `N finding(s)` |
+| PR detail → Agent runs → Timeline tile | the same chips per run | the same preview, for **that** run | falls back to `N finding(s)` |
 | PR detail → Agent runs → Review runs, expanded | pills `N CRITICAL · N WARNING · N SUGGESTION` under the verdict and PR SCORE | **yes** — click filters, click again clears | only present severities render |
 
 `—` never becomes `0`. A severity with no findings is not drawn at all.
@@ -48,9 +48,11 @@ an empty list.
 (a third "latest per PR" rollup beside score and cost).
 
 **client:** `components/severity-chips/` (new, shared by three screens) ·
+`components/findings-popover/` (new: the panel, the row inside it, and the
+open/close hook, shared by the two surfaces that preview) ·
 `lib/finding-format.ts` (new) · PR list `constants.ts` / `styles.ts` / `PRRow` ·
-`pulls/_components/{FindingsCell,FindingsPopover,FindingPreview}/` (new) ·
-`pulls/[number]/_components/{FindingsPanel,FindingsTab,RunHistory}/`.
+`pulls/_components/{FindingsCell,FindingsPopover}/` (new) ·
+`pulls/[number]/_components/{FindingsPanel,FindingsTab,RunHistory,RunFindingsChips}/`.
 
 ## Decisions worth their reasoning
 
@@ -77,6 +79,22 @@ warms the click that usually follows it. A bespoke `/findings/preview` would fil
 a separate key and do the same work twice. Embedding previews in the list payload
 was the third option; it would have added ~75 KB to a response that re-polls
 every 60 s, to buy ~120 ms of hover latency.
+
+**The timeline previews the same findings it counted, from memory.** The tile
+already holds `severityByRun`; the preview takes `findingsByRun`, derived from
+the same reviews in the same pass. There is nothing to fetch, and a tile
+therefore cannot preview something other than what its chips counted. The panel
+itself is the shared one — the list's popover is now only "where the findings
+come from" wrapped around it.
+
+**A click pins the panel; hover alone does not.** Hover opens after
+`OPEN_DELAY_MS` and leaves with the pointer. A click on a panel the pointer
+already opened *pins* it rather than toggling it shut — on a mouse, hover always
+wins the race to open, so a plain toggle would make every click read as
+"dismiss". A pinned panel closes on a second click, a click outside, Escape, or
+scroll. This is also the touch fallback
+([`../client/specs/findings-popover-touch-fallback.md`](../client/specs/findings-popover-touch-fallback.md)):
+with no hover on a phone, the click path is the only way in.
 
 **The popover is `position: fixed`, not a portal.** The list's table card is
 `overflow: hidden`, which clips absolutely-positioned descendants but not fixed

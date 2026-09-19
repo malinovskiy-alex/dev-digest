@@ -84,6 +84,17 @@ export function FindingsTab({
     return byRun;
   }, [runs]);
 
+  // The findings behind those counts, for the timeline's hover preview. Derived
+  // from the same reviews in the same pass, so a tile can never preview
+  // something other than what its chips counted.
+  const findingsByRun = React.useMemo(() => {
+    const byRun: Record<string, FindingRecord[]> = {};
+    for (const review of runs) {
+      if (review.run_id) byRun[review.run_id] = review.findings;
+    }
+    return byRun;
+  }, [runs]);
+
   return (
     <section>
       {liveRunIds.length > 0 && (
@@ -145,6 +156,7 @@ export function FindingsTab({
             runs={prRuns ?? []}
             commits={prCommits}
             severityByRun={severityByRun}
+            findingsByRun={findingsByRun}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}
