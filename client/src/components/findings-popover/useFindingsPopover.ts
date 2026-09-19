@@ -79,9 +79,13 @@ export function useFindingsPopover({ enabled }: { enabled: boolean }): FindingsP
 
   const scheduleOpen = React.useCallback(() => {
     if (!enabled) return;
+    // Re-entering the trigger must not downgrade a panel the user pinned:
+    // `open("hover")` would reset the mode, and the next `mouseleave` would
+    // then take away a panel they deliberately fixed in place.
+    if (anchor && mode === "pin") return;
     clearTimers();
     openTimer.current = setTimeout(() => open("hover"), OPEN_DELAY_MS);
-  }, [enabled, clearTimers, open]);
+  }, [enabled, anchor, mode, clearTimers, open]);
 
   const scheduleClose = React.useCallback(() => {
     clearTimers();

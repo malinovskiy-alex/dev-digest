@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { PANEL_MAX_HEIGHT, PANEL_WIDTH } from "./constants";
 
 /** Co-located styles for the findings popover and the rows inside it. */
 export const s = {
@@ -8,13 +7,21 @@ export const s = {
    * border, modal shadow, ddpop. Positioning comes from `panelPosition`; see
    * the note there about why this is fixed rather than absolute.
    */
-  panel: (pos: { top?: number; bottom?: number; left: number }): CSSProperties => ({
+  panel: (pos: {
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  }): CSSProperties => ({
     position: "fixed",
     top: pos.top,
     bottom: pos.bottom,
     left: pos.left,
-    width: PANEL_WIDTH,
-    maxHeight: PANEL_MAX_HEIGHT,
+    // Both come from `panelPosition`, which sizes the panel to the room the
+    // viewport actually has — see the note there.
+    width: pos.width,
+    maxHeight: pos.maxHeight,
     overflowY: "auto",
     background: "var(--bg-elevated)",
     border: "1px solid var(--border-strong)",

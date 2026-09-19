@@ -137,6 +137,21 @@ describe("RunFindingsChips", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
+  it("does not let a second hover take the pin away", () => {
+    const trigger = renderChips([finding({ id: "f1" })]);
+    fireEvent.click(trigger);
+
+    // Pointer onto the panel and back onto the chips: re-opening in hover mode
+    // here would quietly downgrade the pin, and the next mouseleave would then
+    // close a panel the user deliberately fixed in place.
+    fireEvent.mouseLeave(trigger);
+    fireEvent.mouseEnter(trigger);
+    tick(OPEN_DELAY_MS);
+    fireEvent.mouseLeave(trigger);
+    tick(CLOSE_DELAY_MS);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+  });
+
   it("opens nothing for a run whose findings it does not have", () => {
     const trigger = renderChips([]);
     expect(screen.getByText("0 finding(s)")).toBeInTheDocument();
