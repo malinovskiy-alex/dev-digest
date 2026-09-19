@@ -59,7 +59,7 @@ Sections are `##`. Entries inside them are `###`, newest first:
 **Symptom:** what you actually saw.
 **Cause:** why it happens.
 **Rule:** what to do from now on.
-**Where:** `path/to/file.ts`
+**Where:** `path/to/file.ts:42`
 ```
 
 `Session Notes` and `Open Questions` are the exceptions — both take plain dated
@@ -68,7 +68,15 @@ bullets, no four-field shape.
 Rules for the text:
 
 - **Name real things.** File paths, function names, flags, version numbers, exact
-  error strings. `Where:` is mandatory and must point at something that exists.
+  error strings. `Where:` is mandatory, must point at something that exists, and
+  carries a **line number**: `path/to/file.ts:42`, not a bare path. A reader
+  should land on the code, not go hunting through it. Point at the line the
+  lesson is actually about — the function signature, the config key, the
+  offending expression — and name the symbol in parentheses when the line is
+  likely to drift: `` `server/src/app.ts:41` (`buildApp`) ``. A lesson about a
+  whole folder still cites one representative file and line. The rare entry with
+  no single home (a repo-wide tooling quirk) says so and still cites the files
+  where it bit.
 - **`Rule:` is an instruction, not an observation.** "Run X before Y", not
   "X and Y interact badly".
 - **State the reasoning when the fact looks arbitrary.** A rule without a why
@@ -82,7 +90,8 @@ Rules for the text:
 Delete the draft entry if any of these is true:
 
 - It restates the language, framework or a public API (`useEffect runs after render`).
-- It has no `Where:`, or points at a file you did not open.
+- It has no `Where:`, has one without a line number, or points at a file you
+  did not open.
 - It could be pasted into an unrelated repo unchanged — that means it says nothing
   about *this* codebase.
 - It is a task log (`added the endpoint`) rather than a lesson.
@@ -137,7 +146,7 @@ capture can be read in a diff and reverted.
 - [ ] Right file for the package(s) touched
 - [ ] Section chosen by the first-match-wins order (What Doesn't Work checked first)
 - [ ] Every entry has Symptom / Cause / Rule / Where
-- [ ] Where: points at a path that exists
+- [ ] Where: points at a path that exists, WITH a line number
 - [ ] Passes the cold-reader bar; banal entries dropped
 - [ ] Appended only — nothing existing edited or deleted
 - [ ] No contradiction with an entry already in the file

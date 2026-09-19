@@ -16,6 +16,33 @@ import { ExternalServiceError } from '../../platform/errors.js';
 const DEFAULT_TIMEOUT = 60_000;
 const DEFAULT_MAX_TOKENS = 4096;
 
+/**
+ * Models that still accept the sampling parameters.
+ *
+ * Anthropic removed `temperature` / `top_p` / `top_k` with the current
+ * generation — Opus 4.7 and everything after it, including Opus 5 and
+ * Sonnet 5, answer a request carrying one with a 400. Opus 4.6, Sonnet 4.6,
+ * Haiku 4.5 and older still take them.
+ *
+ * An ALLOW-list rather than a deny-list on purpose: `listModels()` is a live
+ * `GET /models`, so the studio offers models this file has never heard of, and
+ * the safe default for an unknown one is to omit `temperature` (the API's own
+ * default applies) instead of failing every run against it.
+ */
+const SAMPLING_MODELS = new Set([
+  'claude-haiku-4-5',
+  'claude-opus-4-6',
+  'claude-sonnet-4-6',
+  'claude-3-5-sonnet-latest',
+  'claude-3-5-haiku-latest',
+  'claude-3-opus-latest',
+]);
+
+/** Spread into a request: the temperature when the model takes one, else nothing. */
+export function samplingFor(model: string, temperature: number): { temperature?: number } {
+  return SAMPLING_MODELS.has(model) ? { temperature } : {};
+}
+
 /** Anthropic has no embeddings API; embeddings come from the OpenAI Embedder. */
 function splitSystem(messages: ChatMessage[]): {
   system: string;
@@ -69,7 +96,7 @@ export class AnthropicProvider implements LLMProvider {
       system: system || undefined,
       messages: rest,
       max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
-      temperature: req.temperature ?? 0.2,
+      ...samplingFor(req.model, req.temperature ?? 0.2),
     });
     const text = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -104,7 +131,7 @@ export class AnthropicProvider implements LLMProvider {
             system: system || undefined,
             messages,
             max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
-            temperature: req.temperature ?? 0,
+            ...samplingFor(req.model, req.temperature ?? 0),
             tools: [
               {
                 name: toolName,

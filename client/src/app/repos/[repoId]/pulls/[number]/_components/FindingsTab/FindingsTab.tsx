@@ -5,6 +5,7 @@ import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
 import { RunHistory } from "../RunHistory/RunHistory";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
+import { countBySeverity, type SeverityCountMap } from "@/components/severity-chips";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
@@ -71,6 +72,29 @@ export function FindingsTab({
     setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
   }, []);
 
+  // Severity tally per run for the timeline tiles, joined from the reviews this
+  // tab already has rather than denormalized onto agent_runs: the same numbers
+  // then feed the tile and the run card below, so the two cannot disagree, and
+  // runs that predate the feature light up without a backfill.
+  const severityByRun = React.useMemo(() => {
+    const byRun: Record<string, SeverityCountMap> = {};
+    for (const review of runs) {
+      if (review.run_id) byRun[review.run_id] = countBySeverity(review.findings);
+    }
+    return byRun;
+  }, [runs]);
+
+  // The findings behind those counts, for the timeline's hover preview. Derived
+  // from the same reviews in the same pass, so a tile can never preview
+  // something other than what its chips counted.
+  const findingsByRun = React.useMemo(() => {
+    const byRun: Record<string, FindingRecord[]> = {};
+    for (const review of runs) {
+      if (review.run_id) byRun[review.run_id] = review.findings;
+    }
+    return byRun;
+  }, [runs]);
+
   return (
     <section>
       {liveRunIds.length > 0 && (
@@ -131,6 +155,8 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            severityByRun={severityByRun}
+            findingsByRun={findingsByRun}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}

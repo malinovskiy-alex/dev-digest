@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Provider } from './knowledge.js';
+import { SeverityCounts } from './findings.js';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
@@ -170,6 +171,16 @@ export const PrMeta = z.object({
   updated_at: z.string().nullish(),
   // Latest-review score (list endpoint only; null/absent until reviewed).
   score: z.number().int().nullish(),
+  // TOTAL cost of every COMPLETED run on this PR — a sum, not the latest one
+  // (see `totalCostByPr`): the column answers "what has reviewing this PR cost
+  // me?", and re-running a reviewer spends real money. List endpoint only;
+  // null until reviewed, and null — never 0 — when the model's price is
+  // unknown.
+  cost_usd: z.number().nullish(),
+  // Findings of the LATEST review, split by severity (list endpoint only).
+  // All-zero until the PR has been reviewed; nullish so a client that predates
+  // the column still parses a response that carries it, and vice versa.
+  findings: SeverityCounts.nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

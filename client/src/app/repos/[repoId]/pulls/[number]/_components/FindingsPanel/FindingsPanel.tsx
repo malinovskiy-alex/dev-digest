@@ -1,11 +1,18 @@
-/* FindingsPanel — hide-low-confidence + j/k navigation + FindingCard list,
-   wiring the accept/dismiss action hook (A2). */
+/* FindingsPanel — one run's findings: a severity tally that doubles as a
+   filter, hide-low-confidence, j/k navigation, and the FindingCard list,
+   wiring the accept/dismiss action hook (A2).
+
+   The panel is mounted once per run card (ReviewRunAccordion renders one, under
+   the VerdictBanner), which is what makes the severity filter per-run-card for
+   free — and what makes it the only component that can honestly count what is
+   rendered below, since it owns `hideLow`. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
-import type { FindingRecord } from "@devdigest/shared";
+import type { FindingRecord, Severity } from "@devdigest/shared";
+import { SeverityChips, countBySeverity } from "@/components/severity-chips";
 import { FindingCard } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
 import { KEY_TO_ACTION } from "./constants";
@@ -26,9 +33,34 @@ export function FindingsPanel({
   const t = useTranslations("prReview");
   const action = useFindingAction();
   const [hideLow, setHideLow] = React.useState(false);
+  const [severityFilter, setSeverityFilter] = React.useState<Severity | null>(null);
   const [focusIdx, setFocusIdx] = React.useState(0);
 
-  const shown = React.useMemo(() => visibleFindings(findings, hideLow), [findings, hideLow]);
+  // Order matters. The tally is taken AFTER the confidence filter and BEFORE
+  // the severity one, so a chip's number is always the number of cards drawn
+  // below it. Counting the raw `findings` instead would leave "3 WARNING" above
+  // a single card the moment "hide low confidence" is on.
+  const afterConfidence = React.useMemo(
+    () => visibleFindings(findings, hideLow),
+    [findings, hideLow],
+  );
+  const counts = React.useMemo(() => countBySeverity(afterConfidence), [afterConfidence]);
+  // Derived, not stored: turning hideLow on can empty the bucket the filter
+  // points at, and a stored filter would leave the list stuck on nothing.
+  const activeSeverity =
+    severityFilter && (counts[severityFilter] ?? 0) > 0 ? severityFilter : null;
+  const shown = React.useMemo(
+    () =>
+      activeSeverity ? afterConfidence.filter((f) => f.severity === activeSeverity) : afterConfidence,
+    [afterConfidence, activeSeverity],
+  );
+
+  // Toggling off returns the full list. Reset the j/k cursor with it, or the
+  // a/d shortcuts start acting on a card that is no longer on screen.
+  const toggleSeverity = React.useCallback((sev: Severity) => {
+    setSeverityFilter((cur) => (cur === sev ? null : sev));
+    setFocusIdx(0);
+  }, []);
 
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
@@ -48,6 +80,12 @@ export function FindingsPanel({
   return (
     <div>
       <div style={s.toolbar}>
+        <SeverityChips
+          counts={counts}
+          active={activeSeverity}
+          onToggle={toggleSeverity}
+          separator
+        />
         <div style={s.toggleGroup}>
           {t("panel.hideLowConfidence")}
           <Toggle on={hideLow} onChange={setHideLow} size={16} />

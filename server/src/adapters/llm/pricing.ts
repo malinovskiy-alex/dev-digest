@@ -21,6 +21,14 @@ const PRICING: Record<string, Price> = {
   'gpt-4o-mini': { in: 0.15, out: 0.6 },
   'text-embedding-3-small': { in: 0.02, out: 0 },
   // Anthropic
+  // Current generation (list prices, USD / 1M tokens). claude-opus-5 and
+  // claude-sonnet-5 reject `temperature` with a 400; the adapter omits it for
+  // them — see `samplingFor` in anthropic.ts.
+  'claude-opus-5': { in: 5.0, out: 25.0 },
+  'claude-sonnet-5': { in: 2.0, out: 10.0 },
+  'claude-haiku-4-5': { in: 1.0, out: 5.0 },
+  // Retired aliases — the API now returns 404 for these; kept so the cost of
+  // runs recorded against them still resolves.
   'claude-3-5-sonnet-latest': { in: 3.0, out: 15.0 },
   'claude-3-5-haiku-latest': { in: 0.8, out: 4.0 },
   'claude-3-opus-latest': { in: 15.0, out: 75.0 },

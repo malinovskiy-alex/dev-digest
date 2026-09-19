@@ -1,4 +1,4 @@
-import type { PrStatus } from '@devdigest/shared';
+import type { PrStatus, SeverityCounts } from '@devdigest/shared';
 
 /**
  * PR-list rollup helpers (pure — no DB / `this`, so they unit-test cleanly).
@@ -13,19 +13,27 @@ import type { PrStatus } from '@devdigest/shared';
 /** Open PRs whose current head was reviewed but untouched this long read "stale". */
 export const STALE_DAYS = 7;
 
-export interface SeverityCounts {
-  critical: number;
-  warning: number;
-  suggestion: number;
-}
+/** A PR with no review at all — the list still sends an object, never null. */
+export const EMPTY_SEVERITY_COUNTS: SeverityCounts = {
+  CRITICAL: 0,
+  WARNING: 0,
+  SUGGESTION: 0,
+};
 
-/** Tally finding severities (CRITICAL / WARNING / SUGGESTION) for one review. */
+/**
+ * Tally finding severities (CRITICAL / WARNING / SUGGESTION) for one review.
+ *
+ * Keys match the `Severity` enum verbatim so the client can index by severity
+ * without a mapping table. The explicit three-way check (rather than a dynamic
+ * key bump) is what makes an unknown severity from an older row fall on the
+ * floor instead of inventing a bucket.
+ */
 export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
-  const c: SeverityCounts = { critical: 0, warning: 0, suggestion: 0 };
+  const c: SeverityCounts = { ...EMPTY_SEVERITY_COUNTS };
   for (const r of rows) {
-    if (r.severity === 'CRITICAL') c.critical += 1;
-    else if (r.severity === 'WARNING') c.warning += 1;
-    else if (r.severity === 'SUGGESTION') c.suggestion += 1;
+    if (r.severity === 'CRITICAL') c.CRITICAL += 1;
+    else if (r.severity === 'WARNING') c.WARNING += 1;
+    else if (r.severity === 'SUGGESTION') c.SUGGESTION += 1;
   }
   return c;
 }
@@ -52,4 +60,37 @@ export function deriveReviewStatus(args: {
   const staleMs = (args.staleDays ?? STALE_DAYS) * 86_400_000;
   if (updatedAt && now - updatedAt.getTime() > staleMs) return 'stale';
   return 'reviewed';
+}
+
+/**
+ * TOTAL cost of a PR's completed runs, for the list's Cost column.
+ *
+ * The column answers "what has reviewing this PR cost me?", so it sums every
+ * successful run rather than reporting only the most recent: re-running a
+ * reviewer, or running three of them, all spend real money, and showing only
+ * the last one would understate the bill and shrink after a cheap re-run.
+ * Only completed runs are passed in, so a failed attempt never adds to it.
+ *
+ * A PR with no completed run is absent from the map, so the list renders an em
+ * dash rather than "$0.00" — nothing was spent because nothing ran.
+ *
+ * An unknown price stays unknown rather than counting as free: a PR whose runs
+ * ALL have a null cost maps to `null`. When some runs are priced and some are
+ * not, the sum of the known ones is the honest answer — it is a floor, not a
+ * guess at zero.
+ */
+export function totalCostByPr(
+  rows: { prId: string | null; costUsd: number | null }[],
+): Map<string, number | null> {
+  const byPr = new Map<string, number | null>();
+  for (const r of rows) {
+    if (!r.prId) continue;
+    const seen = byPr.get(r.prId);
+    if (seen === undefined) {
+      byPr.set(r.prId, r.costUsd);
+    } else if (r.costUsd != null) {
+      byPr.set(r.prId, (seen ?? 0) + r.costUsd);
+    }
+  }
+  return byPr;
 }

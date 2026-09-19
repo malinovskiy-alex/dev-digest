@@ -103,5 +103,9 @@ describe('pricing / cost discipline', () => {
   it('estimates cost for known models and returns null for unknown', () => {
     expect(estimateCost('gpt-4o-mini', 1_000_000, 0)).toBeCloseTo(0.15, 5);
     expect(estimateCost('some-future-model', 1000, 1000)).toBeNull();
+    // current Anthropic models are priced, so their runs show a real cost, not —
+    expect(estimateCost('claude-haiku-4-5', 1_000_000, 1_000_000)).toBeCloseTo(6, 5);
+    expect(estimateCost('claude-sonnet-5', 1_000_000, 0)).toBeCloseTo(2, 5);
+    expect(estimateCost('claude-opus-5', 0, 1_000_000)).toBeCloseTo(25, 5);
   });
 });

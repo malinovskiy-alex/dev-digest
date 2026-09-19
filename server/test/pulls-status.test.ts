@@ -6,7 +6,12 @@
  * + age, so it gets unit coverage independent of the route's queries.
  */
 import { describe, it, expect } from 'vitest';
-import { deriveReviewStatus, rollupSeverities, STALE_DAYS } from '../src/modules/pulls/status.js';
+import {
+  deriveReviewStatus,
+  totalCostByPr,
+  rollupSeverities,
+  STALE_DAYS,
+} from '../src/modules/pulls/status.js';
 
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 5, 11);
@@ -50,7 +55,7 @@ describe('deriveReviewStatus', () => {
 });
 
 describe('rollupSeverities', () => {
-  it('tallies findings into critical / warning / suggestion buckets (ignores unknown)', () => {
+  it('tallies findings into CRITICAL / WARNING / SUGGESTION buckets (ignores unknown)', () => {
     expect(
       rollupSeverities([
         { severity: 'CRITICAL' },
@@ -59,10 +64,44 @@ describe('rollupSeverities', () => {
         { severity: 'SUGGESTION' },
         { severity: 'WEIRD' },
       ]),
-    ).toEqual({ critical: 2, warning: 1, suggestion: 1 });
+    ).toEqual({ CRITICAL: 2, WARNING: 1, SUGGESTION: 1 });
   });
 
   it('is all-zero for no findings', () => {
-    expect(rollupSeverities([])).toEqual({ critical: 0, warning: 0, suggestion: 0 });
+    expect(rollupSeverities([])).toEqual({ CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
+  });
+});
+
+describe('totalCostByPr', () => {
+  it('sums every completed run of a PR, not just the newest', () => {
+    const byPr = totalCostByPr([
+      { prId: 'pr-1', costUsd: 0.014 },
+      { prId: 'pr-1', costUsd: 0.9 },
+      { prId: 'pr-2', costUsd: 0.003 },
+    ]);
+    expect(byPr.get('pr-1')).toBeCloseTo(0.914, 6);
+    expect(byPr.get('pr-2')).toBeCloseTo(0.003, 6);
+  });
+
+  it('adds the priced runs when only some of them have a known price', () => {
+    const byPr = totalCostByPr([
+      { prId: 'pr-1', costUsd: null },
+      { prId: 'pr-1', costUsd: 0.5 },
+    ]);
+    expect(byPr.get('pr-1')).toBeCloseTo(0.5, 6);
+  });
+
+  it('stays null when no run of the PR has a known price', () => {
+    const byPr = totalCostByPr([
+      { prId: 'pr-1', costUsd: null },
+      { prId: 'pr-1', costUsd: null },
+    ]);
+    expect(byPr.has('pr-1')).toBe(true);
+    expect(byPr.get('pr-1')).toBeNull();
+  });
+
+  it('omits a PR with no runs, so the list can render an em dash', () => {
+    expect(totalCostByPr([]).has('pr-1')).toBe(false);
+    expect(totalCostByPr([{ prId: null, costUsd: 0.1 }]).size).toBe(0);
   });
 });

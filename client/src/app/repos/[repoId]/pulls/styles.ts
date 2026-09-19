@@ -40,6 +40,10 @@ export const s = {
   } satisfies CSSProperties,
   sizeBadgeBorder: (color: string): CSSProperties => ({ border: `1px solid ${color}` }),
   scoreCell: { display: "flex", alignItems: "center" } satisfies CSSProperties,
+  costCell: {
+    fontSize: 12,
+    textAlign: "right",
+  } satisfies CSSProperties,
   updatedCell: {
     fontSize: 12,
     color: "var(--text-muted)",
@@ -102,6 +106,11 @@ export const s = {
     letterSpacing: "0.06em",
     color: "var(--text-muted)",
     textTransform: "uppercase",
+  } satisfies CSSProperties,
+  findingsCell: {
+    display: "flex",
+    alignItems: "center",
+    minWidth: 0,
   } satisfies CSSProperties,
   headCell: (alignRight: boolean): CSSProperties => ({
     textAlign: alignRight ? "right" : "left",
