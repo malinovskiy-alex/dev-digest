@@ -110,15 +110,26 @@ export function useFindingsPopover({ enabled }: { enabled: boolean }): FindingsP
   );
 
   // The panel is fixed-positioned against a rect captured on open, so it would
-  // drift away from its trigger on scroll. Close instead of chasing it.
+  // drift away from its trigger when the page behind it scrolls. Close instead
+  // of chasing it — but the listener has to be in the capture phase to see a
+  // scrolling ancestor at all, which means it also sees the panel scrolling its
+  // OWN overflow. Reading a long run's findings would close the panel under the
+  // reader, so a scroll that started inside it is not a page scroll.
   React.useEffect(() => {
     if (!anchor) return;
-    const onScroll = () => closeNow();
+    const onScroll = (e: Event) => {
+      const panel = panelRef.current;
+      // `instanceof Node` also rules out the window itself, which `contains`
+      // refuses as an argument.
+      const target = e.target instanceof Node ? e.target : null;
+      if (panel && target && (panel === target || panel.contains(target))) return;
+      closeNow();
+    };
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", closeNow);
     return () => {
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", closeNow);
     };
   }, [anchor, closeNow]);
 

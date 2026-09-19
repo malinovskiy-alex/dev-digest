@@ -19,6 +19,20 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-09-18 — a capture-phase `scroll` listener closes the overlay it is protecting
+**Symptom:** the findings popover could not be read to the bottom. The wheel
+over its own scrollbar closed it instead of scrolling it.
+**Cause:** an overlay anchored to a rect captured on open has to close when the
+page behind it scrolls, and seeing a scrolling *ancestor* requires
+`addEventListener("scroll", h, true)` — `scroll` does not bubble. Capture then
+also delivers the overlay's own `overflowY: auto` scroll to the same handler.
+**Rule:** in any close-on-scroll handler, bail out when `e.target` is the panel
+or inside it, before closing. Guard with `e.target instanceof Node` — on a page
+scroll the target is `document` or the window, and `Node.contains` throws on a
+window.
+**Where:** `src/components/findings-popover/useFindingsPopover.ts:120` (`onScroll`),
+registered at `src/components/findings-popover/useFindingsPopover.ts:128`
+
 ### 2026-09-18 — a hover popover whose click *toggles* can never be opened by clicking
 **Symptom:** clicking the severity chips on the PR timeline dismissed the
 findings panel instead of opening it. Every single click, never the first one

@@ -101,6 +101,23 @@ describe("RunFindingsChips", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("survives scrolling its own overflow, but not the page behind it", () => {
+    const trigger = renderChips(
+      Array.from({ length: 8 }, (_, i) => finding({ id: `f${i}`, title: `Finding ${i}` })),
+    );
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog");
+
+    // A long run overflows the panel; reading to the bottom must not close it.
+    fireEvent.scroll(dialog);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // The page behind it is another matter — the panel is anchored to a rect
+    // captured when it opened, so it would drift.
+    fireEvent.scroll(window);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("opens nothing for a run whose findings it does not have", () => {
     const trigger = renderChips([]);
     expect(screen.getByText("0 finding(s)")).toBeInTheDocument();
