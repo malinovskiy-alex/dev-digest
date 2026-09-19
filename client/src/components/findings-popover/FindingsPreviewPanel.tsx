@@ -51,7 +51,9 @@ export function FindingsPreviewPanel({
     <div
       id={id}
       ref={panelRef}
-      role="dialog"
+      // A tooltip, not a dialog: read-only, transient, and focus never enters
+      // it. The trigger points at it with aria-describedby.
+      role="tooltip"
       aria-label={title}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

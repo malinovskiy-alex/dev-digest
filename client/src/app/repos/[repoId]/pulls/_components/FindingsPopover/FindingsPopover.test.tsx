@@ -80,7 +80,7 @@ describe("FindingsPopover", () => {
       isError: false,
     });
     renderPopover();
-    expect(screen.getByRole("dialog", { name: "2 findings in this run" })).toBeInTheDocument();
+    expect(screen.getByRole("tooltip", { name: "2 findings in this run" })).toBeInTheDocument();
   });
 
   it("lists the worst findings first", () => {

@@ -19,6 +19,18 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-09-18 — closing an overlay on the trigger's `blur` dismisses it as soon as the reader touches it
+**Symptom:** a findings popover pinned open by a click vanished on the first
+click inside it, and on any attempt to drag its scrollbar.
+**Cause:** the panel has no focusable descendants by design, so a mousedown
+anywhere in it moves focus off the trigger and fires `blur` — which closed the
+panel. Same trap as the capture-phase `scroll` listener above: an event that
+originated *inside* the overlay was read as "the user left".
+**Rule:** close on `blur` only for the focus-opened (keyboard) path. A panel the
+user pinned outlives the trigger's focus; dismiss it from the outside-`mousedown`
+listener, which already excludes the panel and the trigger.
+**Where:** `src/components/findings-popover/useFindingsPopover.ts:172` (`onBlur`)
+
 ### 2026-09-18 — a capture-phase `scroll` listener closes the overlay it is protecting
 **Symptom:** the findings popover could not be read to the bottom. The wheel
 over its own scrollbar closed it instead of scrolling it.

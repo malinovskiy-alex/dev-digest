@@ -26,7 +26,7 @@ export interface FindingsPopoverController {
   popoverId: string;
   triggerProps: {
     ref: React.RefObject<HTMLButtonElement | null>;
-    "aria-haspopup": "dialog";
+    "aria-describedby": string | undefined;
     "aria-expanded": boolean;
     "aria-controls": string | undefined;
     onClick: (e: React.MouseEvent) => void;
@@ -154,14 +154,25 @@ export function useFindingsPopover({ enabled }: { enabled: boolean }): FindingsP
     popoverId,
     triggerProps: {
       ref: triggerRef,
-      "aria-haspopup": "dialog",
+      // The panel is a tooltip, not a dialog: focus never enters it and it
+      // traps nothing. Describing the trigger with it is what makes the tally
+      // readable to a screen reader, which `aria-haspopup` alone never did —
+      // it only promised a dialog the user could not reach.
+      "aria-describedby": anchor != null ? popoverId : undefined,
       "aria-expanded": anchor != null,
       "aria-controls": anchor != null ? popoverId : undefined,
       onClick: toggle,
       onMouseEnter: scheduleOpen,
       onMouseLeave: scheduleClose,
       onFocus: () => enabled && open("hover"),
-      onBlur: closeNow,
+      // A pinned panel outlives the trigger's focus. Clicking anything inside
+      // it — or dragging its scrollbar — blurs the trigger, and closing there
+      // would dismiss the panel the moment the reader touched it. Dismissal of
+      // a pinned panel is the outside-mousedown listener's job.
+      onBlur: () => {
+        if (anchor && mode === "pin") return;
+        closeNow();
+      },
       onKeyDown: (e: React.KeyboardEvent) => {
         if (e.key === "Escape") closeNow();
       },

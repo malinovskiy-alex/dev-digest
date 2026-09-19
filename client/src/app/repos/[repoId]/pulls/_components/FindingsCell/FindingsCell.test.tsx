@@ -65,16 +65,16 @@ describe("FindingsCell", () => {
 
   it("opens the preview on hover, and closes it when the pointer leaves", () => {
     const { trigger } = renderCell();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(trigger);
     tick(OPEN_DELAY_MS);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
     expect(trigger).toHaveAttribute("aria-expanded", "true");
 
     fireEvent.mouseLeave(trigger);
     tick(CLOSE_DELAY_MS);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("does not open on a passing pointer", () => {
@@ -83,7 +83,7 @@ describe("FindingsCell", () => {
     tick(OPEN_DELAY_MS - 20);
     fireEvent.mouseLeave(trigger);
     tick(OPEN_DELAY_MS + CLOSE_DELAY_MS);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("never navigates the row it sits in", () => {
@@ -95,38 +95,42 @@ describe("FindingsCell", () => {
   it("opens on keyboard focus and closes on Escape", () => {
     const { trigger } = renderCell();
     fireEvent.focus(trigger);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+    // Focus never enters the panel, so describing the trigger with it is the
+    // only way a screen reader reads the tally out.
+    expect(trigger).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
 
     fireEvent.keyDown(trigger, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("pins the preview open on a click, so a touch has a way in", () => {
     const { trigger, onRowClick } = renderCell();
     fireEvent.click(trigger);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
     expect(onRowClick).not.toHaveBeenCalled();
 
     // A pinned panel is deliberate: the pointer leaving must not take it away.
     fireEvent.mouseLeave(trigger);
     tick(CLOSE_DELAY_MS);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
 
   it("closes a pinned preview on a second click", () => {
     const { trigger } = renderCell();
     fireEvent.click(trigger);
     fireEvent.click(trigger);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("closes a pinned preview when the next click lands outside it", () => {
     const { trigger } = renderCell();
     fireEvent.click(trigger);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
     act(() => void fireEvent.mouseDown(document.body));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("has nothing to preview when the PR has no findings", () => {
@@ -134,9 +138,9 @@ describe("FindingsCell", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
     fireEvent.mouseEnter(trigger);
     tick(OPEN_DELAY_MS);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 });

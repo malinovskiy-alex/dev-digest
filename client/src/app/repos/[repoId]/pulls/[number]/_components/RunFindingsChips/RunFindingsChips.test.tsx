@@ -62,43 +62,43 @@ describe("RunFindingsChips", () => {
       finding({ id: "f1", severity: "SUGGESTION", title: "Nit" }),
       finding({ id: "f2", severity: "CRITICAL", title: "Blocker" }),
     ]);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(trigger);
     tick(OPEN_DELAY_MS);
-    expect(screen.getByRole("dialog", { name: "2 findings in this run" })).toBeInTheDocument();
+    expect(screen.getByRole("tooltip", { name: "2 findings in this run" })).toBeInTheDocument();
     expect(screen.getAllByText(/Blocker|Nit/).map((n) => n.textContent)).toEqual(["Blocker", "Nit"]);
 
     fireEvent.mouseLeave(trigger);
     tick(CLOSE_DELAY_MS);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("pins the preview open on a click and closes it on Escape", () => {
     const trigger = renderChips([finding({ id: "f1" })]);
     fireEvent.click(trigger);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
     fireEvent.mouseLeave(trigger);
     tick(CLOSE_DELAY_MS);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
     fireEvent.keyDown(trigger, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("pins a preview the pointer opened, instead of dismissing it", () => {
     const trigger = renderChips([finding({ id: "f1" })]);
     fireEvent.mouseEnter(trigger);
     tick(OPEN_DELAY_MS);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
     // On a mouse, hover always wins the race to open — a click that toggled
     // would read as "dismiss" every single time.
     fireEvent.click(trigger);
     fireEvent.mouseLeave(trigger);
     tick(CLOSE_DELAY_MS);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
 
   it("survives scrolling its own overflow, but not the page behind it", () => {
@@ -106,16 +106,35 @@ describe("RunFindingsChips", () => {
       Array.from({ length: 8 }, (_, i) => finding({ id: `f${i}`, title: `Finding ${i}` })),
     );
     fireEvent.click(trigger);
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("tooltip");
 
     // A long run overflows the panel; reading to the bottom must not close it.
     fireEvent.scroll(dialog);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
     // The page behind it is another matter — the panel is anchored to a rect
     // captured when it opened, so it would drift.
     fireEvent.scroll(window);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("keeps a pinned panel open when the trigger loses focus", () => {
+    const trigger = renderChips([finding({ id: "f1" })]);
+    fireEvent.click(trigger);
+
+    // Clicking inside the panel, or dragging its scrollbar, blurs the trigger.
+    // Closing there would dismiss the panel the moment the reader touched it.
+    fireEvent.blur(trigger);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+  });
+
+  it("still closes on blur when only the keyboard opened it", () => {
+    const trigger = renderChips([finding({ id: "f1" })]);
+    fireEvent.focus(trigger);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+    fireEvent.blur(trigger);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("opens nothing for a run whose findings it does not have", () => {
@@ -125,6 +144,6 @@ describe("RunFindingsChips", () => {
     fireEvent.mouseEnter(trigger);
     tick(OPEN_DELAY_MS);
     fireEvent.click(trigger);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 });
