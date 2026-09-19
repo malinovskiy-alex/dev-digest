@@ -21,9 +21,9 @@ const PRICING: Record<string, Price> = {
   'gpt-4o-mini': { in: 0.15, out: 0.6 },
   'text-embedding-3-small': { in: 0.02, out: 0 },
   // Anthropic
-  // Current generation (list prices, USD / 1M tokens). The adapter sends
-  // `temperature`, which claude-opus-5 / claude-sonnet-5 reject with a 400 —
-  // only claude-haiku-4-5 runs through it unchanged today.
+  // Current generation (list prices, USD / 1M tokens). claude-opus-5 and
+  // claude-sonnet-5 reject `temperature` with a 400; the adapter omits it for
+  // them — see `samplingFor` in anthropic.ts.
   'claude-opus-5': { in: 5.0, out: 25.0 },
   'claude-sonnet-5': { in: 2.0, out: 10.0 },
   'claude-haiku-4-5': { in: 1.0, out: 5.0 },

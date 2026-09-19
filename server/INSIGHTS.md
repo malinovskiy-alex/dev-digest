@@ -64,7 +64,20 @@ cors / rate-limit / the error handler does not inherit them.
 
 ## Tool & Library Notes
 
-*(nothing yet)*
+### 2026-09-18 — current Anthropic models reject `temperature` with a 400
+**Symptom:** a review run against `claude-opus-5` or `claude-sonnet-5` fails the
+whole request; the run is recorded `failed` with `cost_usd` null, so the PR
+list's Cost column reads `—` forever and nothing on screen says why.
+**Cause:** Anthropic removed the sampling parameters (`temperature`, `top_p`,
+`top_k`) with the current generation — Opus 4.7 and everything after it. Opus
+4.6, Sonnet 4.6 and Haiku 4.5 still accept them, which is why the one Anthropic
+agent seeded here (Haiku) never hit it.
+**Rule:** route every Anthropic request through `samplingFor(model, temp)` and
+keep it an ALLOW-list. `listModels()` is a live `GET /models`, so the studio
+offers ids this repo has never heard of; omitting `temperature` for an unknown
+model costs determinism, while sending it costs the whole run.
+**Where:** `src/adapters/llm/anthropic.ts:42` (`samplingFor`), applied at
+`src/adapters/llm/anthropic.ts:99` and `:134`
 
 ## Recurring Errors & Fixes
 
