@@ -30,6 +30,34 @@ per-instance scoping first.
 
 ## Codebase Patterns
 
+### 2026-09-19 — four modules query Drizzle straight from `routes.ts`, with no service
+**Symptom:** `AGENTS.md` describes a routes → service → repository layering, but
+`pulls`, `polling`, `settings` and `workspace` have no `service.ts` at all — their
+route handlers import `drizzle-orm` and call `container.db` directly. A change to,
+say, workspace scoping has to be made in both shapes.
+**Cause:** the starter grew the layered shape only where a feature needed async
+jobs (`repos`, `agents`, `reviews`, `repo-intel`); the read-mostly modules stayed flat.
+**Rule:** do not copy the flat shape into a new module. New business logic goes in
+`service.ts` and new SQL in `repository.ts`, even when the module is one endpoint —
+and when you touch one of those four route files, move the query you touched down
+rather than adding a sibling to it.
+**Where:** `server/src/modules/pulls/routes.ts:238` (`container.db.delete`), plus
+`settings/routes.ts:3`, `workspace/routes.ts:2`, `polling/routes.ts`
+
+### 2026-09-19 — a service may `new` its repository, but nothing else
+**Symptom:** `AGENTS.md` says "never construct an adapter with `new` inside a
+service", yet every service opens with `this.repo = new XRepository(container.db)`.
+Reads like a violation of the rule it sits next to.
+**Cause:** the rule is about *adapters* — things with a port interface that tests
+swap through `ContainerOverrides`. A repository has no port and no mock; it is
+constructed from `container.db`, which is itself injectable. Cross-module
+repositories are the exception and hang off the container (`container.reviewRepo`).
+**Rule:** `new` a repository inside its own module's service; resolve everything
+else — adapters, other modules' repositories — off the container. Do not "fix" the
+`new XRepository` lines.
+**Where:** `server/src/modules/repos/service.ts:36` (`RepoService` constructor),
+container-owned exceptions at `server/src/platform/container.ts:96` (`agentsRepo`)
+
 ### 2026-09-17 — the PR list's findings tally and a run's `blockers` count differently
 **Symptom:** a PR shows `1 CRITICAL` in the list's Findings column while its run
 row reports `0 blockers`, and the two look like they should agree.
@@ -63,6 +91,50 @@ cors / rate-limit / the error handler does not inherit them.
 **Where:** `server/src/app.ts:89` (helmet / cors / rate-limit registration)
 
 ## Tool & Library Notes
+
+### 2026-09-19 — dependency-cruiser group references are `$1`, not `\1`
+**Symptom:** the "a module must not import a sibling module" rule reported 61
+violations, nearly all of them imports a module makes *inside itself*
+(`repo-intel/service.ts → repo-intel/constants.ts`).
+**Cause:** the rule was written as a negative lookahead with a backreference,
+`to.path: '^src/modules/(?!\\1|_shared)[^/]+/'`. dependency-cruiser does not
+evaluate `\1`; it substitutes a group captured in `from.path` into the `to`
+clause as **`$1`**, and only there.
+**Rule:** express "same module" as
+`from: { path: '^src/modules/([^/]+)/' }` plus
+`to: { path: '^src/modules/([^/]+)/', pathNot: '^src/modules/($1|_shared)/' }`.
+After the fix the same rule reports one real violation. Also keep
+`options.tsPreCompilationDeps: true` — without it type-only imports are
+invisible, and most boundary leaks in this codebase are type-only.
+**Where:** `server/.dependency-cruiser.cjs:121` (`no-cross-module`)
+
+### 2026-09-19 — a pnpm path in the dep-cruiser baseline breaks on the next upgrade
+**Symptom:** `.dependency-cruiser-known-violations.json` recorded edges as
+`node_modules/.pnpm/drizzle-orm@0.38.4_postgres@3.4.9/node_modules/drizzle-orm/index.d.ts`.
+**Cause:** pnpm resolves every package through its versioned virtual store, and
+dependency-cruiser baselines the resolved path. A routine dependency bump
+changes that string, so a *known* violation stops matching and `pnpm arch` fails
+for a reason unrelated to the change. `enhancedResolveOptions.symlinks` would
+avoid it but the 17.4.3 config schema rejects the key.
+**Rule:** never let a node_modules edge into the baseline. Rules that carry debt
+match source paths only (`^src/db/schema` — no real query exists without it);
+keep package-name patterns only in rules that have zero violations.
+**Where:** `server/.dependency-cruiser.cjs:96` (`routes-no-db`), baseline at
+`server/.dependency-cruiser-known-violations.json`
+
+### 2026-09-19 — `dependency-cruiser` is already installed, so import-boundary linting costs nothing
+**Symptom:** enforcing layering looks like it needs a new devDependency and a CI
+decision.
+**Cause:** `dependency-cruiser@^17.4.3` is a **runtime** dependency here — the
+`depgraph` adapter calls its `cruise()` API to build the repo-intel import graph.
+There is no `.dependency-cruiser.*` config anywhere in the repo, so its rule
+engine is unused.
+**Rule:** to forbid a cross-layer import (routes → `drizzle-orm`, service →
+`adapters/*`), add a `forbidden` rule to a new `server/.dependency-cruiser.cjs`
+and a `depcruise` script — do not install a second architecture linter, and do not
+drop the package thinking it is dev-only tooling.
+**Where:** `server/src/adapters/depgraph/index.ts:17` (`import { cruise }`),
+`server/package.json:24`
 
 ### 2026-09-18 — current Anthropic models reject `temperature` with a 400
 **Symptom:** a review run against `claude-opus-5` or `claude-sonnet-5` fails the
@@ -108,3 +180,11 @@ before anything else. The fix is a fresh token in Settings (written to
   whose keys moved to the `Severity` enum casing. Third "latest per PR" rollup in
   that route, after score and cost — all three share the one-IN-query + JS
   grouping shape.
+- 2026-09-19 — planned an `onion-architecture` skill: audited the server's rings
+  (ports in `shared/adapters.ts`, adapters, container, modules) and recorded the
+  layering divergences found.
+- 2026-09-19 — built the skill on branch `skill/onion-architecture`: four rings
+  documented in `.claude/skills/onion-architecture/`, enforced by
+  `server/.dependency-cruiser.cjs` + `pnpm arch` with the 21 current violations
+  grandfathered in a baseline and planned out in `specs/onion-debt.md`. Nothing
+  under `src/` changed; `pnpm typecheck` and `pnpm arch` both exit 0.
