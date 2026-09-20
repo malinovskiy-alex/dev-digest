@@ -888,6 +888,23 @@ PR #483 runs on Test Quality Reviewer; PR #484 on General Reviewer with
 The token delta is the honest number for the video: same PR, same model, one
 block of text, a finding that was not there before.
 
+> **Keep both agents on `single-pass`, or the token delta lies.** Under
+> `map-reduce` the skills block is sent with **every chunk**, so `tokens_in`
+> grows by N × the skill text while the Run Trace still shows one whole-diff
+> assembly (`reviewer-core/src/review/run.ts` only overwrites the trace assembly
+> when `mode === 'single-pass'`). `auto` switches to map-reduce when the diff
+> passes the line threshold **and** touches more than one file — both fixtures
+> are far below it, and `single-pass` is the schema default, so this is a
+> warning against changing the agent's strategy before recording, not a defect.
+>
+> Turning **repo-intel off** on the agent is a free way to remove the other
+> source of variance between the arms: it short-circuits callers, repo map and
+> rank note, and does not touch the skills read at all.
+>
+> The logged `chars` count is the raw skill text only — it excludes the
+> `## Skills / rules` heading and the joiners, so the prompt grows by slightly
+> more than the number printed.
+
 ---
 
 ## 10. Steps
