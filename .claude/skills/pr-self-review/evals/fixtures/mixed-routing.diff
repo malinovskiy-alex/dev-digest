@@ -1,0 +1,31 @@
+diff --git a/client/src/app/agents/page.tsx b/client/src/app/agents/page.tsx
+index 1111111..2222222 100644
+--- a/client/src/app/agents/page.tsx
++++ b/client/src/app/agents/page.tsx
+@@ -12,6 +12,10 @@ export default function AgentsPage() {
+   const { data } = useAgents();
+
++  const stats = data?.map((a) => ({
++    id: a.id,
++    runs: a.run_count,
++  }));
++
+   return <AgentList agents={data ?? []} />;
+ }
+diff --git a/server/src/db/schema.ts b/server/src/db/schema.ts
+index 3333333..4444444 100644
+--- a/server/src/db/schema.ts
++++ b/server/src/db/schema.ts
+@@ -88,6 +88,7 @@ export const agents = pgTable('agents', {
+   id: uuid('id').primaryKey().defaultRandom(),
+   name: text('name').notNull(),
++  run_count: integer('run_count').default(0),
+   enabled: boolean('enabled').notNull().default(true),
+ });
+diff --git a/server/drizzle/0012_agent_run_count.sql b/server/drizzle/0012_agent_run_count.sql
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/server/drizzle/0012_agent_run_count.sql
+@@ -0,0 +1,1 @@
++ALTER TABLE "agents" ADD COLUMN "run_count" integer DEFAULT 0;

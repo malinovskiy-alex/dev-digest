@@ -25,9 +25,35 @@ Append only — never edit or delete an entry. Something proven wrong gets
 
 ## What Works
 
-*(nothing yet)*
+### 2026-09-19 — test a command-text hook from a scratchpad script, not from a Bash command
+**Symptom:** every attempt to pipe-test the `gh pr create` guard was blocked by
+the guard itself, because the test command contained the trigger phrase.
+**Cause:** the hook inspects the command text of the very call that tests it.
+**Rule:** put the cases in a `.mjs` file in the scratchpad, run `node <file>`, and
+build the trigger inside it by concatenation (`'gh' + ' pr ' + 'create'`) so the
+outer command never carries it. Feed each case with
+`execFileSync('node', [guard], { input: JSON.stringify({ tool_input: { command } }) })`
+and assert on `"deny"` in stdout.
+**Where:** `.claude/skills/pr-self-review/scripts/pr-guard.mjs:15` (the deny
+payload the test asserts on)
 
 ## What Doesn't Work
+
+### 2026-09-19 — a PreToolUse Bash hook sees raw command TEXT, so a substring matcher blocks innocent commands
+**Symptom:** the `pr-self-review` guard, matching `/\bgh pr create\b/`, refused a
+`node -e "…"` command whose only sin was containing that phrase inside a quoted
+string. The hook error replaced the command's output, so the command never ran.
+**Cause:** a hook receives `tool_input.command` as text and cannot know which part
+of it is a command and which is an argument. Any substring match fires on
+documentation, echoes and test fixtures. The `if: "Bash(gh pr create*)"` filter in
+`.claude/settings.json` did **not** prevent the hook from running on the
+non-matching command either, so the filter cannot be the guarantee.
+**Rule:** anchor a command matcher to the start of a command —
+`(^|[;&|(]|\n)\s*(\w+=\S+\s+)*(sudo\s+)?<cmd>` — and re-check the command
+inside the script rather than relying on `if`. Accept that a literal
+`; gh pr create` inside a quoted string still trips it.
+**Where:** `.claude/skills/pr-self-review/scripts/pr-guard.mjs:37` (the matcher),
+`.claude/settings.json:10` (the `if` filter)
 
 ### 2026-09-16 — `grep -r` over the repo doubles every hit and can hang
 **Symptom:** a `grep -o -E` across the tree ran past 120s and returned two
@@ -91,7 +117,20 @@ work only through tsconfig `paths`, consumed as TypeScript source (tsx/vitest).
 
 ## Tool & Library Notes
 
-*(nothing yet)*
+### 2026-09-19 — a hook cannot see an inline `VAR=1 cmd` prefix, but a brand-new `.claude/settings.json` takes effect at once
+**Symptom:** two surprises while wiring the first hook in this repo. A documented
+bypass `PR_SELF_REVIEW_SKIP=1 gh pr create` did nothing, and the hook started
+firing immediately after `.claude/settings.json` was created — no `/hooks`, no
+restart.
+**Cause:** the shell applies an inline env prefix when it runs the command, which
+is *after* the hook has already decided, so `process.env` in the hook never holds
+it. And the settings watcher did pick up a settings file that did not exist when
+the session started, contrary to the usual caveat.
+**Rule:** read an escape-hatch variable out of `tool_input.command`, not only out
+of `process.env`. After creating a settings file, test the hook instead of
+assuming a restart is needed — and instead of assuming it is live.
+**Where:** `.claude/skills/pr-self-review/scripts/pr-guard.mjs:42` (the bypass
+check), `.claude/settings.json:1`
 
 ## Recurring Errors & Fixes
 
@@ -131,3 +170,8 @@ whole-file diff means you flipped the endings, not that you edited the file.
 - 2026-09-16 — implemented L01 Run Cost Badge across shared contracts, server
   and client. The plan leaned on the removal commit `d45ab0d`; that approach is
   now ruled out for lesson work (see *Codebase Patterns*).
+- 2026-09-19 — built the `pr-self-review` skill: a pre-PR router and gate that
+  maps the open diff onto the repo's other skills, runs deterministic gates
+  G1–G12 plus `pnpm arch`, and blocks `gh pr create` through the first
+  `.claude/settings.json` hook in this repo. Severity, verdict and the block rule
+  are read from the product's own contracts rather than invented.
