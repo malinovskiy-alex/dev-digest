@@ -76,6 +76,8 @@ client → `next-best-practices`, `react-best-practices`, `react-testing-library
 anywhere → `zod`, `typescript-expert`, `security`. docs → `mermaid-diagram`.
 end of a substantive task → `engineering-insights`, which files what you learned
 into the right `INSIGHTS.md`.
+before you open a pull request → `pr-self-review`, which reviews every open
+change and refuses to open the PR while a CRITICAL stands.
 
 ## Where to write what
 
