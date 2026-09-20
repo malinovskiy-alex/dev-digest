@@ -1,0 +1,49 @@
+# Vendored-contract drift guard.
+#
+# `@devdigest/shared` is vendored twice — server/src/vendor/shared and
+# client/src/vendor/shared — because the four packages deliberately share no
+# workspace. Both AGENTS.md files require the copies to stay byte-compatible,
+# and nothing enforced that until this job: they had drifted by 120 lines
+# across 5 files, including `Provider` carrying 'openrouter' on the server and
+# not on the client, so the two ends disagreed about what a provider is.
+#
+# The server copy is the source of truth. If this job fails, copy it over the
+# client one in the same commit as your change — do not edit either copy alone.
+name: contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/src/vendor/shared/**'
+      - 'client/src/vendor/shared/**'
+      - '.github/workflows/contracts.yml'
+  pull_request:
+    paths:
+      - 'server/src/vendor/shared/**'
+      - 'client/src/vendor/shared/**'
+      - '.github/workflows/contracts.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-drift:
+    name: vendored copies agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: diff the two vendored copies
+        run: |
+          if ! diff -r server/src/vendor/shared client/src/vendor/shared; then
+            echo ""
+            echo "::error::The vendored copies of @devdigest/shared have drifted."
+            echo "Fix: cp -r server/src/vendor/shared/. client/src/vendor/shared/"
+            exit 1
+          fi
+          echo "Vendored contracts are identical."

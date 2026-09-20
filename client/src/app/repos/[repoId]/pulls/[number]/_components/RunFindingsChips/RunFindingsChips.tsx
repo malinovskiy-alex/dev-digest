@@ -35,6 +35,10 @@ export function RunFindingsChips({ findings, counts, emptyFallback }: RunFinding
         type="button"
         {...triggerProps}
         title={canPreview ? t("timeline.previewFindings") : undefined}
+        // Without this the accessible name is whatever the chips happen to
+        // render — colour-coded counts. Named only when the trigger actually
+        // does something, so the label never promises an action that is off.
+        aria-label={canPreview ? t("timeline.previewFindings") : undefined}
         style={s.trigger(canPreview)}
       >
         <SeverityChips counts={counts} emptyFallback={emptyFallback} />

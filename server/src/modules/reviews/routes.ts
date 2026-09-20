@@ -26,10 +26,17 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   // Body stays a tolerant manual parse (both fields optional; empty body is OK).
   app.post(
     '/pulls/:id/review',
-    { schema: { params: IdParams }, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    {
+      // Declared on the route, not parsed in the handler, so malformed input
+      // 422s before we get here and the error envelope is rendered for free.
+      // Both fields are already optional; `.default({})` is what keeps a
+      // body-less POST valid, which is how the UI triggers "run all".
+      schema: { params: IdParams, body: RunRequest.default({}) },
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
     async (req) => {
     const { workspaceId } = await getContext(container, req);
-    const body = RunRequest.parse(req.body ?? {});
+    const body = req.body;
     const targets = await service.resolveTargets(workspaceId, {
       ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
       ...(body.all !== undefined ? { all: body.all } : {}),
