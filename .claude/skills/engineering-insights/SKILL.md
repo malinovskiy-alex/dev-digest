@@ -95,7 +95,7 @@ Delete the draft entry if any of these is true:
 - It could be pasted into an unrelated repo unchanged — that means it says nothing
   about *this* codebase.
 - It is a task log (`added the endpoint`) rather than a lesson.
-- It is already in this file, or in `<pkg>/CLAUDE.md`, `<pkg>/README.md` or
+- It is already in this file, or in `<pkg>/AGENTS.md`, `<pkg>/README.md` or
   `<pkg>/docs/`. Those homes win; `INSIGHTS.md` is for what has no home yet.
 
 Zero entries is a valid outcome. Say so and stop — a padded file costs the next

@@ -113,7 +113,7 @@ matter most are the criterion guard in `FindingsPanel.test.tsx` (the pill says
 contract in `FindingPreview.test.tsx` (`queryAllByRole("button")` and
 `queryAllByRole("link")` are both empty).
 
-No e2e flow is added: this is component-level behaviour, and `e2e/CLAUDE.md`
+No e2e flow is added: this is component-level behaviour, and `e2e/AGENTS.md`
 routes that to the client suite. See
 [`../e2e/docs/flow-or-component-test.md`](../e2e/docs/flow-or-component-test.md).
 

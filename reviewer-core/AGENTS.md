@@ -15,7 +15,7 @@ These are **not** loaded for you. Read the file when its trigger matches.
 | [specs/](specs/README.md) | you are about to build something that does not exist yet — write the plan there first |
 | [INSIGHTS.md](INSIGHTS.md) | a finding went missing or a score looks wrong — check here **before** you start debugging |
 | [../docs/agent-prompts/](../docs/agent-prompts/README.md) | you are changing what goes *into* a prompt — the built-in reviewer prompts live only there |
-| [../CLAUDE.md](../CLAUDE.md) | your change crosses a package boundary |
+| [../AGENTS.md](../AGENTS.md) | your change crosses a package boundary |
 
 ## Commands
 

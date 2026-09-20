@@ -26,10 +26,10 @@ one up front only if you are planning a change there.
 
 | Package | What it is | Port | Rules |
 |---|---|---|---|
-| `server/` | Fastify 5 + Drizzle/Postgres — imports repos and PRs, indexes, runs reviews | 3001 | [server/CLAUDE.md](server/CLAUDE.md) |
-| `client/` | Next.js 15 studio | 3000 | [client/CLAUDE.md](client/CLAUDE.md) |
-| `reviewer-core/` | pure review engine: diff → prompt → LLM → findings | — | [reviewer-core/CLAUDE.md](reviewer-core/CLAUDE.md) |
-| `e2e/` | deterministic browser flows | — | [e2e/CLAUDE.md](e2e/CLAUDE.md) |
+| `server/` | Fastify 5 + Drizzle/Postgres — imports repos and PRs, indexes, runs reviews | 3001 | [server/AGENTS.md](server/AGENTS.md) |
+| `client/` | Next.js 15 studio | 3000 | [client/AGENTS.md](client/AGENTS.md) |
+| `reviewer-core/` | pure review engine: diff → prompt → LLM → findings | — | [reviewer-core/AGENTS.md](reviewer-core/AGENTS.md) |
+| `e2e/` | deterministic browser flows | — | [e2e/AGENTS.md](e2e/AGENTS.md) |
 
 `repo-intel`, the codebase indexer, lives **inside** the server: `server/src/modules/repo-intel`.
 
@@ -43,7 +43,7 @@ one up front only if you are planning a change there.
 otherwise. On Windows run it from Git Bash, and if Docker Desktop did not add
 itself to `PATH`, add `/c/Program Files/Docker/Docker/resources/bin` first or
 bring the stack up by hand: `docker compose up -d`, then follow
-[server/CLAUDE.md](server/CLAUDE.md) and [client/CLAUDE.md](client/CLAUDE.md).
+[server/AGENTS.md](server/AGENTS.md) and [client/AGENTS.md](client/AGENTS.md).
 
 Every other command runs **from inside the package directory**, never the root.
 Node >= 22. **`pnpm`** for `server/` and `client/`; `reviewer-core/` and `e2e/`
@@ -85,7 +85,7 @@ into the right `INSIGHTS.md`.
 | a non-obvious fact that cost you time | `<pkg>/INSIGHTS.md` |
 | something a human needs to run the package | `<pkg>/README.md` |
 
-Never restate README content inside a `CLAUDE.md`. One fact, one home, links
+Never restate README content inside a `AGENTS.md`. One fact, one home, links
 everywhere else.
 
 ## Session protocol

@@ -36,7 +36,7 @@ Session Notes · Open Questions. Also the source of:
 
 Source of the append-only rule in §5, quoted exactly: *"Do not overwrite existing
 entries — only append, or correct with a dated note."* Also draws the line this
-skill depends on — stable configuration belongs in `CLAUDE.md`, evolving
+skill depends on — stable configuration belongs in `AGENTS.md`, evolving
 discoveries belong in the insights file. "Project handbook" versus "sprint
 retrospective notes."
 
@@ -94,7 +94,7 @@ From the Anthropic guide, and worth checking against on every edit:
 
 | Source says | This repo does | Why |
 |---|---|---|
-| File is `LEARNINGS.md` | `INSIGHTS.md` | The name predates this skill and the root `CLAUDE.md` already routes non-obvious facts there. Two names for one thing breaks "one fact, one home". |
+| File is `LEARNINGS.md` | `INSIGHTS.md` | The name predates this skill and the root `AGENTS.md` already routes non-obvious facts there. Two names for one thing breaks "one fact, one home". |
 | One file at the repo root | One per package, plus a root file for cross-package facts | Knowledge lives next to the code it describes, and a session in `client/` should not page in `server/` lessons. |
 | Free-form entries under each section | Fixed `Symptom / Cause / Rule / Where` shape | The shape is already established in this repo, and each field forces a piece of the cold-reader bar: `Where:` makes the entry verifiable, `Rule:` makes it actionable. |
 | Sections only | Sections plus an explicit first-match-wins order | The seven sections overlap heavily — a silent `db:migrate` fits under three of them. Without a tie-break the same class of fact scatters, and nothing is findable. |

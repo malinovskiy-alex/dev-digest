@@ -46,7 +46,7 @@ semantics that the current code sidesteps:
    left join agent_runs ar on ar.id = r.run_id
    where r.run_id is not null and ar.id is null;
    ```
-2. **New migration** (never edit an applied one — `../CLAUDE.md`): null out the
+2. **New migration** (never edit an applied one — `../AGENTS.md`): null out the
    orphans found above, then
    `alter table reviews add constraint reviews_run_id_fk
    foreign key (run_id) references agent_runs(id) on delete restrict`.
@@ -54,7 +54,7 @@ semantics that the current code sidesteps:
 3. **Keep `deleteAgentRun`'s explicit review delete** and its comment; under
    `RESTRICT` it is load-bearing, not redundant.
 4. **Integration test** (`*.it.test.ts` — anything touching Postgres must be, see
-   `../CLAUDE.md`): deleting a run with a review succeeds and removes both;
+   `../AGENTS.md`): deleting a run with a review succeeds and removes both;
    inserting a review with a fabricated `run_id` is rejected.
 
 ## Not in scope
