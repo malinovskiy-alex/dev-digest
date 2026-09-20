@@ -11,6 +11,24 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Doesn't Work
 
+### 2026-09-20 — a runtime import from `vendor/shared` breaks the whole client
+**Symptom:** every route 500s with
+`./src/vendor/shared/index.ts: Can't resolve './contracts/findings.js'`, while
+`pnpm typecheck` and all 111 client tests are green.
+**Cause:** the vendored barrel re-exports with Node-style `./contracts/*.js`
+specifiers. Vitest (vite) maps `.js` → `.ts`; the Next bundler does not. Until
+L02 every `@devdigest/shared` import in `client/` was `import type`, erased
+before any bundler saw it — so the barrel had never actually been bundled. The
+first runtime import (`SkillType.options` for a picker) was enough to break
+`next dev` and `next build` everywhere, not just on the new screen.
+**Rule:** in `client/`, import **types only** from `@devdigest/shared`. A
+runtime value belongs in `src/lib/` as a local const with a compile-time
+exhaustiveness check against the contract — see `src/lib/skill-types.ts`.
+And **run `pnpm build`**: neither the unit suite nor `tsc` can see this class of
+failure.
+**Where:** `client/src/vendor/shared/index.ts:17`, `client/src/lib/skill-types.ts`
+
+
 ### 2026-09-20 — parallel integration files silently skip themselves
 **Symptom:** `pnpm exec vitest run .it.test` reports *3 passed, 6 skipped* with
 `Docker not available — skipping integration tests`, on a machine where Docker

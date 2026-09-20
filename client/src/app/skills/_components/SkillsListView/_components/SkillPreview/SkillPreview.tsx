@@ -19,7 +19,8 @@ import {
   Textarea,
   ErrorState,
 } from "@devdigest/ui";
-import { SkillType, type Skill } from "@devdigest/shared";
+import type { Skill } from "@devdigest/shared";
+import { SKILL_TYPES } from "@/lib/skill-types";
 import { useDeleteSkill, useSkill, useUpdateSkill } from "@/lib/hooks/skills";
 import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
@@ -64,7 +65,7 @@ export function SkillPreview({
     return <ErrorState body={t("page.loadError")} onRetry={() => refetch()} />;
   }
 
-  const typeOptions = SkillType.options.map((v) => ({ value: v, label: t(`listItem.type.${v}`) }));
+  const typeOptions = SKILL_TYPES.map((v) => ({ value: v, label: t(`listItem.type.${v}`) }));
 
   const save = async () => {
     const patch = changedFields(skill, draft ?? toDraft(skill));

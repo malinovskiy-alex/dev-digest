@@ -17,7 +17,8 @@ import {
   TextInput,
   Textarea,
 } from "@devdigest/ui";
-import { SkillType, type Skill, type SkillImportPreview } from "@devdigest/shared";
+import type { Skill, SkillImportPreview } from "@devdigest/shared";
+import { SKILL_TYPES } from "@/lib/skill-types";
 import { useConfirmImport, useImportPreview, type ImportUpload } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { ImportEntryTable } from "./_components/ImportEntryTable";
@@ -102,7 +103,7 @@ export function ImportSkillDrawer({
     }
   };
 
-  const typeOptions = SkillType.options.map((v) => ({ value: v, label: t(`listItem.type.${v}`) }));
+  const typeOptions = SKILL_TYPES.map((v) => ({ value: v, label: t(`listItem.type.${v}`) }));
 
   return (
     <Drawer
