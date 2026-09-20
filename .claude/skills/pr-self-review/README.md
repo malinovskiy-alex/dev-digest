@@ -21,7 +21,6 @@ refuses `gh pr create` until a fresh, passing report exists.
 | [references/report.md](references/report.md) | `last-run.json` schema, freshness rules, terminal contract |
 | [references/hook.md](references/hook.md) | the `gh pr create` guard and why it is a hook |
 | [examples.md](examples.md) | blocking, non-blocking, false-positive, gate-only, second run |
-| [evals/](evals/) | 8 cases / 30 assertions, including the blocking canary |
 | `scripts/gates.mjs` | the deterministic half — diff inventory, routing, G1–G12 |
 | `scripts/pr-guard.mjs` | the hook: freshness check, deny with a reason |
 | `scripts/lib/` | shared git plumbing and the machine-readable routing table |
@@ -42,7 +41,7 @@ Node builtins only. Writes `.devdigest/cache/pr-self-review/gates.json`
 - **The vocabulary is the product's.** `Severity`, `Verdict`, `Finding`,
   `CiFailOn` come from `server/src/vendor/shared/contracts/`, and the definition
   of CRITICAL from `docs/agent-prompts/general-reviewer.md:53-73`. Cited by file
-  and line, never copied — so drift is detectable (eval 7).
+  and line, never copied — so drift is detectable.
 - **Routing lives here, not in the skills.** No skill declares where it applies,
   and the product's `Skill` contract has no path field either. Most skills are
   vendored from upstream (`skills-lock.json`) and cannot be edited locally.
@@ -67,4 +66,4 @@ Internal, all verified in this repository:
 (`pnpm arch`, and the baseline pattern reused for tests) ·
 `server/src/modules/index.ts`, `server/drizzle/`, `client/messages/en/`
 (the seams behind G8–G12) · `skills-lock.json` (which skills are vendored) ·
-`.claude/skills/frontend-ui-architecture/` (package layout and `evals.json` shape).
+`.claude/skills/frontend-ui-architecture/` (package layout).

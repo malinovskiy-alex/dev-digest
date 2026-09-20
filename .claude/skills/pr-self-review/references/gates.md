@@ -127,5 +127,5 @@ for that run.
    judgement, it is a lens rule, not a gate.
 2. Implement it in `scripts/gates.mjs` with an id, and document the row here.
 3. CRITICAL only if merging it breaks something. Otherwise WARNING.
-4. Add an eval fixture that makes it fire, and check it stays silent on a clean
+4. Check it fires on a diff that should trip it AND stays silent on a clean
    tree — a gate that fires on everything is deleted within a week.
