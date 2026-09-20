@@ -30,6 +30,20 @@ per-instance scoping first.
 
 ## Codebase Patterns
 
+### 2026-09-20 — `pnpm typecheck` does not cover `test/`
+**Symptom:** a test file with a genuine type error passes `pnpm typecheck`
+clean, then fails at runtime — or, worse, never fails, because the error is in a
+branch vitest does not reach. Two people hit this independently in one day while
+building L02.
+**Cause:** `server/tsconfig.json` sets `"include": ["src/**/*.ts"]`. The test
+directory is outside it, so `tsc --noEmit -p tsconfig.json` never sees a single
+file under `test/`.
+**Rule:** when a test file's types matter, typecheck it explicitly — a scratch
+tsconfig that `extends` the server one and includes `test/**/*.ts` does it in one
+command. Do not assume a clean `pnpm typecheck` says anything about your tests.
+**Where:** `server/tsconfig.json`
+
+
 ### 2026-09-19 — four modules query Drizzle straight from `routes.ts`, with no service
 **Symptom:** `AGENTS.md` describes a routes → service → repository layering, but
 `pulls`, `polling`, `settings` and `workspace` have no `service.ts` at all — their
