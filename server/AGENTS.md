@@ -23,6 +23,7 @@ pnpm dev          # tsx watch, :3001
 pnpm db:migrate   # NEVER runs on boot — you run it
 pnpm db:seed      # idempotent demo data
 pnpm typecheck
+pnpm arch         # import-boundary check; fails on any NEW ring violation
 pnpm test                                         # both suites
 pnpm exec vitest run --exclude '**/*.it.test.ts'  # unit only, no Docker
 pnpm exec vitest run .it.test                     # integration, needs Docker
@@ -33,7 +34,13 @@ pnpm exec vitest run .it.test                     # integration, needs Docker
 - **Never construct an adapter with `new` inside a service.** Everything goes
   through the DI container (`src/platform/container.ts`) so tests can inject
   mocks via `ContainerOverrides`. Services depend on the port interfaces from
-  `@devdigest/shared`, not on concrete classes.
+  `@devdigest/shared`, not on concrete classes. A service may `new` **its own**
+  module's repository — that has no port and no mock.
+- **Imports point inward**: `routes.ts` → `service.ts` → `repository.ts`, never
+  the reverse and never a shortcut. `pnpm arch` enforces it
+  (`.dependency-cruiser.cjs`); today's exceptions are grandfathered in the
+  baseline and listed in [specs/onion-debt.md](specs/onion-debt.md). The
+  reasoning lives in the `onion-architecture` skill.
 - **Plugin order is load-bearing.** helmet / cors / rate-limit / SSE and the
   error handler register *before* the modules, because each module is an
   encapsulated Fastify plugin and only inherits what was registered earlier.

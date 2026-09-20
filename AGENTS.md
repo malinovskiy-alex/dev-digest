@@ -70,7 +70,8 @@ still carry a starter `package-lock.json`.
 
 ## Skills
 
-server → `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design`.
+server → `onion-architecture`, `fastify-best-practices`, `drizzle-orm-patterns`,
+`postgresql-table-design`.
 client → `next-best-practices`, `react-best-practices`, `react-testing-library`.
 anywhere → `zod`, `typescript-expert`, `security`. docs → `mermaid-diagram`.
 end of a substantive task → `engineering-insights`, which files what you learned

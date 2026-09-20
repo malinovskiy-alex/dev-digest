@@ -1,0 +1,110 @@
+diff --git a/server/src/modules/digests/service.ts b/server/src/modules/digests/service.ts
+new file mode 100644
+--- /dev/null
++++ b/server/src/modules/digests/service.ts
+@@ -0,0 +1,58 @@
++import type { Container } from '../../platform/container.js';
++import type { FastifyRequest } from 'fastify';
++import { eq } from 'drizzle-orm';
++import * as t from '../../db/schema.js';
++import { OctokitGitHubClient } from '../../adapters/github/octokit.js';
++import { DIGEST_JOB_KIND } from '../repo-intel/constants.js';
++import { DigestRepository } from './repository.js';
++
++export class DigestService {
++  private repo: DigestRepository;
++
++  constructor(private container: Container) {
++    this.repo = new DigestRepository(container.db);
++  }
++
++  /** Build the weekly digest for the workspace behind this request. */
++  async build(req: FastifyRequest) {
++    const workspaceId = (req.headers['x-workspace-id'] as string) ?? 'default';
++
++    const token = await this.container.secrets.get('GITHUB_TOKEN');
++    const github = new OctokitGitHubClient(token!);
++    const prs = await github.listPullRequests({ owner: 'acme', name: 'web' });
++
++    const runs = await this.container.db
++      .select()
++      .from(t.agentRuns)
++      .where(eq(t.agentRuns.workspaceId, workspaceId));
++
++    const summary = summarize(runs, prs);
++    await this.repo.insertDigest(workspaceId, summary);
++
++    this.container.jobs.enqueue(DIGEST_JOB_KIND, { workspaceId });
++    return summary;
++  }
++}
++
++function summarize(runs: typeof t.agentRuns.$inferSelect[], prs: unknown[]) {
++  return {
++    total_runs: runs.length,
++    blockers: runs.filter((r) => r.verdict === 'request_changes').length,
++    prs: prs.length,
++  };
++}
+diff --git a/server/src/modules/digests/routes.ts b/server/src/modules/digests/routes.ts
+new file mode 100644
+--- /dev/null
++++ b/server/src/modules/digests/routes.ts
+@@ -0,0 +1,24 @@
++import type { FastifyInstance } from 'fastify';
++import { eq } from 'drizzle-orm';
++import * as t from '../../db/schema.js';
++import { DigestService } from './service.js';
++
++export default async function digestRoutes(app: FastifyInstance) {
++  const service = new DigestService(app.container);
++
++  app.post('/digests/build', async (req, reply) => {
++    try {
++      const summary = await service.build(req);
++      return summary;
++    } catch (err) {
++      reply.status(500);
++      return { error: { code: 'digest_failed', message: String(err) } };
++    }
++  });
++
++  app.get('/digests/latest', async () => {
++    const [row] = await app.container.db
++      .select()
++      .from(t.digests)
++      .orderBy(t.digests.createdAt);
++    return row ?? null;
++  });
++}
+diff --git a/server/src/modules/digests/helpers.ts b/server/src/modules/digests/helpers.ts
+new file mode 100644
+--- /dev/null
++++ b/server/src/modules/digests/helpers.ts
+@@ -0,0 +1,12 @@
++import * as t from '../../db/schema.js';
++
++/** Format a digest row for the API. */
++export function toDigestDto(row: typeof t.digests.$inferSelect) {
++  return {
++    id: row.id,
++    created_at: row.createdAt.toISOString(),
++    total_runs: row.totalRuns,
++  };
++}
+diff --git a/server/test/digests.test.ts b/server/test/digests.test.ts
+new file mode 100644
+--- /dev/null
++++ b/server/test/digests.test.ts
+@@ -0,0 +1,16 @@
++import { describe, it, expect } from 'vitest';
++import { PostgreSqlContainer } from '@testcontainers/postgresql';
++import { DigestService } from '../src/modules/digests/service.js';
++
++describe('DigestService', () => {
++  it('builds a digest', async () => {
++    const pg = await new PostgreSqlContainer().start();
++    // …boot a container, run migrations, construct the service
++    expect(true).toBe(true);
++  });
++});
