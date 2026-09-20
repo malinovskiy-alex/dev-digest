@@ -1,0 +1,98 @@
+diff --git a/client/src/utils.ts b/client/src/utils.ts
+new file mode 100644
+--- /dev/null
++++ b/client/src/utils.ts
+@@ -0,0 +1,14 @@
++export function formatDuration(ms: number) {
++  if (ms < 1000) return `${ms}ms`;
++  return `${(ms / 1000).toFixed(1)}s`;
++}
++
++export function prUrl(owner: string, repo: string, n: number) {
++  return `https://github.com/${owner}/${repo}/pull/${n}`;
++}
++
++export function truncate(s: string, n: number) {
++  return s.length > n ? `${s.slice(0, n)}…` : s;
++}
+
+diff --git a/client/src/app/agents/_components/AgentRunList/AgentRunList.tsx b/client/src/app/agents/_components/AgentRunList/AgentRunList.tsx
+new file mode 100644
+--- /dev/null
++++ b/client/src/app/agents/_components/AgentRunList/AgentRunList.tsx
+@@ -0,0 +1,52 @@
++"use client";
++
++import { useEffect, useState } from "react";
++import { SEVERITY_ORDER } from "@/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/constants";
++import { s } from "@/app/repos/[repoId]/pulls/[number]/_components/FindingCard/styles";
++import { formatDuration, truncate } from "@/utils";
++
++type Run = {
++  id: string;
++  agentId: string;
++  durationMs: number;
++  costCents: number;
++  findings: { severity: string; title: string }[];
++};
++
++export function AgentRunList({ agentId }: { agentId: string }) {
++  const [runs, setRuns] = useState<Run[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [expensiveCount, setExpensiveCount] = useState(0);
++
++  useEffect(() => {
++    fetch(`http://localhost:3001/agents/${agentId}/runs`)
++      .then((r) => r.json())
++      .then((data) => {
++        setRuns(data);
++        setLoading(false);
++      });
++  }, [agentId]);
++
++  useEffect(() => {
++    setExpensiveCount(runs.filter((r) => r.costCents > 50).length);
++  }, [runs]);
++
++  if (loading) return <p>Loading runs…</p>;
++
++  return (
++    <div style={s.card}>
++      <h3>Recent runs</h3>
++      <p>{expensiveCount} runs cost more than $0.50</p>
++      {runs.map((run) => (
++        <div key={run.id}>
++          <span>{formatDuration(run.durationMs)}</span>
++          {[...run.findings]
++            .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
++            .slice(0, 3)
++            .map((f) => (
++              <span key={f.title}>{truncate(f.title, 40)}</span>
++            ))}
++        </div>
++      ))}
++    </div>
++  );
++}
+
+diff --git a/client/src/app/agents/page.tsx b/client/src/app/agents/page.tsx
+--- a/client/src/app/agents/page.tsx
++++ b/client/src/app/agents/page.tsx
+@@ -1,10 +1,14 @@
+ "use client";
+
+ import { useAgents } from "@/lib/hooks";
+ import { AgentsListView } from "./_components/AgentsListView";
++import { AgentRunList } from "./_components/AgentRunList/AgentRunList";
+
+ export default function AgentsPage() {
+   const { data: agents = [] } = useAgents();
+-  return <AgentsListView agents={agents} />;
++  const active = agents.filter((a) => a.enabled && a.lastRunAt != null);
++  return (
++    <>
++      <AgentsListView agents={active} />
++      {active[0] && <AgentRunList agentId={active[0].id} />}
++    </>
++  );
+ }

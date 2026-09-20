@@ -20,5 +20,15 @@
     "title": "No repo selected",
     "body": "This repository isn't in your workspace — it may have been removed, or the link is stale. Add a repo or pick another from the switcher to get started.",
     "cta": "Add repository"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "body": "This screen hit an unexpected error. Retrying usually fixes it; if it keeps happening, check that the DevDigest engine is running.",
+    "retry": "Try again"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "That URL does not match any screen in the studio.",
+    "home": "Go to the start"
   }
 }

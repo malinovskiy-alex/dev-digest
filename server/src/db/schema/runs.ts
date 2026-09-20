@@ -1,11 +1,22 @@
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  jsonb,
+  timestamp,
+  doublePrecision,
+  index,
+} from 'drizzle-orm/pg-core';
 import { workspaces } from './core';
 import { agents } from './agents';
 import { pullRequests } from './pulls';
 
 // ============================================================ Observability
 
-export const agentRuns = pgTable('agent_runs', {
+export const agentRuns = pgTable(
+  'agent_runs',
+  {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
     .notNull()
@@ -30,7 +41,16 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
-});
+  },
+  (t) => ({
+    // The PR detail timeline: every run for one PR, newest first. Postgres does
+    // not index foreign keys on its own, so without this the table is scanned
+    // and the scan grows with every review ever run.
+    prIdx: index('agent_runs_ws_pr_ran_idx').on(t.workspaceId, t.prId, t.ranAt),
+    // The boot-time reaper looks for runs still marked 'running'.
+    statusIdx: index('agent_runs_status_idx').on(t.status),
+  }),
+);
 
 /** Whole trace of one run as a SINGLE jsonb document. */
 export const runTraces = pgTable('run_traces', {

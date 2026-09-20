@@ -7,6 +7,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import type { PrMeta } from "@devdigest/shared";
 import { SeverityChips, totalOf } from "@/components/severity-chips";
 import { useFindingsPopover } from "@/components/findings-popover";
@@ -18,6 +19,7 @@ export interface FindingsCellProps {
 }
 
 export function FindingsCell({ pr }: FindingsCellProps) {
+  const t = useTranslations("prReview");
   const hasFindings = totalOf(pr.findings) > 0;
   const prId = pr.id ?? null;
   const canPreview = hasFindings && prId != null;
@@ -28,7 +30,14 @@ export function FindingsCell({ pr }: FindingsCellProps) {
 
   return (
     <div style={s.cell} onClick={(e) => e.stopPropagation()}>
-      <button type="button" {...triggerProps} style={s.trigger(canPreview)}>
+      <button
+        type="button"
+        {...triggerProps}
+        // Same reason as RunFindingsChips: the chips are colour-coded counts,
+        // so without a label a screen reader announces a bare number.
+        aria-label={canPreview ? t("timeline.previewFindings") : undefined}
+        style={s.trigger(canPreview)}
+      >
         <SeverityChips counts={pr.findings} emptyFallback={<span style={s.muted}>—</span>} />
       </button>
       {anchor && prId && (
