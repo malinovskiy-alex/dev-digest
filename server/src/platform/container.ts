@@ -26,6 +26,7 @@ import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import { RepoRepository } from '../modules/repos/repository.js';
+import { SkillsRepository } from '../modules/skills/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
@@ -74,6 +75,7 @@ export class Container {
   private _agentsRepo?: AgentsRepository;
   private _reviewRepo?: ReviewRepository;
   private _reposRepo?: RepoRepository;
+  private _skillsRepo?: SkillsRepository;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
@@ -109,6 +111,17 @@ export class Container {
    */
   get reposRepo(): RepoRepository {
     return (this._reposRepo ??= new RepoRepository(this.db));
+  }
+
+  /**
+   * The `skills` data layer, shared because the review path needs it outside the
+   * skills module: `run-executor` resolves an agent's ordered, enabled skill
+   * bodies before assembling the prompt. A service may only construct its OWN
+   * module's repository, so it comes off the container rather than being `new`ed
+   * inside `modules/reviews`. See L02 6.7.
+   */
+  get skillsRepo(): SkillsRepository {
+    return (this._skillsRepo ??= new SkillsRepository(this.db));
   }
 
   get codeIndex(): CodeIndex {

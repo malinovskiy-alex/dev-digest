@@ -213,6 +213,7 @@ export class AgentsRepository {
         target: [t.agentSkills.agentId, t.agentSkills.skillId],
         set: { order },
       });
+    await this.bumpForSkillChange(agentId);
   }
 
   async unlinkSkill(agentId: string, skillId: string): Promise<void> {
@@ -227,10 +228,45 @@ export class AgentsRepository {
    * the list are unlinked.
    */
   async setSkills(agentId: string, skillIds: string[]): Promise<void> {
+    // Re-posting the same ordered set is not a change. The Skills tab writes the
+    // whole array on every interaction, so without this an idempotent save would
+    // inflate the agent's version on each render-triggered retry.
+    const current = await this.skillIdsForAgent(agentId);
+    if (current.length === skillIds.length && current.every((id, i) => id === skillIds[i])) {
+      return;
+    }
+
     await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (skillIds.length === 0) return;
-    await this.db
-      .insert(t.agentSkills)
-      .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+    if (skillIds.length > 0) {
+      await this.db
+        .insert(t.agentSkills)
+        .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+    }
+    // Detaching everything is a change too, so this runs for an empty list.
+    await this.bumpForSkillChange(agentId);
+  }
+
+  /**
+   * Bump the agent's config version and snapshot it, after its skill links moved.
+   *
+   * `AgentVersionConfig.skills` is part of every snapshot, so an agent whose
+   * links changed without a bump would carry a version that no longer describes
+   * the prompt it produces: attach three skills and the agent still reads v1,
+   * while the recorded v1 has an empty `skills` array. See L02 D7.
+   *
+   * Takes no workspaceId: every caller has already resolved the agent inside its
+   * workspace (the service checks before touching links).
+   */
+  private async bumpForSkillChange(agentId: string): Promise<void> {
+    const [existing] = await this.db.select().from(t.agents).where(eq(t.agents.id, agentId));
+    if (!existing) return;
+    const nextVersion = existing.version + 1;
+    const [updated] = await this.db
+      .update(t.agents)
+      .set({ version: nextVersion })
+      .where(eq(t.agents.id, agentId))
+      .returning();
+    // snapshotVersion re-reads the links, so it must run AFTER they are written.
+    if (updated) await this.snapshotVersion(updated, nextVersion);
   }
 }
