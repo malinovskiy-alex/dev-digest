@@ -20,17 +20,26 @@ import {
   ErrorState,
 } from "@devdigest/ui";
 import { SkillType, type Skill } from "@devdigest/shared";
-import { useSkill, useUpdateSkill } from "@/lib/hooks/skills";
+import { useDeleteSkill, useSkill, useUpdateSkill } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { BODY_ROWS, DESCRIPTION_ROWS } from "./constants";
 import { changedFields, isUntrusted, toDraft, type SkillDraft } from "./helpers";
 import { s } from "./styles";
 
-export function SkillPreview({ skillId }: { skillId: string }): React.JSX.Element {
+export function SkillPreview({
+  skillId,
+  onDeleted,
+}: {
+  skillId: string;
+  /** Lets the list drop its selection — this panel is about to describe a row
+      that no longer exists. */
+  onDeleted?: () => void;
+}): React.JSX.Element {
   const t = useTranslations("skills");
   const toast = useToast();
   const { data: skill, isLoading, isError, refetch } = useSkill(skillId);
   const update = useUpdateSkill();
+  const del = useDeleteSkill();
   // `draft === null` IS read mode — one source of truth instead of an
   // `editing` boolean that can disagree with the form it guards.
   const [draft, setDraft] = React.useState<SkillDraft | null>(null);
@@ -62,6 +71,18 @@ export function SkillPreview({ skillId }: { skillId: string }): React.JSX.Elemen
     const saved = await update.mutateAsync({ id: skill.id, patch });
     setDraft(null);
     toast.success(t("preview.saved", { version: saved.version }));
+  };
+
+  /**
+   * The confirm cannot quote a usage count: `unlinked_from` is only knowable
+   * AFTER the cascade has run, so the number goes in the result toast instead
+   * of being guessed at in the question.
+   */
+  const remove = async () => {
+    if (!window.confirm(t("preview.deleteConfirm", { name: skill.name }))) return;
+    const result = await del.mutateAsync(skill.id);
+    toast.success(t("preview.deleted", { name: skill.name, count: result.unlinked_from }));
+    onDeleted?.();
   };
 
   if (draft) {
@@ -117,6 +138,16 @@ export function SkillPreview({ skillId }: { skillId: string }): React.JSX.Elemen
         </div>
         <Button kind="secondary" size="sm" icon="Edit" onClick={() => setDraft(toDraft(skill))}>
           {t("preview.edit")}
+        </Button>
+        <Button
+          kind="ghost"
+          size="sm"
+          icon="Trash"
+          onClick={remove}
+          disabled={del.isPending}
+          aria-label={t("preview.delete")}
+        >
+          {t("preview.delete")}
         </Button>
       </div>
       <div style={s.metaRow}>

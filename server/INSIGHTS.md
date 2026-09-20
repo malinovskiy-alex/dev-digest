@@ -11,6 +11,25 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Doesn't Work
 
+### 2026-09-20 — parallel integration files silently skip themselves
+**Symptom:** `pnpm exec vitest run .it.test` reports *3 passed, 6 skipped* with
+`Docker not available — skipping integration tests`, on a machine where Docker
+is running and where each of those files passes 12/12 when run **alone**. The
+suite stays green, so the skip is invisible unless you read the file counts.
+**Cause:** `test/helpers/pg.ts:27` probes with
+`execSync('docker info', { timeout: 5000 })`. Vitest runs the files in parallel
+workers, the cache (`dockerCache`) is per-worker, so every worker shells out at
+once. Under that contention Docker Desktop on Windows regularly takes longer
+than 5 s, the probe throws, and the worker caches `false` and skips the file.
+**Why it matters:** a genuinely failing integration test is reported as
+*skipped*, not as a failure. "Both suites pass" means much less than it looks.
+**Rule:** when an integration run matters, check the **passed/skipped counts**,
+not just the exit code — and re-run any skipped file on its own before believing
+it. Adding integration files makes this worse: L02 took the suite from 6 files
+to 9 and the skipping became routine.
+**Where:** `server/test/helpers/pg.ts:23-33`
+
+
 ### 2026-09-15 — a DB test named `*.test.ts` poisons the unit suite
 **Symptom:** the hermetic run (`--exclude '**/*.it.test.ts'`) suddenly needs
 Docker, and `server-unit.yml` fails on a machine without it.

@@ -103,7 +103,7 @@ export function SkillsListView(): React.JSX.Element {
             </div>
             <div style={s.rail}>
               {selected ? (
-                <SkillPreview skillId={selected} />
+                <SkillPreview skillId={selected} onDeleted={() => setSelectedId(null)} />
               ) : (
                 <EmptyState
                   icon="FileText"

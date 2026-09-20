@@ -64,7 +64,7 @@
     "edit": "Edit",
     "cancel": "Cancel",
     "delete": "Delete skill",
-    "deleteConfirm": "Delete \"{name}\"? It is attached to {count} agent(s). This cannot be undone.",
+    "deleteConfirm": "Delete \"{name}\"? Any agent using it loses it. This cannot be undone.",
     "untrustedNotice": "This skill came from outside. An enabled skill is read as instructions inside your agent's prompt — read the body before you enable it.",
     "nameLabel": "Name",
     "descriptionLabel": "Description",
@@ -73,7 +73,8 @@
     "bodyLabel": "Body (Markdown)",
     "bodyHint": "Saving a changed body creates a new version.",
     "version": "v{version}",
-    "saved": "Saved (v{version})"
+    "saved": "Saved (v{version})",
+    "deleted": "Deleted \"{name}\" — unlinked from {count} agent(s)."
   },
   "import": {
     "title": "Import a skill",

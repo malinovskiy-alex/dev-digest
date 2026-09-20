@@ -39,13 +39,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderPreview() {
+function renderPreview(onDeleted?: () => void) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
         <ToastProvider>
-          <SkillPreview skillId="sk1" />
+          <SkillPreview skillId="sk1" onDeleted={onDeleted} />
         </ToastProvider>
       </NextIntlClientProvider>
     </QueryClientProvider>,
@@ -111,5 +111,40 @@ describe("SkillPreview", () => {
     expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "PUT")).toBe(
       false,
     );
+  });
+
+  it("deletes the skill after a confirm, and tells the caller", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") return jsonOk({ ok: true, unlinked_from: 2 });
+      return jsonOk(SKILL);
+    });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onDeleted = vi.fn();
+    renderPreview(onDeleted);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete skill" }));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls.find((c) => c[1]?.method === "DELETE")!;
+    expect(url).toContain("/skills/sk1");
+    expect(init!.method).toBe("DELETE");
+    // The count is only knowable after the cascade, so it belongs in the
+    // result, not in the question the user was asked.
+    expect(confirm.mock.calls[0]![0]).not.toContain("2");
+    expect(await screen.findByText(/unlinked from 2 agent/)).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it("deletes nothing when the confirm is declined", async () => {
+    fetchMock.mockImplementation(() => jsonOk(SKILL));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onDeleted = vi.fn();
+    renderPreview(onDeleted);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete skill" }));
+
+    expect(fetchMock.mock.calls.some((c) => c[1]?.method === "DELETE")).toBe(false);
+    expect(onDeleted).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });
