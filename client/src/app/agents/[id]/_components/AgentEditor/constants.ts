@@ -7,7 +7,12 @@ export interface EditorTab {
   icon: IconName;
 }
 
-/** Editor tabs. Part-0 ships Config only; later lessons add the rest. */
+/**
+ * Editor tabs. L02 adds Skills beside Config; the mockup's Evals / Stats / CI
+ * tabs stay unbuilt — the eval pipeline is a later lesson, and a tab with no
+ * screen behind it is a trap for the next reader.
+ */
 export const TABS: readonly EditorTab[] = [
   { key: "config", labelKey: "editor.tabs.config", icon: "Settings" },
+  { key: "skills", labelKey: "editor.tabs.skills", icon: "Sparkles" },
 ];
