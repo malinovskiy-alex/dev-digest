@@ -256,7 +256,13 @@ export class SkillsService {
   get(workspaceId: string, id: string): Promise<Skill | undefined>;
   create(workspaceId: string, input: CreateSkillInput): Promise<Skill>;
   update(workspaceId: string, id: string, patch: UpdateSkillInput): Promise<Skill | undefined>;
-  delete(workspaceId: string, id: string): Promise<boolean>;
+  /**
+   * BUILT AS `Promise<DeleteSkillResult | undefined>`, where
+   * `DeleteSkillResult = { unlinked_from: number }` and `undefined` means 404.
+   * A boolean cannot carry the count §6.3's response needs, and Ring 4 may not
+   * query the DB to find it (`routes-no-db`).
+   */
+  delete(workspaceId: string, id: string): Promise<DeleteSkillResult | undefined>;
   versions(workspaceId: string, id: string): Promise<SkillVersion[] | undefined>;
 
   /** Parse only. Writes nothing. Throws ValidationError on a bad upload. */
@@ -408,10 +414,13 @@ Failures, all `AppError` subclasses:
 | 413 | `archive_too_large` | decoded archive > 2 MiB, or an entry > 256 KiB |
 | 413 | — | Fastify's own limit, before the handler, if base64 > 4 MiB |
 
-`no_skill_core`, `unsupported_archive`, `unsafe_entry_path` are
-`ValidationError` subclasses (422); `archive_too_large` is a new
-`PayloadTooLargeError extends AppError` with status 413, added to
-`platform/errors.ts`.
+> **BUILT AS raw `AppError`s, not new subclasses.** `AppError`'s constructor
+> already takes `(code, message, statusCode)`, so `import-parse.ts` throws
+> `new AppError('no_skill_core', …, 422)` and friends directly. The rendered
+> envelope is byte-identical to what a subclass would produce — invisible to the
+> client — and `platform/errors.ts` stays untouched. Introducing
+> `ValidationError` / `PayloadTooLargeError` subclasses later is a refactor of
+> four factory calls with no API change.
 
 #### `POST /skills/import`
 
@@ -849,8 +858,16 @@ Skill 4 is **not** seeded. It ships as `server/fixtures/skills/flake-patterns.zi
 so the import path is walked end to end on camera and the entry table has an
 executable row to show. The seed leaves order 3 free for it.
 
-Skill 5 attached to the **General Reviewer** (D5) is the reuse requirement made
-visible: the same row, reachable from two agents, edited in one place.
+Skill 5 is seeded onto the **General Reviewer** only (D5) — it is the PR #484
+arm of the experiment.
+
+> **The "one skill, two agents" checkbox is a demo step, not a seeded fact.**
+> There is no second sensible slot for it: Test Quality Reviewer holds three
+> links and order 3 is reserved for the imported `flake-patterns`. Attaching
+> `api-contract-gate` to a second agent **in the UI**, on camera, is the better
+> demonstration anyway — reuse is something the user does, not something the
+> fixture asserts. The seed therefore leaves the row single-linked, and
+> `seed-skills.it.test.ts` asserts what is actually true.
 
 Seeding stays idempotent — look up by `(workspace_id, name)` and insert only when
 absent, exactly like the existing agent seeding at `seed.ts:218`. Links go
@@ -858,6 +875,12 @@ through `onConflictDoNothing` on `(agent_id, skill_id)`.
 
 > **Windows note.** `pnpm db:seed` exits 0 here without touching the database.
 > Verify by counting rows (`select count(*) from skills`), not by the exit code.
+> `seed-skills.it.test.ts` is the real verification.
+
+> **Re-seeding restores a link you detached.** The link insert is
+> `onConflictDoNothing` on `(agent_id, skill_id)`, so once a detach has deleted
+> the row a later `seed()` re-inserts it. If you detached `api-contract-gate`
+> for the "without skills" arm, detach it again after any re-seed.
 
 ---
 
@@ -961,7 +984,9 @@ The requirement checklist, each line mapped to something a human can see:
 - [ ] the **token delta** between the two runs is visible in the trace
 - [ ] the **control experiment reproduces** on both fixture PRs — a skipped
       finding without skills, a flagged one with
-- [ ] one skill (`api-contract-gate`) is attached to **two different agents**
+- [ ] one skill (`api-contract-gate`) is attached to **two different agents** —
+      seeded onto General Reviewer, attached to a second agent by hand in the
+      Skills tab (see §8: deliberately a demo step, not a seeded row)
 - [ ] `pnpm arch`, `pnpm typecheck` and both suites pass in `server/` and `client/`
 - [ ] `/pr-self-review` runs clean — installed with auto-invoke off, invoked by
       hand, and it pulls both the frontend and the backend skills for this diff
