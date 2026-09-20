@@ -6,7 +6,10 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { SEED_SKILLS } from './seed-skills.js';
+import { FIXTURE_PULLS } from './seed-fixtures.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -18,11 +21,18 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  *
  * Seeds: default workspace + system user + membership, default settings,
  * demo repo (acme/payments-api), PR #482 with files/commits, a sample review
- * with a few findings, and the three built-in agents (General + Security +
- * Performance), all on the default openrouter/deepseek-v4-flash provider+model.
+ * with a few findings, and four built-in agents (General + Security +
+ * Performance + Test Quality), all on the default openrouter/deepseek-v4-flash
+ * provider+model.
  *
- * Course lessons populate the other tables (skills, conventions, memory, eval,
- * …) once their features are built — they start empty here.
+ * L02 added the skills half: four `skills` rows with their v1 `skill_versions`
+ * snapshots (bodies in ./seed-skills.ts), the `agent_skills` links that put
+ * them in an agent's prompt, and the two control-experiment pull requests
+ * (#483, #484) from ./seed-fixtures.ts. A fifth skill, `flake-patterns`, is
+ * deliberately NOT seeded — it arrives through the UI import flow.
+ *
+ * Later course lessons populate the remaining tables (conventions, memory,
+ * eval, …) once their features are built — those still start empty here.
  */
 
 export const DEFAULT_WORKSPACE_NAME = 'default';
@@ -218,6 +228,172 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
     if (!existing) await db.insert(t.agents).values(a);
+  }
+
+  // ---- L02 skills (bodies in ./seed-skills.ts) ----
+  // Same idempotency rule as the agents above: look up by (workspace_id, name),
+  // insert only when absent.
+  //
+  // The matching `skill_versions` row at version 1 is written here too.
+  // `SkillsRepository.insert` writes one for every skill created through the
+  // API, and the seed bypasses the repository to write rows directly — so it
+  // has to do the same, or a seeded skill opens with an empty version history
+  // and the first body edit produces a v2 with no v1 behind it.
+  const skillIds = new Map<string, string>();
+  for (const s of SEED_SKILLS) {
+    let [skill] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.name)));
+    if (!skill) {
+      [skill] = await db
+        .insert(t.skills)
+        .values({
+          workspaceId,
+          name: s.name,
+          description: s.description,
+          type: s.type,
+          source: 'manual',
+          body: s.body,
+          enabled: true,
+          version: 1,
+        })
+        .returning();
+      await db
+        .insert(t.skillVersions)
+        .values({ skillId: skill!.id, version: 1, body: s.body })
+        .onConflictDoNothing();
+    }
+    skillIds.set(s.name, skill!.id);
+  }
+
+  /** Id of a skill seeded just above. Throws rather than linking `undefined`. */
+  const skillId = (name: string): string => {
+    const id = skillIds.get(name);
+    if (!id) throw new Error(`seed: skill "${name}" is not in SEED_SKILLS`);
+    return id;
+  };
+
+  // ---- Test Quality Reviewer (the L02 agent) ----
+  // Its system prompt is deliberately general — the enumerable checks live in
+  // the skills linked below, which is what makes attaching/detaching them
+  // visible in a review.
+  const TEST_QUALITY_REVIEWER_NAME = 'Test Quality Reviewer';
+  let [testQuality] = await db
+    .select()
+    .from(t.agents)
+    .where(
+      and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, TEST_QUALITY_REVIEWER_NAME)),
+    );
+  if (!testQuality) {
+    [testQuality] = await db
+      .insert(t.agents)
+      .values({
+        workspaceId,
+        name: TEST_QUALITY_REVIEWER_NAME,
+        description:
+          'Reviews the tests in a diff, not the code: uncovered branches, missing corner cases, over-mocking, and flake-prone patterns.',
+        provider: DEFAULT_PROVIDER,
+        model: DEFAULT_MODEL,
+        systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+        enabled: true,
+        version: 1,
+        createdBy: userId,
+      })
+      .returning();
+  }
+
+  // ---- skill links ----
+  // `agent_skills.order` ascending is the order the bodies are read out into
+  // the prompt, so these numbers ARE the prompt order: enumerate the branches,
+  // then walk the corner cases, then judge the mocks.
+  //
+  // Order 3 is deliberately LEFT FREE. The fourth skill, `flake-patterns`, is
+  // not seeded: it ships as `server/fixtures/skills/flake-patterns.zip` and is
+  // brought in by hand through the import flow, which appends it at order 3.
+  // Seeding it would remove the only end-to-end walk of the import path.
+  await db
+    .insert(t.agentSkills)
+    .values(
+      ['uncovered-branch-gate', 'corner-case-checklist', 'over-mocking-gate'].map(
+        (name, order) => ({ agentId: testQuality!.id, skillId: skillId(name), order }),
+      ),
+    )
+    .onConflictDoNothing();
+
+  // `api-contract-gate` hangs off the EXISTING General Reviewer as well — one
+  // skill row reachable from two agents, edited in one place. That reuse is a
+  // requirement of its own, and it is also the second arm of the control
+  // experiment (PR #484 runs on General Reviewer, not on Test Quality).
+  const [generalReviewer] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'General Reviewer')));
+  if (generalReviewer) {
+    await db
+      .insert(t.agentSkills)
+      .values({
+        agentId: generalReviewer.id,
+        skillId: skillId('api-contract-gate'),
+        order: 0,
+      })
+      .onConflictDoNothing();
+  }
+
+  // ---- control-experiment fixture PRs (#483, #484) ----
+  // Idempotent by (repo_id, number), like #482 above, and on the same
+  // acme/payments-api repo. No review and no findings are seeded for these on
+  // purpose: the point of the experiment is that the user runs the review
+  // live — once with the skills detached, once with them attached — and reads
+  // the two findings lists side by side. A pre-seeded review would answer the
+  // question before it was asked.
+  for (const fixture of FIXTURE_PULLS) {
+    const [existingPull] = await db
+      .select()
+      .from(t.pullRequests)
+      .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, fixture.number)));
+    if (existingPull) continue;
+
+    const [fixturePr] = await db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId,
+        number: fixture.number,
+        title: fixture.title,
+        author: fixture.author,
+        branch: fixture.branch,
+        base: fixture.base,
+        headSha: fixture.headSha,
+        additions: fixture.files.reduce((n, f) => n + f.additions, 0),
+        deletions: fixture.files.reduce((n, f) => n + f.deletions, 0),
+        filesCount: fixture.files.length,
+        status: 'needs_review',
+        body: fixture.body,
+      })
+      .returning();
+
+    // `patch` is load-bearing here. A seeded PR has no clone, so `loadDiff`
+    // fails its `git diff` attempt and reconstructs the unified diff from these
+    // rows; a fixture without patch text reviews an empty diff and the
+    // experiment shows nothing. (PR #482 above has no patch and stays that way
+    // — it is a list fixture, not a review fixture.)
+    await db.insert(t.prFiles).values(
+      fixture.files.map((f) => ({
+        prId: fixturePr!.id,
+        path: f.path,
+        additions: f.additions,
+        deletions: f.deletions,
+        patch: f.patch,
+      })),
+    );
+
+    await db.insert(t.prCommits).values({
+      prId: fixturePr!.id,
+      sha: fixture.headSha,
+      message: fixture.commitMessage,
+      author: fixture.author,
+    });
   }
 
   return { workspaceId, userId };
