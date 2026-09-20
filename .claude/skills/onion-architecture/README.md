@@ -16,7 +16,6 @@ Version 1.0.0.
 | `references/tooling.md` | The ruling per tool: Fastify, Drizzle, Zod, the container, jobs, errors, tests. |
 | `references/enforcement.md` | Each `pnpm arch` rule, what it catches, how to fix it; the review checklist. |
 | `examples.md` | Before/after pairs, all taken from real files in this repository. |
-| `evals/` | Three cases: place a new module, refactor a flat one, review a diff. |
 | `RESEARCH.md` | Working notes (Ukrainian): consensus, disagreements, the audit, decisions taken. |
 | `README.md` | This file — every source the skill was built from. |
 
