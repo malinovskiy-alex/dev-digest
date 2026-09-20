@@ -14,7 +14,7 @@ These are **not** loaded for you. Read the file when its trigger matches.
 | [specs/](specs/README.md) | you are about to build a screen that does not exist yet — write the plan there first |
 | [INSIGHTS.md](INSIGHTS.md) | something behaves unexpectedly — check here **before** you start debugging |
 | [src/vendor/ui/README.md](src/vendor/ui/README.md) | you are adding or restyling a UI primitive, or need the design tokens |
-| [../CLAUDE.md](../CLAUDE.md) | your change crosses a package boundary |
+| [../AGENTS.md](../AGENTS.md) | your change crosses a package boundary |
 
 ## Commands
 
@@ -38,7 +38,7 @@ pnpm build
 - **Cross-cutting chrome** — nav, breadcrumbs, `g`-then-key shortcuts — lives in
   `src/components/app-shell`; extend it there rather than per page.
 - **Query by role, label or text, never by class or test id.** Real browser
-  journeys belong in [`../e2e`](../e2e/CLAUDE.md), not here.
+  journeys belong in [`../e2e`](../e2e/AGENTS.md), not here.
 
 ## Naming
 

@@ -14,7 +14,7 @@ These are **not** loaded for you. Read the file when its trigger matches.
 | [specs/](specs/README.md) | you are adding a flow — it holds both the `.flow.json` flows and their `.md` plans |
 | [INSIGHTS.md](INSIGHTS.md) | a flow fails for no visible reason — check here **before** you start debugging |
 | [../TESTING.md](../TESTING.md) | you are unsure whether a behaviour belongs here or in a component test |
-| [../CLAUDE.md](../CLAUDE.md) | your change crosses a package boundary |
+| [../AGENTS.md](../AGENTS.md) | your change crosses a package boundary |
 
 ## Commands
 
@@ -42,7 +42,7 @@ pnpm typecheck
   guarantees that; locally, reseed before blaming a failure.
 - Prefer extending an existing flow over adding a near-duplicate. The suite is a
   smoke net, not exhaustive coverage — component-level behaviour belongs in
-  [`../client`](../client/CLAUDE.md) tests.
+  [`../client`](../client/AGENTS.md) tests.
 
 ## Naming
 

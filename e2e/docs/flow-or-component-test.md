@@ -52,7 +52,7 @@ Only when it moves the journey:
 - a new screen appears that no flow reaches
 
 The last one is the only case that justifies a new file, and even then
-`../CLAUDE.md` says to prefer extending an existing flow over adding a
+`../AGENTS.md` says to prefer extending an existing flow over adding a
 near-duplicate.
 
 ## Before adding a flow, check the data

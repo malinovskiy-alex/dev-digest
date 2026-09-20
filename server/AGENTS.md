@@ -14,7 +14,7 @@ These are **not** loaded for you. Read the file when its trigger matches.
 | [specs/](specs/README.md) | you are about to build something that does not exist yet — write the plan there first |
 | [INSIGHTS.md](INSIGHTS.md) | something behaves unexpectedly — check here **before** you start debugging |
 | [src/modules/repo-intel/README.md](src/modules/repo-intel/README.md) | you are touching indexing, the repo map, or the **Indexed** badge |
-| [../CLAUDE.md](../CLAUDE.md) | your change crosses a package boundary |
+| [../AGENTS.md](../AGENTS.md) | your change crosses a package boundary |
 
 ## Commands
 

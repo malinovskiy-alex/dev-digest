@@ -158,6 +158,6 @@ neither: an agent reading both picks one at random.
 | "Added the `/repos/:id/pulls` endpoint." | A task log. Git already records this. |
 | "`useEffect` runs after render." | Public API of the framework. |
 | "Always validate input." | True in every repo, therefore says nothing about this one. |
-| "The server uses Fastify and Drizzle." | Already in `server/CLAUDE.md`. One fact, one home. |
+| "The server uses Fastify and Drizzle." | Already in `server/AGENTS.md`. One fact, one home. |
 | "Something is weird with the seed script." | No `Where:`, no `Rule:`. Either finish the investigation or file it under Open Questions with a concrete next step. |
 | "Fixed the flaky e2e test." | Names no cause. What made it flaky, and what stops it recurring? |
