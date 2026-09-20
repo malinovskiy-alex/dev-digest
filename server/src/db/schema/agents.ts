@@ -1,11 +1,22 @@
-import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  boolean,
+  jsonb,
+  primaryKey,
+  index,
+} from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces, users } from './core';
 import { skills } from './skills';
 
 // ============================================================ Agents & skills
 
-export const agents = pgTable('agents', {
+export const agents = pgTable(
+  'agents',
+  {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
     .notNull()
@@ -32,8 +43,13 @@ export const agents = pgTable('agents', {
   enabled: boolean('enabled').notNull().default(true),
   version: integer('version').notNull().default(1),
   createdBy: uuid('created_by').references(() => users.id),
-  createdAt: now(),
-});
+    createdAt: now(),
+  },
+  (t) => ({
+    // Every agents read is scoped to the workspace (list, resolve targets).
+    wsIdx: index('agents_ws_idx').on(t.workspaceId),
+  }),
+);
 
 export const agentVersions = pgTable(
   'agent_versions',

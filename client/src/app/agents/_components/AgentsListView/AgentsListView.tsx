@@ -6,8 +6,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
-import { AppShell } from "../../../../components/app-shell";
-import { useAgents, useUpdateAgent } from "../../../../lib/hooks/agents";
+import { AppShell } from "@/components/app-shell";
+import { useAgents, useUpdateAgent } from "@/lib/hooks/agents";
 import { AgentCard } from "../AgentCard";
 import { CreateAgentModal } from "./_components/CreateAgentModal";
 import { TEMPLATES } from "./constants";
@@ -36,9 +36,13 @@ export function AgentsListView() {
           <div style={s.search}>
             <Icon.Search size={13} style={s.searchIcon} />
             <input
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("list.searchPlaceholder")}
+              // A placeholder is not an accessible name: it is not reliably
+              // announced, and it disappears as soon as the field has content.
+              aria-label={t("list.searchPlaceholder")}
               style={s.searchInput}
             />
           </div>

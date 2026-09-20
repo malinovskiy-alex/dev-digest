@@ -46,4 +46,8 @@ jobs:
 
       - run: pnpm typecheck
 
+      # Architectural lint: module boundaries, component-folder public APIs,
+      # no fetch outside lib/api.ts, a11y names. See client/eslint.config.mjs.
+      - run: pnpm lint
+
       - run: pnpm test
