@@ -220,6 +220,10 @@ export class AgentsRepository {
     await this.db
       .delete(t.agentSkills)
       .where(and(eq(t.agentSkills.agentId, agentId), eq(t.agentSkills.skillId, skillId)));
+    // Symmetry with linkSkill/setSkills. No route calls this today — which is
+    // exactly why it needs the bump now: the first `DELETE /agents/:id/skills/:skillId`
+    // would otherwise reopen D7 with nothing to signal it.
+    await this.bumpForSkillChange(agentId);
   }
 
   /**
@@ -254,10 +258,14 @@ export class AgentsRepository {
    * the prompt it produces: attach three skills and the agent still reads v1,
    * while the recorded v1 has an empty `skills` array. See L02 D7.
    *
+   * Public because DELETE /skills/:id needs it too: removing a skill cascades
+   * its links away and changes those agents' prompts, which must move their
+   * versions for the same reason an attach does.
+   *
    * Takes no workspaceId: every caller has already resolved the agent inside its
    * workspace (the service checks before touching links).
    */
-  private async bumpForSkillChange(agentId: string): Promise<void> {
+  async bumpForSkillChange(agentId: string): Promise<void> {
     const [existing] = await this.db.select().from(t.agents).where(eq(t.agents.id, agentId));
     if (!existing) return;
     const nextVersion = existing.version + 1;

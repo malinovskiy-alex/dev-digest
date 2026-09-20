@@ -83,12 +83,16 @@ export function SkillRow({
       )}
 
       {/* The label wraps the switch, which is a labelable element — that is what
-          gives the toggle its accessible name without any visible chrome. */}
-      <label style={s.toggleLabel}>
+          gives the toggle its accessible name without any visible chrome.
+          While a write is in flight the toggle is inert: SkillsTab drops the
+          click anyway, and a live-looking switch that does nothing is worse
+          than a dimmed one. The vendored Toggle takes no `disabled`, so the
+          refusal is expressed here. */}
+      <label style={s.toggleLabel(busy)} aria-disabled={busy || undefined}>
         <span style={s.srOnly}>
           {attached ? t("skills.detach", { name: skill.name }) : t("skills.attach", { name: skill.name })}
         </span>
-        <Toggle on={attached} onChange={onToggle} size={16} />
+        <Toggle on={attached} onChange={busy ? () => {} : onToggle} size={16} />
       </label>
     </li>
   );

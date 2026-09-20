@@ -13,14 +13,11 @@ import { s } from "./styles";
 export function SkillCard({
   skill,
   active,
-  usedBy,
   onClick,
   onToggle,
 }: {
   skill: Skill;
   active?: boolean;
-  /** Agents this skill is attached to — the reuse signal. */
-  usedBy?: number;
   onClick?: () => void;
   /**
    * Writes `enabled`. This is the GLOBAL kill-switch: off means the skill never
@@ -32,7 +29,22 @@ export function SkillCard({
   const color = typeColor(skill.type);
 
   return (
-    <div onClick={onClick} style={s.card(!!active, skill.enabled)}>
+    // Selecting a skill is this screen's primary action, so the card has to be
+    // reachable without a mouse. AgentCard on main is a bare clickable <div>;
+    // that is an inherited defect, not a pattern to copy.
+    <div
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-pressed={!!active}
+      style={s.card(!!active, skill.enabled)}
+    >
       <div style={s.headerRow}>
         <div style={s.iconBox}>
           <Icon.Sparkles size={15} />
@@ -57,11 +69,6 @@ export function SkillCard({
               {t("listItem.needsVetting")}
             </Badge>
           </span>
-        )}
-        {usedBy != null && (
-          <Badge color="var(--text-secondary)" icon="Sparkles">
-            {usedBy > 0 ? t("page.usedBy", { count: usedBy }) : t("page.usedByNone")}
-          </Badge>
         )}
       </div>
     </div>

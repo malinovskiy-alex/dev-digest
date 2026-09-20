@@ -74,7 +74,7 @@ export interface DeleteSkillResult {
 export class SkillsService {
   private repo: SkillsRepository;
 
-  constructor(container: Container) {
+  constructor(private container: Container) {
     this.repo = new SkillsRepository(container.db);
   }
 
@@ -131,9 +131,22 @@ export class SkillsService {
    * always answers 0. `undefined` when there was nothing to delete here.
    */
   async delete(workspaceId: string, id: string): Promise<DeleteSkillResult | undefined> {
-    const unlinkedFrom = await this.repo.countAgentsUsing(workspaceId, id);
+    // Collected before the delete for the same reason as the count: the links
+    // cascade with the skill, so afterwards there is nothing left to ask.
+    const affectedAgentIds = await this.repo.agentIdsUsing(workspaceId, id);
     const deleted = await this.repo.deleteById(workspaceId, id);
-    return deleted ? { unlinked_from: unlinkedFrom } : undefined;
+    if (!deleted) return undefined;
+
+    // Deleting a skill silently changes the prompt of every agent that had it.
+    // That is exactly the drift D7 closed on the attach/reorder path, and it
+    // reaches the same place: an agent left on v4 whose recorded v4 snapshot
+    // lists a skill that no longer exists. The lesson's whole question is
+    // "what changed between the run that missed it and the run that caught
+    // it?" — the version has to move here too.
+    for (const agentId of affectedAgentIds) {
+      await this.container.agentsRepo.bumpForSkillChange(agentId);
+    }
+    return { unlinked_from: affectedAgentIds.length };
   }
 
   /**

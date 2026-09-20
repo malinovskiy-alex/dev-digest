@@ -21,6 +21,7 @@ import {
 } from "@devdigest/ui";
 import { SkillType, type Skill } from "@devdigest/shared";
 import { useDeleteSkill, useSkill, useUpdateSkill } from "@/lib/hooks/skills";
+import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { BODY_ROWS, DESCRIPTION_ROWS } from "./constants";
 import { changedFields, isUntrusted, toDraft, type SkillDraft } from "./helpers";
@@ -44,8 +45,11 @@ export function SkillPreview({
   // `editing` boolean that can disagree with the form it guards.
   const [draft, setDraft] = React.useState<SkillDraft | null>(null);
 
-  // Selecting another skill leaves the editor.
-  React.useEffect(() => setDraft(null), [skillId]);
+  // NOTE: no effect resets `draft` when `skillId` changes. An effect runs AFTER
+  // the render, so for one frame the form would hold the PREVIOUS skill's draft
+  // under the new id — and a Save in that frame writes the wrong text to the
+  // wrong skill. The list passes `key={skill.id}`, so switching skills
+  // remounts this panel and clears the draft synchronously instead.
 
   if (isLoading) {
     return (
@@ -68,9 +72,17 @@ export function SkillPreview({
       setDraft(null);
       return;
     }
-    const saved = await update.mutateAsync({ id: skill.id, patch });
-    setDraft(null);
-    toast.success(t("preview.saved", { version: saved.version }));
+    // mutateAsync rejects on a 4xx/5xx. Uncaught, that is an unhandled
+    // rejection inside an event handler — no error boundary sees it, and the
+    // user presses Save and watches nothing happen. System errors are toasts
+    // (see lib/toast.tsx).
+    try {
+      const saved = await update.mutateAsync({ id: skill.id, patch });
+      setDraft(null);
+      toast.success(t("preview.saved", { version: saved.version }));
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("page.loadError"));
+    }
   };
 
   /**
@@ -80,9 +92,13 @@ export function SkillPreview({
    */
   const remove = async () => {
     if (!window.confirm(t("preview.deleteConfirm", { name: skill.name }))) return;
-    const result = await del.mutateAsync(skill.id);
-    toast.success(t("preview.deleted", { name: skill.name, count: result.unlinked_from }));
-    onDeleted?.();
+    try {
+      const result = await del.mutateAsync(skill.id);
+      toast.success(t("preview.deleted", { name: skill.name, count: result.unlinked_from }));
+      onDeleted?.();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("page.loadError"));
+    }
   };
 
   if (draft) {

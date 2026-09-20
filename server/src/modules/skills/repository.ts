@@ -180,12 +180,31 @@ export class SkillsRepository {
   }
 
   /**
+   * The agents in this workspace that have this skill attached. Read BEFORE a
+   * delete: `agent_skills` cascades with the skill, so afterwards the answer is
+   * always empty — and those agents' versions still have to move.
+   */
+  async agentIdsUsing(workspaceId: string, skillId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ agentId: t.agentSkills.agentId })
+      .from(t.agentSkills)
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .where(and(eq(t.agentSkills.skillId, skillId), eq(t.agents.workspaceId, workspaceId)));
+    return rows.map((r) => r.agentId);
+  }
+
+  /**
    * Ordered bodies for an agent's prompt: attached order, globally-enabled
    * only. THE one read the review path uses — a disabled skill produces no row
    * here, so it leaves no trace in the prompt or the run log.
    *
-   * No `workspaceId`: the caller has already resolved the agent within its
-   * workspace, and `agent_skills` rows only ever exist for that agent.
+   * Takes no `workspaceId` — the caller has already resolved the agent inside
+   * its workspace — but the query joins `agents` and requires the skill's
+   * workspace to match the agent's anyway. A link row is written from a
+   * caller-supplied id, so this is the last place a foreign skill's body could
+   * be stopped before it becomes instructions in someone's prompt (D6). One
+   * extra join is a cheap price for not having that depend on every future
+   * caller of `POST /agents/:id/skills` remembering to validate.
    */
   async promptBodiesForAgent(agentId: string): Promise<PromptSkill[]> {
     return this.db
@@ -197,7 +216,14 @@ export class SkillsRepository {
       })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
-      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.skills.enabled, true)))
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .where(
+        and(
+          eq(t.agentSkills.agentId, agentId),
+          eq(t.skills.enabled, true),
+          eq(t.skills.workspaceId, t.agents.workspaceId),
+        ),
+      )
       .orderBy(asc(t.agentSkills.order));
   }
 }

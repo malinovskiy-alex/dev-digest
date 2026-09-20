@@ -45,13 +45,14 @@ export const s = {
     color: disabled ? "var(--border-strong)" : "var(--text-secondary)",
     cursor: disabled ? "not-allowed" : "pointer",
   }),
-  toggleLabel: {
+  toggleLabel: (busy: boolean): CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
     flexShrink: 0,
     paddingTop: 2,
-    cursor: "pointer",
-  } satisfies CSSProperties,
+    cursor: busy ? "wait" : "pointer",
+    opacity: busy ? 0.5 : 1,
+  }),
   /** Names the toggle for assistive tech without adding visual noise. */
   srOnly: {
     position: "absolute",

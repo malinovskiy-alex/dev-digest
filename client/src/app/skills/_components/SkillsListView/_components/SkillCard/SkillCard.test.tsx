@@ -60,8 +60,13 @@ describe("SkillCard", () => {
     expect(screen.queryByText("needs vetting")).not.toBeInTheDocument();
   });
 
-  it("shows how many agents reuse the skill", () => {
-    renderCard(<SkillCard skill={SKILL} usedBy={2} />);
-    expect(screen.getByText("2 agents")).toBeInTheDocument();
+  it("selects the skill from the keyboard, not just the mouse", () => {
+    const onClick = vi.fn();
+    renderCard(<SkillCard skill={SKILL} onClick={onClick} />);
+    const card = screen.getByRole("button", { name: /uncovered-branch-gate/ });
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(card, { key: " " });
+    expect(onClick).toHaveBeenCalledTimes(2);
   });
 });

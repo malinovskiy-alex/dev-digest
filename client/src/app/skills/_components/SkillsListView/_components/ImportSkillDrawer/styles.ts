@@ -27,4 +27,20 @@ export const s = {
     lineHeight: 1.6,
   } satisfies CSSProperties,
   footer: { display: "flex", justifyContent: "flex-end", gap: 10 } satisfies CSSProperties,
+  /** Display, not a field — see the note in ImportSkillDrawer. */
+  bodyPreview: {
+    margin: 0,
+    padding: 10,
+    maxHeight: 220,
+    overflow: "auto",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    fontFamily: "var(--font-mono, monospace)",
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "var(--text-secondary)",
+    background: "var(--bg-hover)",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+  } satisfies CSSProperties,
 } as const;

@@ -180,11 +180,14 @@ export function ImportSkillDrawer({
               options={typeOptions}
             />
           </FormField>
-          <FormField label={t("preview.bodyLabel")}>
-            {/* Read-only on purpose: what you are about to store is exactly what
-                the parser extracted. Editing it here would make `token` — the
-                hash the server re-checks — meaningless. */}
-            <Textarea value={preview.body} rows={BODY_ROWS} mono />
+          <FormField label={t("preview.bodyLabel")} hint={t("import.bodyReadOnly")}>
+            {/* NOT a Textarea. The vendored one always wires its own onChange
+                and takes no `readOnly`, so a value-only Textarea renders as a
+                focusable field that silently discards every keystroke. This is
+                display: what you are about to store is exactly what the parser
+                extracted, and editing it would make `token` — the hash the
+                server re-checks on confirm — meaningless. */}
+            <pre style={s.bodyPreview}>{preview.body}</pre>
           </FormField>
           <div style={s.section}>
             <ImportEntryTable entries={preview.entries} />

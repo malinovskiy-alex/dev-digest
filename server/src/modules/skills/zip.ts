@@ -1,4 +1,5 @@
 import zlib from 'node:zlib';
+import { MAX_ENTRY_BYTES } from './constants.js';
 
 /**
  * A minimal, PURE ZIP reader built on `node:zlib` — no I/O, no db, no
@@ -153,13 +154,39 @@ export function inflateEntry(buf: Buffer, entry: ZipEntry): string {
 
   const payload = buf.subarray(dataStart, dataEnd);
 
-  if (entry.method === METHOD_STORED) return payload.toString('utf8');
-  if (entry.method === METHOD_DEFLATE) {
-    try {
-      return zlib.inflateRawSync(payload).toString('utf8');
-    } catch {
-      throw new ZipFormatError(`Corrupt ZIP: "${entry.path}" is not a valid deflate stream.`);
+  if (entry.method === METHOD_STORED) {
+    if (payload.length > MAX_ENTRY_BYTES) {
+      throw new ZipFormatError(`"${entry.path}" is larger than the per-file limit.`);
     }
+    return payload.toString('utf8');
+  }
+  if (entry.method === METHOD_DEFLATE) {
+    let inflated: Buffer;
+    try {
+      // `maxOutputLength` is the ONLY real zip-bomb guard. The caller's
+      // pre-check reads `entry.bytes` from the central directory, and that
+      // number is written by whoever built the archive — an archive can declare
+      // 1 KiB and carry a stream that expands to gigabytes. Without this cap
+      // that stream is inflated synchronously on the HTTP path, blocking the
+      // event loop and then OOM-killing the process, from a single request.
+      inflated = zlib.inflateRawSync(payload, { maxOutputLength: MAX_ENTRY_BYTES });
+    } catch {
+      // Covers both a corrupt stream and one that blew the cap. Distinguishing
+      // them in the message would tell an attacker which limit they hit, and
+      // the user can do nothing different either way.
+      throw new ZipFormatError(
+        `Corrupt ZIP: "${entry.path}" is not a valid deflate stream, or expands past the per-file limit.`,
+      );
+    }
+    // A truthful central directory is the normal case; a lying one is the
+    // attack. The inflated bytes are what we are about to store, so they are
+    // what has to match what was declared.
+    if (inflated.length !== entry.bytes) {
+      throw new ZipFormatError(
+        `Corrupt ZIP: "${entry.path}" declares ${entry.bytes} bytes but expands to ${inflated.length}.`,
+      );
+    }
+    return inflated.toString('utf8');
   }
 
   throw new ZipFormatError(

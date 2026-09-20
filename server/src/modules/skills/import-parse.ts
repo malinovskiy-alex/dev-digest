@@ -66,6 +66,17 @@ export function parseUpload(upload: ImportUpload): SkillImportPreview {
 // ---------------------------------------------------------------------------
 
 function parseMarkdown(upload: { filename: string; text: string }): SkillImportPreview {
+  // The same ceiling the archive path enforces per entry. Without it, a body a
+  // .zip rejects at 256 KiB sails through as a ~4 MiB skill (the route's
+  // bodyLimit) and then goes into an agent's prompt on every review — which
+  // would also make the stated reasoning behind MAX_ENTRY_BYTES untrue.
+  const size = Buffer.byteLength(upload.text, 'utf8');
+  if (size > MAX_ENTRY_BYTES) {
+    throw archiveTooLarge(
+      `"${upload.filename}" is ${size} bytes; the limit for one file is ${MAX_ENTRY_BYTES}.`,
+    );
+  }
+
   const fields = extractFields(upload.text, upload.filename);
   return {
     ...fields,
@@ -94,7 +105,15 @@ function parseArchive(upload: { filename: string; base64: string }): SkillImport
   // ── 1. EOCD found? ───────────────────────────────────────────────────────
   let listing: ZipEntry[];
   try {
-    listing = readCentralDirectory(buf);
+    // Normalise separators ONCE, here, so every guard and classifier below
+    // works on a single form. The zip spec says forward slashes, but archives
+    // written on Windows carry backslashes — and a `bin\install` entry that
+    // the classifier reads as `other` loses its "executable — listed only,
+    // never read or run" warning on the very screen D6's vetting depends on.
+    listing = readCentralDirectory(buf).map((entry) => ({
+      ...entry,
+      path: entry.path.replaceAll('\\', '/'),
+    }));
   } catch (err) {
     if (err instanceof ZipFormatError) throw unsupportedArchive(err.message);
     throw err;

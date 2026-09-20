@@ -103,7 +103,13 @@ export function SkillsListView(): React.JSX.Element {
             </div>
             <div style={s.rail}>
               {selected ? (
-                <SkillPreview skillId={selected} onDeleted={() => setSelectedId(null)} />
+                // `key` remounts the panel when the selection changes, which
+                // clears any in-progress edit synchronously — see SkillPreview.
+                <SkillPreview
+                  key={selected}
+                  skillId={selected}
+                  onDeleted={() => setSelectedId(null)}
+                />
               ) : (
                 <EmptyState
                   icon="FileText"

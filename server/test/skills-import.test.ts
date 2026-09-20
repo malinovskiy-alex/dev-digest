@@ -398,4 +398,48 @@ describe('parseUpload — token', () => {
 
     expect(fromArchive.token).toBe(fromMarkdown.token);
   });
+
+  // ── zip-bomb: the declared size is attacker-controlled ────────────────────
+  // The pre-flight guard reads `entry.bytes` from the central directory, and
+  // whoever built the archive wrote that number. These pin the real defence:
+  // the inflate itself is capped, and a central directory that lies is caught.
+  describe('a lying central directory', () => {
+    it('rejects an entry that declares a small size but expands past the cap', () => {
+      // ~1 MiB of zeroes deflates to a few KiB, and the archive claims 1 KiB —
+      // so every declared-size check passes and only the capped inflate stops it.
+      const bomb = '0'.repeat(1024 * 1024);
+      const zip = makeZipBase64([{ path: 'SKILL.md', content: bomb, declaredSize: 1024 }]);
+      expect(() =>
+        parseUpload({ kind: 'archive', filename: 'bomb.zip', base64: zip }),
+      ).toThrowError(AppError);
+    });
+
+    it('rejects an entry whose real size does not match the declared one', () => {
+      const zip = makeZipBase64([
+        { path: 'SKILL.md', content: '# Real', declaredSize: 12 },
+      ]);
+      expect(() =>
+        parseUpload({ kind: 'archive', filename: 'liar.zip', base64: zip }),
+      ).toThrowError(AppError);
+    });
+  });
+
+  // ── the markdown path gets the same ceiling as an archive entry ───────────
+  describe('markdown upload size', () => {
+    it('rejects a markdown body over the per-file cap', () => {
+      const huge = '# Big' + 'x'.repeat(MAX_ENTRY_BYTES + 1);
+      let code: string | undefined;
+      try {
+        parseUpload({ kind: 'markdown', filename: 'big.md', text: huge });
+      } catch (e) {
+        code = (e as AppError).code;
+      }
+      expect(code).toBe('archive_too_large');
+    });
+
+    it('accepts a markdown body under the cap', () => {
+      const ok = '# Fine' + 'x'.repeat(1000);
+      expect(parseUpload({ kind: 'markdown', filename: 'ok.md', text: ok }).body).toContain('Fine');
+    });
+  });
 });

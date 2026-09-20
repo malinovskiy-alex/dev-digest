@@ -7,8 +7,6 @@
     "addSkill": "Add Skill",
     "searchPlaceholder": "Search skills…",
     "loadError": "Could not load skills.",
-    "usedBy": "{count} agents",
-    "usedByNone": "unused",
     "menu": {
       "create": "Create skill",
       "fromFile": "Import from file"
@@ -56,7 +54,6 @@
     }
   },
   "preview": {
-    "untrustedBadge": "imported",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "save": "Save",
@@ -102,7 +99,8 @@
     "confirming": "Importing…",
     "cancel": "Cancel",
     "success": "Imported \"{name}\". It is disabled until you enable it.",
-    "failed": "Import failed"
+    "failed": "Import failed",
+    "bodyReadOnly": "Shown as extracted. It is stored exactly as it is here — the server re-checks its hash on confirm."
   },
   "errors": {
     "no_skill_core": "No markdown file in that archive — there is nothing to use as the skill body.",
