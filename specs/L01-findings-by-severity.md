@@ -1,4 +1,4 @@
-# L02 — Findings by Severity
+# L01 — Findings by Severity
 
 **Goal:** make severity the axis for scanning findings. A reviewer should be able
 to tell a PR with two nits from one with two blockers without opening it, and

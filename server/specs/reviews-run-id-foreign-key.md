@@ -1,7 +1,7 @@
 # `reviews.run_id` → `agent_runs.id`, as a real foreign key
 
 **Status:** not built. Surfaced while wiring the findings-by-severity rollups
-(see [`../../specs/L02-findings-by-severity.md`](../../specs/L02-findings-by-severity.md)).
+(see [`../../specs/L01-findings-by-severity.md`](../../specs/L01-findings-by-severity.md)).
 
 **Goal:** make the run ↔ review link a database constraint instead of a
 convention four separate places already depend on.
@@ -16,7 +16,7 @@ at `agent_runs.id` and nothing enforces that:
   the review **explicitly**, with a comment saying that otherwise the findings
   orphan,
 - the client anchors `review-run-${review.run_id}` and scroll-targets by it,
-- and as of L02 the PR-detail timeline joins reviews to runs on it to derive each
+- and as of L01 the PR-detail timeline joins reviews to runs on it to derive each
   tile's severity chips.
 
 Four consumers, zero constraint. A review whose run row is gone keeps its

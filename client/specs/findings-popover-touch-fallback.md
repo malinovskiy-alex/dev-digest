@@ -2,7 +2,7 @@
 
 **Status:** built, but not the way this plan describes — read the deviation
 below before trusting the steps. Surfaced while building the popover (see
-[`../../specs/L02-findings-by-severity.md`](../../specs/L02-findings-by-severity.md)).
+[`../../specs/L01-findings-by-severity.md`](../../specs/L01-findings-by-severity.md)).
 
 ## What shipped instead
 

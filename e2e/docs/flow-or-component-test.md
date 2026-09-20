@@ -21,7 +21,7 @@ component test.
 | a tab or drawer opens and its content loads from the server | filtering, sorting, toggling, expanding |
 | a regression that only appears with the whole stack wired | anything driven by local state |
 
-## Worked example — findings by severity (L02)
+## Worked example — findings by severity (L01)
 
 That feature added four things. Only one of them was even a candidate for a flow,
 and it did not get one:
