@@ -115,7 +115,17 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+// 'imported_file' = came from a markdown file or a .zip the user uploaded. Such
+// a skill is stored DISABLED until the user vets and enables it: an enabled
+// skill is INSTRUCTIONS in the agent's prompt, not delimiter-wrapped data.
+// See specs/L02-skills-in-the-product.md D6.
+export const SkillSource = z.enum([
+  'manual',
+  'imported_file',
+  'imported_url',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
 export const Skill = z.object({
@@ -130,6 +140,51 @@ export const Skill = z.object({
   evidence_files: z.array(z.string()).nullish(),
 });
 export type Skill = z.infer<typeof Skill>;
+
+/** One immutable body revision of a skill. Mirrors the `skill_versions` table. */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+/**
+ * How one entry of an uploaded archive was classified. ONLY `core` is ever
+ * decompressed — an `executable` entry contributes its central-directory name
+ * and size to the preview and nothing else. See L02 6.5.
+ */
+export const SkillImportEntryKind = z.enum(['core', 'doc', 'executable', 'other']);
+export type SkillImportEntryKind = z.infer<typeof SkillImportEntryKind>;
+
+export const SkillImportEntry = z.object({
+  path: z.string(),
+  bytes: z.number().int(),
+  kind: SkillImportEntryKind,
+  /** true for everything except `core`: named in the listing, never parsed. */
+  ignored: z.boolean(),
+});
+export type SkillImportEntry = z.infer<typeof SkillImportEntry>;
+
+/**
+ * The result of parsing an upload. NOTHING is persisted to produce this — the
+ * user sees the extracted body and the ignored-entry listing first, and only a
+ * confirm writes a row. `token` is the sha256 of the extracted core body; the
+ * confirm call re-parses and compares it, so a body that changed between the
+ * two calls is a 409 instead of a silent swap.
+ */
+export const SkillImportPreview = z.object({
+  token: z.string(),
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  source: SkillSource,
+  entries: z.array(SkillImportEntry),
+  warnings: z.array(z.string()),
+});
+export type SkillImportPreview = z.infer<typeof SkillImportPreview>;
 
 export const CommunitySkill = z.object({
   name: z.string(),

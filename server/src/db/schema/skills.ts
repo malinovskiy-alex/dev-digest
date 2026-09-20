@@ -10,8 +10,11 @@ export const skills = pgTable('skills', {
   name: text('name').notNull(),
   description: text('description').notNull(),
   type: text('type', { enum: ['rubric', 'convention', 'security', 'custom'] }).notNull(),
+  // Plain `text` in the DDL — this list is type-level only, so adding a value
+  // is a code change and needs no migration. Mirrors `SkillSource` in
+  // @devdigest/shared; the two must stay in step.
   source: text('source', {
-    enum: ['manual', 'imported_url', 'extracted', 'community'],
+    enum: ['manual', 'imported_file', 'imported_url', 'extracted', 'community'],
   }).notNull(),
   body: text('body').notNull(),
   enabled: boolean('enabled').notNull().default(true),
