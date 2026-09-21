@@ -269,6 +269,37 @@ d('/conventions routes', () => {
     expect(res.json().enabled).toBe(false);
   });
 
+  /**
+   * The modal holds a draft while the screen behind it stays live, so the
+   * candidates it was built from can be rejected before it is submitted. The
+   * write has to re-check, or it stores an `extracted` skill with no evidence.
+   */
+  it('refuses to store a skill whose conventions were rejected meanwhile', async () => {
+    const view = await extract();
+    const id = view.candidates[0].id;
+    await app.inject({
+      method: 'PATCH',
+      url: `/conventions/${id}`,
+      payload: { status: 'rejected' },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/repos/${repoId}/conventions/skill`,
+      payload: {
+        name: 'payments-api-conventions',
+        description: 'x',
+        type: 'convention',
+        body: '# x',
+        enabled: true,
+        convention_ids: [id],
+      },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('no_accepted_conventions');
+    expect(await pg.handle.db.select().from(t.skills)).toHaveLength(0);
+  });
+
   it('is a 404 for a repo in another workspace, never a 403', async () => {
     const [other] = await pg.handle.db
       .insert(t.workspaces)

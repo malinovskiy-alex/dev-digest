@@ -129,6 +129,54 @@ describe('conventions · the evidence gate', () => {
     );
   });
 
+  /**
+   * Regression. `locate`'s last resort used to be "the first occurrence of the
+   * snippet's FIRST line anywhere in the file", so a one-line snippet whose text
+   * repeats (`}`, `});`, an import) was silently re-anchored near the top and
+   * stored as verified — a true rule pinned to code that says nothing about it.
+   * The claim below is >EVIDENCE_LINE_CAP lines from BOTH occurrences, so the
+   * windowed search cannot help and that last resort is what decides.
+   */
+  describe('a claim that drifts past the search window', () => {
+    const DECOY = "import { z } from 'zod';";
+    const REAL = 'await db.transaction(async (tx) => {';
+    const repeated = toSample(
+      'src/x.ts',
+      [
+        DECOY, // 1 — the decoy
+        'export const A = z.object({});', // 2
+        ...Array.from({ length: 120 }, (_, i) => `const filler${i} = ${i};`), // 3..122
+        DECOY, // 123 — where the quote really is
+        REAL, // 124
+      ].join('\n'),
+    );
+
+    const drifted = (snippet: string): ExtractedConvention => ({
+      category: 'error-handling',
+      rule: 'Multi-statement writes run inside one transaction.',
+      evidence_path: 'src/x.ts',
+      evidence_start_line: 60,
+      evidence_end_line: 61,
+      evidence_snippet: snippet,
+      confidence: 0.9,
+    });
+
+    it('repairs it when a second anchor line confirms the match', () => {
+      const [kept] = verifyCandidates([drifted(`${DECOY}\n${REAL}`)], [repeated]);
+      expect(kept?.evidenceStartLine).toBe(123);
+      expect(kept?.evidenceEndLine).toBe(124);
+    });
+
+    it('DROPS it when a one-line snippet could be either occurrence', () => {
+      expect(verifyCandidates([drifted(DECOY)], [repeated])).toEqual([]);
+    });
+
+    it('still places a one-line snippet that occurs exactly once', () => {
+      const [kept] = verifyCandidates([drifted(REAL)], [repeated]);
+      expect(kept?.evidenceStartLine).toBe(124);
+    });
+  });
+
   it('collapses a repeated rule to its most confident evidence', () => {
     const kept = verifyCandidates(
       [candidate({ confidence: 0.4 }), candidate({ confidence: 0.95 })],

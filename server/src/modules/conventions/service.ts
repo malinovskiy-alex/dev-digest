@@ -178,9 +178,24 @@ export class ConventionsService {
   ): Promise<Skill> {
     const accepted = await this.acceptedFor(workspaceId, repoId);
     const cited = new Set(input.conventionIds);
-    const evidenceFiles = [
-      ...new Set(accepted.filter((c) => cited.has(c.id)).map((c) => c.evidence_path)),
-    ];
+    const stillAccepted = accepted.filter((c) => cited.has(c.id));
+
+    // The same guard `skillDraft` applies, for the same reason — and it has to
+    // be re-checked HERE, not just there: the modal holds a draft while the
+    // screen behind it stays live, so the candidates it was built from can be
+    // rejected between opening it and submitting. Without this, that submit
+    // stores an `extracted` skill whose body is rules nobody accepted and whose
+    // `evidence_files` is empty, which the Skills screen then renders as an
+    // extracted skill with no evidence to click through to.
+    if (stillAccepted.length === 0) {
+      throw new AppError(
+        'no_accepted_conventions',
+        'None of those conventions are accepted any more. Re-open the list and try again.',
+        422,
+      );
+    }
+
+    const evidenceFiles = [...new Set(stillAccepted.map((c) => c.evidence_path))];
 
     const row = await this.container.skillsRepo.insert({
       workspaceId,

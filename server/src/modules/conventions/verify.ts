@@ -54,25 +54,94 @@ function anchorLines(snippet: string): string[] {
 }
 
 /**
- * Where the snippet really starts in the file, as a 0-based index, or -1.
- * Prefers the claimed range so an anchor that repeats (a `}` line, an import)
- * does not drag the evidence to the first occurrence in the file.
+ * Where a snippet was found: 0-based `start`, exclusive `end`, and how many of
+ * its anchor lines were actually confirmed there.
  */
-function locate(lines: string[], anchors: string[], claimedStart: number): number {
-  if (anchors.length === 0) return -1;
+interface Located {
+  start: number;
+  end: number;
+  matched: number;
+}
+
+/**
+ * Try to place the anchor block at `start`.
+ *
+ * The first anchor must sit exactly on `start`; the rest are then looked for in
+ * order within `EVIDENCE_LINE_CAP` lines, and a file line that does not match is
+ * stepped over rather than failing the whole attempt. That tolerance is
+ * deliberate — a model routinely re-indents or re-spaces the lines it quotes
+ * (`{ userId }` → `{userId}`), and `normalise` cannot absorb all of it. What it
+ * costs is certainty, which is why `matched` comes back with the position and
+ * the caller decides how much corroboration it needs.
+ */
+function matchFrom(normalised: string[], anchors: string[], start: number): Located | null {
+  if (normalised[start] !== anchors[0]) return null;
+
+  let matched = 1;
+  let end = start + 1;
+  let i = start + 1;
+  while (matched < anchors.length && i < normalised.length && i - start <= EVIDENCE_LINE_CAP) {
+    if (normalised[i] === anchors[matched]) {
+      matched += 1;
+      i += 1;
+      end = i;
+    } else {
+      i += 1;
+    }
+  }
+  return { start, end, matched };
+}
+
+/**
+ * Where the snippet really is, or `null`.
+ *
+ * The claimed line is a HINT and nothing more, so the search widens in three
+ * steps, each less trustworthy than the last:
+ *
+ *   1. the claimed line;
+ *   2. a ±EVIDENCE_LINE_CAP window around it. Steps 1 and 2 accept a
+ *      first-line match on its own, because the model's own line number is
+ *      already corroborating it;
+ *   3. the whole file, corroborated by nothing — and therefore accepted only
+ *      when the match cannot be a coincidence: a second anchor line confirms
+ *      it, or the snippet occurs exactly once.
+ *
+ * Step 3 is the one that matters. It used to take the first occurrence of the
+ * snippet's FIRST line anywhere in the file, which let `}`, `});` and
+ * `import { z } from 'zod';` drag a candidate to the top of the file and store
+ * it as verified — a real rule pinned to code that says nothing about it, the
+ * exact failure this module exists to prevent. A candidate that only step 3 can
+ * place, and place ambiguously, is dropped instead.
+ */
+function locate(lines: string[], anchors: string[], claimedStart: number): Located | null {
+  if (anchors.length === 0) return null;
   const normalised = lines.map(normalise);
-  const first = anchors[0]!;
+
+  const at = (start: number): Located | null =>
+    start < 0 || start >= normalised.length ? null : matchFrom(normalised, anchors, start);
 
   const claimedIdx = claimedStart - 1;
-  if (normalised[claimedIdx] === first) return claimedIdx;
+  const exact = at(claimedIdx);
+  if (exact) return exact;
 
-  // A small window around the claim absorbs the usual off-by-a-few drift.
   for (let d = 1; d <= EVIDENCE_LINE_CAP; d += 1) {
-    if (normalised[claimedIdx - d] === first) return claimedIdx - d;
-    if (normalised[claimedIdx + d] === first) return claimedIdx + d;
+    const before = at(claimedIdx - d);
+    if (before) return before;
+    const after = at(claimedIdx + d);
+    if (after) return after;
   }
 
-  return normalised.indexOf(first);
+  // Uncorroborated: a second confirmed anchor line makes a match trustworthy on
+  // its own; without one, the snippet has to be unique in the file.
+  const hits: Located[] = [];
+  for (let i = 0; i < normalised.length; i += 1) {
+    const hit = at(i);
+    if (!hit) continue;
+    if (hit.matched >= 2) return hit;
+    hits.push(hit);
+    if (hits.length > 1) return null; // ambiguous — guessing is what caused the bug
+  }
+  return hits[0] ?? null;
 }
 
 /**
@@ -91,19 +160,20 @@ export function verifyCandidates(
     if (!sample) continue; // cited a file it was never shown
 
     const anchors = anchorLines(c.evidence_snippet);
-    const start = locate(sample.lines, anchors, c.evidence_start_line);
-    if (start < 0) continue; // the quoted code is not in the file
+    const found = locate(sample.lines, anchors, c.evidence_start_line);
+    if (!found) continue; // not in the file, or not placeable without guessing
 
-    // How MUCH to show is taken from the snippet, not from the claimed range:
-    // the line numbers are the field a model gets wrong most often, and the
-    // quoted lines are the one part of the answer we just proved. Leading and
-    // trailing blanks go first, so the span lines up with what `locate` anchored
-    // on.
+    // The span comes from where the anchors MATCHED, never from the claimed
+    // range: line numbers are the field a model gets wrong most often, and the
+    // matched region is the part we just proved. When only the first line could
+    // be confirmed (a heavily reformatted quote), the snippet's own line count
+    // is the floor, so the card still shows the lines the model meant.
+    const { start } = found;
     const quoted = c.evidence_snippet.split(/\r?\n/);
     while (quoted.length > 0 && quoted[0]!.trim() === '') quoted.shift();
     while (quoted.length > 0 && quoted[quoted.length - 1]!.trim() === '') quoted.pop();
-    const span = Math.min(Math.max(quoted.length, 1), EVIDENCE_LINE_CAP);
-    const end = Math.min(start + span, sample.lines.length);
+    const floor = start + Math.min(Math.max(quoted.length, 1), EVIDENCE_LINE_CAP);
+    const end = Math.min(Math.max(found.end, floor), sample.lines.length);
 
     const snippet = sample.lines.slice(start, end).join('\n');
     if (snippet.trim().length === 0) continue;
