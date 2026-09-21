@@ -27,8 +27,9 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  *
  * L02 added the skills half: four `skills` rows with their v1 `skill_versions`
  * snapshots (bodies in ./seed-skills.ts), the `agent_skills` links that put
- * them in an agent's prompt, and the two control-experiment pull requests
- * (#483, #484) from ./seed-fixtures.ts. A fifth skill, `flake-patterns`, is
+ * them in an agent's prompt, and the control-experiment pull requests
+ * (#483, #484 for L02; #485, #486 for the L03 contract skills) from
+ * ./seed-fixtures.ts. A fifth skill, `flake-patterns`, is
  * deliberately NOT seeded — it arrives through the UI import flow.
  *
  * Later course lessons populate the remaining tables (conventions, memory,
@@ -340,7 +341,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .onConflictDoNothing();
   }
 
-  // ---- control-experiment fixture PRs (#483, #484) ----
+  // ---- control-experiment fixture PRs (#483-#486) ----
   // Idempotent by (repo_id, number), like #482 above, and on the same
   // acme/payments-api repo. No review and no findings are seeded for these on
   // purpose: the point of the experiment is that the user runs the review

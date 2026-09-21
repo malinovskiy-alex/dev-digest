@@ -109,7 +109,8 @@ through `SecretsProvider` (`~/.devdigest/secrets.json`, mode `0600`, with
 Migrations are **not** applied on boot — run `pnpm db:migrate` (pgvector is
 enabled by migration `0000`). `pnpm db:seed` is idempotent demo data
 (`acme/payments-api`, PR #482, the built-in agents, and — since L02 — the
-starter skills plus the two control-experiment PRs #483/#484).
+starter skills plus the control-experiment PRs #483/#484 for L02 and
+#485/#486 for the L03 API-contract skills).
 
 ## Skills in the prompt (non-obvious)
 
