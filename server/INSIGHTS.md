@@ -11,6 +11,25 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Doesn't Work
 
+### 2026-09-21 — committing a `server/src` file kills every review run in flight
+**Symptom:** two review runs that had been `running` for minutes both flipped to
+`failed` with `error` NULL and zero findings, seconds after a `git commit` that
+touched only `server/src/adapters/llm/anthropic.ts`. The commit changed no
+logic — git rewrote the file's line endings (`LF will be replaced by CRLF`).
+**Cause:** three things in a row. `git add` rewrites the working file under
+`core.autocrlf`; `pnpm dev` is `tsx watch`, which restarts on that write; and
+`app.ts` reaps every `running` row on boot, because a fresh process has no
+in-flight runs of its own. The reaper writes no `error`, so the result is
+indistinguishable from a run that failed for a real reason — the empty `error`
+column IS the signature.
+**Rule:** do not commit, checkout or reformat anything under `server/src` while
+a review run is in flight — start the run, let it land, then commit. A run that
+reports `failed` with a NULL `error` was almost certainly reaped rather than
+broken; check whether the API restarted before debugging the agent, the model
+or the prompt.
+**Where:** `server/src/app.ts:75` (the run reaper), `server/package.json:6`
+(`dev` = `tsx watch`)
+
 ### 2026-09-20 — `drizzle-kit generate` blocks forever when one migration both adds and drops a column
 **Symptom:** `pnpm db:generate` printed
 `Is scan_id column in conventions table created or renamed from another column?`
