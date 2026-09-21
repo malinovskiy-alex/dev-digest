@@ -28,7 +28,8 @@ Settled before writing; the rest of the document assumes them.
 | # | Decision | Consequence |
 |---|---|---|
 | D1 | Import accepts a **markdown file or a `.zip` archive** | archive parsing is hand-rolled on `node:zlib` (`inflateRawSync`) — no new dependency |
-| D2 | In the agent editor, the per-skill toggle **is** attach/detach | no `enabled` column on `agent_skills`, no migration; matches the existing string `agents.skills.orderHint` ("Toggle to attach") |
+| D2 | ~~In the agent editor, the per-skill toggle **is** attach/detach~~ — **superseded, see D2a** | — |
+| D2a | The agent editor is one flat list of every workspace skill: a row carries a **position** and an **enabled** flag, and the checkbox flips the flag without moving the row | `agent_skills` gains an `enabled` column (migration `0012_agent_skill_enabled`); the ordered list is posted as `{ skills: [{ skill_id, enabled }] }` |
 | D3 | One new agent: **Test Quality Reviewer**, with 4 skills | seeded in `server/src/db/seed.ts`; one of its skills is brought in through the import flow by hand, not seeded |
 | D4 | Control experiment ships as **fixtures + a written procedure** | no LLM calls from the build; the two demo PRs are seed fixtures |
 | D5 | The **API Contract** half of the experiment runs on the existing **General Reviewer** | proves reuse — one skill row (`api-contract-gate`) attached to two agents |
@@ -55,22 +56,52 @@ The safety lives in the **lifecycle**, not the delimiter:
 This is the line the video calls out: *someone else's skill is someone else's
 instructions inside your agent's prompt.*
 
-### D7 — attaching or reordering skills bumps the agent's version
+### D7 — ~~attaching or reordering skills bumps the agent's version~~ — REVERSED
 
-`AgentsRepository.snapshotVersion` already writes the ordered skill ids into
-`AgentVersionConfig.skills` (`repository.ts:150`), but `setSkills` / `linkSkill`
-do **not** snapshot today. So the moment skills reach the prompt, an agent's
-version stops describing the prompt it produces: attach three skills and the
-agent still says v1, while `agent_versions` records a v1 whose `skills` array is
-empty. The edit history — the thing a user opens to answer *"what changed
-between the run that missed it and the run that caught it?"* — would be wrong in
-exactly the case this lesson is built to demonstrate.
+**Built, then removed. Skill links do not touch `agents.version`.**
 
-`AgentsService.setSkills` and `.linkSkill` therefore bump the agent version and
-snapshot after writing the links. This is a change to an existing module and
-belongs in the same commit as the prompt wiring (step 6). It is not an eval
-concern — L06 will lean on it later, but the reason to do it now is that the
-version number is user-visible today.
+The original argument was that `AgentVersionConfig.skills` is part of every
+snapshot, so an agent whose links moved without a bump would carry a version
+that no longer describes the prompt it produces — and the edit history, the
+thing a user opens to answer *"what changed between the run that missed it and
+the run that caught it?"*, would be wrong in exactly the case this lesson
+demonstrates.
+
+It rested on one clause: *"the reason to do it now is that the version number is
+user-visible today."* That clause was false. The agent's version reaches the UI
+in exactly four places, all transient — three toasts and an inline
+`Saved (v{n})` that lives only while `update.isSuccess` holds. There is no badge,
+no column, no history screen; `GET /agents/:id/versions` is implemented and the
+client never calls it. So the bump was paying for a history nobody could read,
+while making the number jump on every checkbox — which is what made a user ask
+why toggling a skill "versions the skill".
+
+Nothing in the acceptance criteria asked for it either: the only versioning
+requirement there is the **skill's** version and its Versioning tab.
+
+Consequences of the reversal:
+
+- `linkSkill`, `unlinkSkill`, `setSkills` and `SkillsService.delete` write links
+  and stop. `bumpForSkillChange` is gone.
+- `agents.version` now means what it meant before L02: the agent's **own**
+  config (provider, model, prompt, strategy, gate, repo-intel). Config edits
+  still version and snapshot, exactly as the starter did.
+- `AgentVersionConfig.skills` is kept but weaker, and `snapshotVersion` says so:
+  it is the enabled skill ids *at the moment that config was saved*, context on
+  the snapshot rather than a history of the skill set.
+- The Skills tab's toast drops the version: "Skill list updated".
+
+If L06 needs an exact "which skills did this run send", the right place is the
+run, not the agent — `agent_runs` records `agent_id` and no version at all, so
+that gap has to be closed there regardless of what this decision says.
+
+**Known and deliberately left open.** Config edits still version and snapshot,
+and that history is just as invisible: `GET /agents/:id/versions` is implemented
+and tested (`test/agents-versions.it.test.ts`) and the client never calls it, so
+`agents.version` reaches the UI only through the same transient toast. Unlike
+the skill-link bump this is **not** noise — it is starter infrastructure that
+L06 plans to replay from — so it stays. Surfacing it (a `v{n}` badge, or an
+agent-side history screen) is L06's call, not this lesson's.
 
 ---
 
@@ -88,10 +119,12 @@ these.
 | ordered skill ids in the version snapshot | `AgentVersionConfig.skills` |
 | the prompt slot | `reviewer-core/src/prompt.ts:88` builds `## Skills / rules`, records `PromptAssembly.skills` |
 | the trace UI for that block | `RunTraceDrawer/_components/TraceBody/TraceBody.tsx:76`, colour at `constants.ts:16` |
+| per-block weight in the trace | `PromptBlock` renders `~N tok` from `helpers.estimateTokens` (chars/4 — an estimate on purpose; the number is for comparing blocks, not billing) |
 | every user-facing string | `client/messages/en/skills.json`, `agents.skills.*` |
 | sidebar entry + active-key routing | `app-shell/helpers.ts:33`, `shell.json:21` |
 
-**No migration is needed.** `skills.source` is plain `text` in the DDL — the
+**One migration is needed** (`0012_agent_skill_enabled`, per D2a) and nothing
+else schema-side. `skills.source` is plain `text` in the DDL — the
 drizzle `{ enum: [...] }` is type-level only — so adding a source value is a code
 change in both vendored `shared` copies and nothing else.
 
@@ -106,7 +139,8 @@ change in both vendored `shared` copies and nothing else.
    `agents/[id]/page.tsx:15` gates on `VALID_TABS = ["config"]`.
 5. Import — no parser, no preview, no confirm.
 6. Seed data for the new agent, its skills and the fixture PRs.
-7. D7 — skill-link changes do not version the agent.
+7. ~~D7 — skill-link changes do not version the agent.~~ Reversed: they
+   deliberately do not, and that is now the intended behaviour (see D7).
 
 ---
 
@@ -114,7 +148,7 @@ change in both vendored `shared` copies and nothing else.
 
 | Package | Files |
 |---|---|
-| server | `modules/skills/**` (new), `modules/index.ts`, `modules/agents/service.ts` (D7), `modules/reviews/run-executor.ts`, `platform/container.ts`, `db/seed.ts`, `db/seed-prompts.ts`, `db/seed-fixtures.ts` (new), `vendor/shared/contracts/knowledge.ts` |
+| server | `modules/skills/**` (new), `modules/index.ts`, `modules/agents/repository.ts` (skill links), `modules/reviews/run-executor.ts`, `platform/container.ts`, `db/seed.ts`, `db/seed-prompts.ts`, `db/seed-fixtures.ts` (new), `vendor/shared/contracts/knowledge.ts` |
 | client | `app/skills/**` (new), `app/agents/[id]/page.tsx`, `app/agents/[id]/_components/AgentEditor/{AgentEditor.tsx,constants.ts}`, `…/_components/SkillsTab/**` (new), `lib/hooks/skills.ts` (new), `lib/hooks/agents.ts`, `messages/en/skills.json`, `messages/en/agents.json`, `vendor/shared/contracts/knowledge.ts` |
 | reviewer-core | none — the `skills` input already exists end to end |
 | docs | `docs/agent-prompts/test-quality-reviewer.md`, `server/README.md`, `client/README.md` |
@@ -456,14 +490,19 @@ archive twice. At a 2 MiB cap that is not a cost worth a cache.
 #### Unchanged, on the agent side
 
 ```
-GET  /agents/:id/skills   → AgentSkillLink[]   (ordered)
-POST /agents/:id/skills   { skill_ids: string[] }  → replaces the ordered set
-                          { skill_id, order? }     → links one
+GET  /agents/:id/skills   → AgentSkillLink[]   (ordered; each carries `enabled`)
+POST /agents/:id/skills   { skills: [{ skill_id, enabled }] } → replaces the list
+                          { skill_ids: string[] }             → same, all enabled
+                          { skill_id, order? }                → links one
 ```
 
-The client uses the `skill_ids` form for every attach, detach and reorder — one
-endpoint, one invalidation, no partial states. Per D7 both forms now bump the
-agent's version and snapshot.
+The client uses the `skills` form for every check, uncheck and reorder — one
+endpoint, one invalidation, no partial states. `skill_ids` is kept for scripts
+and for the integration tests: it means "this list, every row on".
+
+A write never touches `agents.version` — see D7, which was built and then
+reversed. The agent's version tracks its own config; the skill list is not part
+of it.
 
 ### 6.4 The import pipeline
 
@@ -637,44 +676,91 @@ through a hook in `lib/hooks/*` that calls `lib/api.ts`; server components by
 default, `"use client"` pushed as far down as it goes; every string through
 `next-intl`; tests query by role, label or text, never a class or a test id.
 
-### 7.1 `/skills` — the list
+### 7.1 `/skills` — the list, and `/skills/:id` — the editor
+
+Two routes, exactly mirroring `/agents` → `/agents/:id`. The grid selects; the
+skill's own screen edits. A right-hand rail that doubled as the editor was the
+first shape, and it could not hold the history and the rendered preview as well
+without becoming a third thing.
 
 ```
 client/src/app/skills/
   page.tsx                                  # thin: renders <SkillsListView />
-  _components/SkillsListView/
-    SkillsListView.tsx                      # grid + side preview + Add dropdown
-    SkillsListView.test.tsx
-    constants.ts  helpers.ts  styles.ts  index.ts
-    _components/SkillCard/                  # name, type chip, description, toggle
-    _components/SkillPreview/               # right rail: render → edit → save
-    _components/CreateSkillModal/           # name, description, type, body
-    _components/ImportSkillDrawer/          # pick → preview → confirm
+  [id]/
+    page.tsx                                # split: skill rail + <SkillEditor />
+    styles.ts
+    _components/SkillEditor/
+      SkillEditor.tsx                       # Tabs shell; tab lives in ?tab=
+      constants.ts  helpers.ts  styles.ts  index.ts
+      _components/ConfigTab/                # name, description, type, body → save/delete
+      _components/PreviewTab/               # rendered body, provenance, untrusted notice
+      _components/VersionsTab/              # history, diff, restore (+ test)
+  _components/                              # shared by BOTH routes
+    SkillCard/                              # name, type chip, description, toggle
+    AddSkillButton/                         # the split button; the route owns the dialogs
+    CreateSkillModal/                       # name, description, type, body
+    ImportSkillDrawer/                      # pick → preview → confirm
       _components/ImportEntryTable/         # the ignored/executable listing
+    SkillsListView/
+      SkillsListView.tsx                    # grid + header; a click navigates
+      SkillsListView.test.tsx
+      constants.ts  styles.ts  index.ts
 ```
 
+`filterSkills` is `src/lib/skills.ts`: both routes narrow their list, and a
+search that means two different things on two screens is worse than none.
+
 **`SkillsListView`** mirrors `AgentsListView` (same `AppShell` + header + search +
-`Dropdown` shape), with the grid narrowed to make room for the preview rail:
+`AddSkillButton` shape) and is a plain grid:
 
 ```tsx
 <AppShell crumb={[{ label: t("page.crumbLab") }, { label: t("page.crumbSkills") }]}>
-  {creating && <CreateSkillModal onClose={…} />}
-  {importing && <ImportSkillDrawer onClose={…} onImported={(s) => setSelected(s.id)} />}
+  {creating && <CreateSkillModal onClose={…} onCreated={(s) => push(`/skills/${s.id}?tab=config`)} />}
+  {importing && <ImportSkillDrawer onClose={…} onImported={(s) => push(`/skills/${s.id}?tab=preview`)} />}
   <header>  h1, subtitle, search input (aria-label, not just a placeholder),
-            Dropdown["Create", "Import from file"] </header>
-  <div className="split">
-    <div className="grid">   {list.map(s => <SkillCard … />)}   </div>
-    {selected ? <SkillPreview skillId={selected} /> : <EmptyState … page.selectPrompt />}
-  </div>
+            AddSkillButton["Create", "Import from file"] </header>
+  <div className="grid">   {list.map(s => <SkillCard onClick={…navigate} … />)}   </div>
 </AppShell>
 ```
+
+An import lands on **Preview**, not Config: it arrives `enabled: false`, and
+reading the body is the gate that decides whether it gets enabled (D6).
 
 States, in the order they are implemented: `isLoading` → three `<Skeleton/>`;
 `isError` → `<ErrorState body={t("page.loadError")} onRetry={refetch}/>`; empty →
 `<EmptyState icon="Sparkles" … page.empty.* onCta={() => setImporting(true)}/>`.
 
+**`/skills/:id`** is the agent editor's layout: a left rail listing every skill
+(with its global kill-switch) beside the tabbed panel. The header carries the
+name, the type chip and `v{version}`. `TABS` is `config | preview | versions`;
+the mockup's `Stats` stays unbuilt for the same reason the agent editor's does —
+nothing feeds it yet.
+
+**`VersionsTab`** is the one genuinely new screen. `skill_versions` holds every
+body revision, so each row is a distinct prompt agents once sent:
+
+- the row label is the body's first non-empty line, heading markers stripped —
+  the table stores a body and no commit message, so there is nothing else to
+  show; an empty body renders as `—`;
+- **Diff** expands an inline line diff of that version against the *current*
+  body, computed client-side by an LCS pass in `helpers.ts`. Bodies are prompt
+  fragments — tens of lines — so the exact O(n·m) table beats a dependency;
+- **Restore** is a normal save of the old body, not a rewind: it mints a NEW
+  version whose body equals the old one. The history stays append-only, so a
+  run that cites v2 still resolves to the text v2 actually had. The confirm says
+  so in words.
+
 **`SkillCard`** — props mirror `AgentCard` so the two grids stay visually one
-system:
+system. It also owns its own delete: the button, the `ConfirmDialog` behind it,
+and the mutation. `agent_count` rides on the `Skill` DTO (one grouped query in
+`SkillsRepository.agentCountsFor`, not a read per card) and counts only rows an
+agent has CHECKED — it answers "who loses something if this goes away", which is
+exactly the question the delete dialog asks.
+
+`ConfirmDialog` (`src/components/confirm-dialog/`) replaces `window.confirm`
+everywhere a row is destroyed. The native dialog cannot be styled, offers no
+close control beyond its own two buttons, blocks the tab while it is up, and is
+invisible to a browser-driven test or a screenshot.
 
 ```tsx
 function SkillCard({
@@ -694,14 +780,18 @@ vetting` badge when `source !== 'manual' && !enabled`, and `usedBy` as a
 `Sparkles` badge. The toggle writes `enabled` — the **global kill-switch**: off
 means the skill never enters any prompt, whatever it is attached to.
 
-**`SkillPreview`** is the skill editor (D: the requirements' "Редактор скіла").
-Two modes in one panel, matching the strings that already exist
-(`skills.preview.edit` / `.save`):
+**`ConfigTab` + `PreviewTab`** are the skill editor (D: the requirements'
+"Редактор скіла"). What began as one two-mode panel is two tabs, because the
+screen also has to hold the history:
 
-| Mode | Shows |
+| Tab | Shows |
 |---|---|
-| read | `<Markdown>{skill.body}</Markdown>`, source badge, `v{version}`, the untrusted notice when `source !== 'manual'` |
-| edit | `FormField`-wrapped `TextInput` name, `Textarea` description, `SelectInput` type, `Textarea` body (monospace), Save / Cancel |
+| Preview | `<Markdown>{skill.body}</Markdown>`, source badge, `v{version}`, enabled badge, the untrusted notice when `source !== 'manual'` |
+| Config | `FormField`-wrapped `TextInput` name, `Textarea` description, `SelectInput` type, `Textarea` body (monospace), Save / Cancel / Delete |
+
+Save is disabled until something actually changed — a save that posts an empty
+patch looks like it worked and did nothing. Cancel reseeds the draft from the
+stored skill rather than leaving the tab.
 
 The description field carries the hint that it is **the skill's interface,
 written as a directive** — the one line the requirements call out, and the reason
@@ -720,7 +810,7 @@ proof of the versioning rule.
 |---|---|
 | pick | `<input type="file" accept=".md,.markdown,.zip">`, read via `FileReader` (`readAsText` for md, `readAsArrayBuffer` → base64 for zip), plus the size hint |
 | preview | the extracted name/description/type as editable fields, the body in a read-only `<Textarea>`, `<ImportEntryTable>`, and every `warnings[]` line |
-| confirm | `Import skill` → `POST /skills/import` → toast `skills.file.success`, close, select the new skill |
+| confirm | `Import skill` → `POST /skills/import` → toast `skills.file.success`, close, open the new skill on its Preview tab |
 
 `ImportEntryTable` renders `entries[]` as a real `<table>` with a row per file:
 path, size, kind, and `ignored`. An `executable` row is styled as muted with a
@@ -763,26 +853,42 @@ function SkillsTab({ agent }: { agent: Agent }) // reads useSkills() + useAgentS
 ```
 
 - header: `agents.skills.title` + `agents.skills.enabledCount` — *{linked} of
-  {total} enabled* — and a filter input (`agents.skills.filterPlaceholder`);
+  {total} enabled*, as a chip — and a filter input
+  (`agents.skills.filterPlaceholder`);
 - the hint line `agents.skills.orderHint`;
-- per row: an order index, the name, the type badge, a `<Toggle>` and two
-  reorder buttons.
+- per row: a drag handle, a checkbox, the name in mono, the type badge.
 
-**The toggle is attach/detach (D2).** On → the skill id is appended to the
-ordered list; off → removed. A globally-disabled skill still appears and can be
-attached, but renders muted with the `needs vetting` badge and a note that it
-will not reach the prompt until it is enabled on the Skills page — otherwise
-"attached but nothing happened" is an invisible dead end.
+**The checkbox is the `enabled` flag, not attach/detach (D2a).** Every workspace
+skill is a row, always, and clearing a box leaves the row where it is. The
+alternative — a link that exists only while checked — cannot express "off, but
+seventh", so the list reshuffles itself under the user every time a box is
+cleared, which makes deliberate ordering impossible.
 
-**Reordering uses `↑` / `↓` buttons, not drag.** The mockup shows a drag handle,
-but the existing string was already reworded to *"Toggle to attach"*, and buttons
-are keyboard reachable, screen-reader announceable, and testable by accessible
-name (`Move "corner-case-checklist" up`) — which the repo's own test rule
-requires. Drag can come back later as an enhancement on top.
+Rows with no stored position (a skill the agent has never been given one for)
+render last, alphabetically, cleared. The first write gives them positions.
 
-Every mutation writes the **whole** ordered array through
-`POST /agents/:id/skills { skill_ids }`, then invalidates
-`["agent-skills", agentId]` and `["agent", agentId]` (the version moved, per D7).
+A globally-disabled skill still appears and can be checked, but renders muted
+with the `needs vetting` badge — otherwise "checked but nothing happened" is an
+invisible dead end. Two independent gates decide what reaches the prompt: the
+skill is on globally **and** this agent's row is checked.
+
+**Reordering is drag AND keyboard, and only for CHECKED rows.** The mockup shows
+a drag handle, so the handle is what a pointer user sees. It is a real
+`<button>`, though: focus it and `↑`/`↓` move the row. A drag-only handle would
+put ordering — the thing this tab is about — out of reach of the keyboard and
+out of reach of a test that addresses controls by accessible name
+(`Reorder "corner-case-checklist" — press the up or down arrow key`), which the
+repo's own test rule requires.
+
+An unchecked row cannot be dragged: it is not in the prompt, so it has no
+position in the prompt to argue about. It keeps its slot in the list and gets
+its handle back the moment it is checked. Every row stays a drop TARGET, or a
+checked row could never move past an unchecked one.
+
+Every mutation writes the **whole** ordered list through
+`POST /agents/:id/skills { skills }`, then invalidates `["agent-skills", agentId]`
+and `["agent", agentId]`. Reorder indices always address the FULL list, never the
+filtered view.
 
 ### 7.3 Hooks
 
@@ -803,7 +909,7 @@ Added to `lib/hooks/agents.ts`:
 
 ```ts
 useAgentSkills(agentId): UseQueryResult<AgentSkillLink[]>  // ["agent-skills", agentId]
-useSetAgentSkills(): mutation<AgentSkillLink[], { agentId; skillIds: string[] }>
+useSetAgentSkills(): mutation<AgentSkillLink[], { agentId; skills: AgentSkillEntry[] }>
 ```
 
 `useImportPreview` is a mutation rather than a query on purpose: it is a POST
@@ -877,10 +983,12 @@ through `onConflictDoNothing` on `(agent_id, skill_id)`.
 > Verify by counting rows (`select count(*) from skills`), not by the exit code.
 > `seed-skills.it.test.ts` is the real verification.
 
-> **Re-seeding restores a link you detached.** The link insert is
-> `onConflictDoNothing` on `(agent_id, skill_id)`, so once a detach has deleted
-> the row a later `seed()` re-inserts it. If you detached `api-contract-gate`
-> for the "without skills" arm, detach it again after any re-seed.
+> **Re-seeding re-enables a row you cleared.** The link insert is
+> `onConflictDoNothing` on `(agent_id, skill_id)`, so it leaves an existing row
+> — and its `enabled` flag — alone. But if the row was removed entirely, a later
+> `seed()` re-inserts it with `enabled` defaulting to true. Clearing the
+> `api-contract-gate` box for the "without skills" arm survives a re-seed;
+> deleting the skill and re-seeding does not.
 
 ---
 
@@ -941,12 +1049,12 @@ Ordered so each step is demonstrable on its own.
 | 3 | `zip.ts` + `import-parse.ts` + `helpers.ts` — pure; all guards at the top | unit tests green, including the `install.sh` case |
 | 4 | `service.ts` + `routes.ts` + `PayloadTooLargeError` — schema-first, per-route `bodyLimit` | `curl` round-trips create / update / preview / import |
 | 5 | Register in `modules/index.ts` | `GET /skills` returns `[]` |
-| 6 | **Prompt wiring** — container exposure (§6.7), `run-executor` read + log, D7 version bump in `AgentsService` | `pnpm arch` clean; a skill attached by `curl` changes a real prompt |
+| 6 | **Prompt wiring** — container exposure (§6.7), `run-executor` read + log | `pnpm arch` clean; a skill attached by `curl` changes a real prompt |
 | 7 | Seed — agent, 4 seeded skills, links, the 2 fixture PRs, the zip fixture | re-run the seed twice, row counts unchanged |
 | 8 | `lib/hooks/skills.ts` + the two agent-skill hooks | — |
 | 9 | `/skills` screen — list, card, preview/edit, create modal | a skill is created and edited in the UI |
 | 10 | Import drawer + entry table | `flake-patterns.zip` imports through preview, lands disabled |
-| 11 | Agent Skills tab — `TABS`, the tab switch, `VALID_TABS`, attach/detach/reorder | order in the UI matches order in the trace |
+| 11 | Agent Skills tab — `TABS`, the tab switch, `VALID_TABS`, check/uncheck/reorder | order in the UI matches order in the trace; an unchecked row keeps its place |
 | 12 | i18n — the new keys; delete the url/community strings | no hardcoded string in the new JSX |
 | 13 | Docs — the agent prompt, a README line for the new route and module, INSIGHTS if anything surprised us | — |
 
@@ -962,9 +1070,9 @@ Which suite, per `TESTING.md`. A test that touches Postgres **must** be named
 | Suite | Cases |
 |---|---|
 | `server/test/skills-import.test.ts` (unit, no Docker) | front matter vs heading fallback vs filename fallback; core precedence (`SKILL.md` beats a nested `.md`); an archive whose only markdown is nested; **`install.sh` → `kind:'executable'`, `ignored:true`, and `inflateRawSync` is never called for it** (spy on the zip reader); zip-slip name → `unsafe_entry_path`; oversize entry → `archive_too_large`; a non-zip buffer → `unsupported_archive`; an archive with no `.md` → `no_skill_core` |
-| `server/test/skills.it.test.ts` (Postgres) | CRUD is workspace-scoped (another workspace's id → 404); a body edit bumps `version` and appends **one** `skill_versions` row; a name-only edit does not; delete cascades `agent_skills` and reports `unlinked_from`; `POST /agents/:id/skills` sets and reorders; D7 — a link change bumps the agent version and snapshots the new `skills` array |
+| `server/test/skills.it.test.ts` (Postgres) | CRUD is workspace-scoped (another workspace's id → 404); a body edit bumps `version` and appends **one** `skill_versions` row; a name-only edit does not; delete cascades `agent_skills` and reports `unlinked_from`; `POST /agents/:id/skills` sets and reorders; a link change leaves `agents.version` alone (D7, reversed) |
 | `server/test/skills-prompt.test.ts` (unit) | two attached skills → `assembly.skills` holds both bodies **in attached order**; a globally-disabled one is absent; none attached → `assembly.skills === null` and the prompt is byte-identical to the no-skills baseline |
-| `client` (vitest + jsdom, fetch mocked) | `SkillCard` renders type, description and a working toggle; `SkillsListView` loading / error / empty / populated, and clicking a card opens the preview; `SkillPreview` edit → save calls the mutation with the changed body; `ImportSkillDrawer` — the preview lists the executable entry as not processed, and confirm posts the token; `SkillsTab` — attach, detach, and reorder by accessible name |
+| `client` (vitest + jsdom, fetch mocked) | `SkillCard` renders type, description and a working toggle; `SkillsListView` loading / error / empty / populated, and clicking a card navigates to `/skills/:id`; `VersionsTab` — newest first with the current row marked, the first body line as the row label, an inline diff of a past version against the current body, and Restore posting the old body only after a confirm; `ImportSkillDrawer` — the preview lists the executable entry as not processed, and confirm posts the token; `SkillsTab` — check, uncheck (the row keeps its position), reorder by accessible name, and a filter that narrows the view without narrowing the write |
 | `e2e` | create a skill → attach it to Test Quality Reviewer → it appears in the agent's Skills tab at position 1 |
 
 ## 12. Done when
