@@ -88,7 +88,10 @@ for (const p of paths) {
 }
 
 // ---------------------------------------------------------------- G5 migrations
-const migrations = has(/^server\/drizzle\/.*\.sql$/);
+// `server/drizzle/` has never existed in this repo — drizzle.config.ts sets
+// `out: './src/db/migrations'`. With the old pattern G5 could never fire and G9
+// fired on EVERY schema change, migration or not.
+const migrations = has(/^server\/src\/db\/migrations\/.*\.sql$/);
 if (migrations.length) {
   flag('G5', 'WARNING', 'Нова міграція — застосуй її вручну',
     'Міграції не застосовуються на старті. На Windows `pnpm db:migrate` виходить із кодом 0, нічого не зробивши, — перевіряй кількість таблиць, а не exit-код.',
@@ -108,7 +111,7 @@ for (const p of has(/^server\/src\/modules\/[^/]+\/routes\.ts$/)) {
 // ---------------------------------------------------------------- G9 schema <-> migration
 if (has(/^server\/src\/db\/schema\.ts$/).length && !migrations.length) {
   flag('G9', 'CRITICAL', 'Схему змінено без міграції',
-    'server/src/db/schema.ts у діфі, а нової міграції в server/drizzle/ немає. Прожени `pnpm db:generate`.',
+    'server/src/db/schema.ts у діфі, а нової міграції в server/src/db/migrations/ немає. Прожени `pnpm db:generate`.',
     'server/src/db/schema.ts');
 }
 
