@@ -50,7 +50,7 @@ The safety lives in the **lifecycle**, not the delimiter:
 | an imported skill is stored `enabled = false` | `SkillsService.confirmImport` |
 | "needs vetting" badge until enabled | `skills.listItem.needsVetting` (string exists) |
 | full body shown before the first write | the import preview step |
-| nothing enters a prompt until enabled **and** attached | `run-executor` filter |
+| nothing enters a prompt until the skill is enabled globally **and** its row on the agent is checked (D2a: two independent gates) | `SkillsRepository.promptBodiesForAgent` |
 | the UI says it in words | `skills.preview.untrustedNotice` (string exists) |
 
 This is the line the video calls out: *someone else's skill is someone else's
@@ -149,7 +149,7 @@ change in both vendored `shared` copies and nothing else.
 | Package | Files |
 |---|---|
 | server | `modules/skills/**` (new), `modules/index.ts`, `modules/agents/repository.ts` (skill links), `modules/reviews/run-executor.ts`, `platform/container.ts`, `db/seed.ts`, `db/seed-prompts.ts`, `db/seed-fixtures.ts` (new), `vendor/shared/contracts/knowledge.ts` |
-| client | `app/skills/**` (new), `app/agents/[id]/page.tsx`, `app/agents/[id]/_components/AgentEditor/{AgentEditor.tsx,constants.ts}`, `…/_components/SkillsTab/**` (new), `lib/hooks/skills.ts` (new), `lib/hooks/agents.ts`, `messages/en/skills.json`, `messages/en/agents.json`, `vendor/shared/contracts/knowledge.ts` |
+| client | `vendor/ui/nav.ts` (the one sanctioned vendor edit — the sidebar entry), `app/skills/**` (new), `app/agents/[id]/page.tsx`, `app/agents/[id]/_components/AgentEditor/{AgentEditor.tsx,constants.ts}`, `…/_components/SkillsTab/**` (new), `lib/hooks/skills.ts` (new), `lib/hooks/agents.ts`, `messages/en/skills.json`, `messages/en/agents.json`, `vendor/shared/contracts/knowledge.ts` |
 | reviewer-core | none — the `skills` input already exists end to end |
 | docs | `docs/agent-prompts/test-quality-reviewer.md`, `server/README.md`, `client/README.md` |
 
@@ -208,7 +208,26 @@ export const SkillImportPreview = z.object({
 export type SkillImportPreview = z.infer<typeof SkillImportPreview>;
 ```
 
-`Skill` itself is unchanged.
+```ts
+// ── changed, on shapes that already existed ────────────────────────────────
+// All three are read-only and derived; nothing writes them through an endpoint.
+
+// One flag per link (D2a). A row records a POSITION; `enabled` decides whether
+// it reaches the prompt, so an unchecked row keeps its place.
+AgentSkillLink.enabled: z.boolean()
+
+// How many skills this agent actually sends — the checked rows of its Skills
+// tab. One grouped query (`AgentsRepository.skillCountsFor`), not a read per
+// card.
+Agent.skill_count: z.number().int()
+
+// How many agents actually send this skill. Counts only checked rows, because
+// that is the question the delete dialog asks.
+Skill.agent_count: z.number().int()
+```
+
+Eight additions in total, and **both vendored copies move in the same commit** —
+client/server drift here is the failure mode the root `AGENTS.md` names by hand.
 
 ---
 
@@ -306,9 +325,10 @@ export class SkillsService {
   confirmImport(workspaceId: string, input: ConfirmImportInput): Promise<Skill>;
 
   /**
-   * Ordered bodies for the agent's prompt: attached order, globally-enabled
-   * only. The ONE read the review path uses. Returns [] for an agent with
-   * no skills so `assemblePrompt` omits the section.
+   * Ordered bodies for the agent's prompt: stored order, and only rows that
+   * pass BOTH gates — checked on this agent AND enabled globally (D2a). The
+   * ONE read the review path uses. Returns [] for an agent with no skills, so
+   * `assemblePrompt` omits the section.
    */
   promptBodiesForAgent(agentId: string): Promise<PromptSkill[]>;
 }
@@ -487,7 +507,7 @@ Re-parsing rather than caching the preview keeps the server stateless — no TTL
 no eviction, nothing to leak between workspaces — at the cost of inflating the
 archive twice. At a 2 MiB cap that is not a cost worth a cache.
 
-#### Unchanged, on the agent side
+#### The agent side — one new body shape (D2a)
 
 ```
 GET  /agents/:id/skills   → AgentSkillLink[]   (ordered; each carries `enabled`)
@@ -596,7 +616,9 @@ In `run-executor.ts`, inside `runOneAgent`, beside the existing repo-intel
 gathering (`:169`–`:183`):
 
 ```ts
-// Ordered, attached AND globally-enabled skills. `linkedSkills` already sorts
+// Ordered skills that pass BOTH gates: the row on this agent is checked
+// (`agent_skills.enabled`) AND the skill is on globally (`skills.enabled`).
+// `linkedSkills` already sorts
 // by `agent_skills.order`, so the agent's chosen order IS the prompt order.
 const skills = await this.container.skillsRepo.promptBodiesForAgent(agent.id);
 for (const s of skills) runLog.info(`skill: ${s.name} (v${s.version}) → prompt`);
@@ -630,7 +652,7 @@ trace, built before any skill is resolved.
 
 ```mermaid
 flowchart LR
-    A[agent_skills<br/>order asc] --> B[skills.enabled = true]
+    A[agent_skills<br/>order asc] --> A2[agent_skills.enabled<br/>= true] --> B[skills.enabled = true]
     B --> C[promptBodiesForAgent]
     C --> D[reviewPullRequest<br/>skills: string_]
     D --> E[assemblePrompt]
@@ -1044,7 +1066,7 @@ Ordered so each step is demonstrable on its own.
 
 | # | Step | Done when |
 |---|---|---|
-| 1 | **Contracts** — the five additions in §5, in both vendored copies, one commit | `pnpm typecheck` passes in both packages |
+| 1 | **Contracts** — the additions in §5, in both vendored copies, one commit | `pnpm typecheck` passes in both packages |
 | 2 | `db/rows.ts` + `repository.ts` — CRUD, `skill_versions` append, `countAgentsUsing`, `promptBodiesForAgent` | integration tests green |
 | 3 | `zip.ts` + `import-parse.ts` + `helpers.ts` — pure; all guards at the top | unit tests green, including the `install.sh` case |
 | 4 | `service.ts` + `routes.ts` + `PayloadTooLargeError` — schema-first, per-route `bodyLimit` | `curl` round-trips create / update / preview / import |

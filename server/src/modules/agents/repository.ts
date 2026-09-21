@@ -226,7 +226,17 @@ export class AgentsRepository {
     const rows = await this.db
       .select({ agentId: t.agentSkills.agentId, n: count() })
       .from(t.agentSkills)
-      .where(and(inArray(t.agentSkills.agentId, agentIds), eq(t.agentSkills.enabled, true)))
+      // Both gates, or the count says something the prompt does not. A skill
+      // switched off globally can still be checked on an agent, and counting
+      // it would promise a block that `promptBodiesForAgent` never emits.
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(
+        and(
+          inArray(t.agentSkills.agentId, agentIds),
+          eq(t.agentSkills.enabled, true),
+          eq(t.skills.enabled, true),
+        ),
+      )
       .groupBy(t.agentSkills.agentId);
     return new Map(rows.map((r) => [r.agentId, r.n]));
   }
@@ -276,12 +286,23 @@ export class AgentsRepository {
       );
     if (unchanged) return;
 
-    await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (entries.length > 0) {
-      await this.db
-        .insert(t.agentSkills)
-        .values(entries.map((e, i) => ({ agentId, skillId: e.skillId, order: i, enabled: e.enabled })));
-    }
+    // ONE transaction, because the two statements are one edit. Without it a
+    // failing insert — an id that was deleted in another tab, a duplicate in
+    // the array — leaves the delete committed and the agent with NO skills at
+    // all. There is nothing to restore from: links are deliberately not
+    // versioned, so the order and the flags the user parked are gone. The
+    // Skills tab posts this whole array on every checkbox, so that window
+    // would be open constantly rather than once per explicit save.
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (entries.length > 0) {
+        await tx
+          .insert(t.agentSkills)
+          .values(
+            entries.map((e, i) => ({ agentId, skillId: e.skillId, order: i, enabled: e.enabled })),
+          );
+      }
+    });
   }
 
 }

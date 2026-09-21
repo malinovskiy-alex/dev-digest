@@ -28,7 +28,7 @@ const miniBtnStyle: React.CSSProperties = {
 
 export function PromptBlock({ label, text, color }: { label: string; text: string; color: string }) {
   const t = useTranslations("runs");
-  const tokens = estimateTokens(text ?? "");
+  const tokens = estimateTokens(text);
   const [open, setOpen] = React.useState(false);
   const [full, setFull] = React.useState(false);
   const [copied, setCopied] = React.useState(false);

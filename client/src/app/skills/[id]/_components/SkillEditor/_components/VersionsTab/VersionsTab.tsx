@@ -13,6 +13,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Skeleton } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSkillVersions, useUpdateSkill } from "@/lib/hooks/skills";
 import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
@@ -27,6 +28,9 @@ export function VersionsTab({ skill }: { skill: Skill }): React.JSX.Element {
   // Which row has its diff open. Only one at a time: two open diffs of the same
   // body against the same current text is noise, not comparison.
   const [openDiff, setOpenDiff] = React.useState<number | null>(null);
+  // Restore rewrites the body, so it asks in the same dialog every other
+  // destructive action in this app uses.
+  const [restoring, setRestoring] = React.useState<{ version: number; body: string } | null>(null);
 
   if (isLoading) {
     return (
@@ -43,18 +47,34 @@ export function VersionsTab({ skill }: { skill: Skill }): React.JSX.Element {
 
   const versions = newestFirst(data);
 
-  const restore = async (version: number, body: string) => {
-    if (!window.confirm(t("versions.restoreConfirm", { version, next: skill.version + 1 }))) return;
+  const restore = async () => {
+    if (!restoring) return;
+    const { version, body } = restoring;
     try {
       const saved = await update.mutateAsync({ id: skill.id, patch: { body } });
+      setRestoring(null);
       toast.success(t("versions.restored", { from: version, version: saved.version }));
     } catch (e) {
+      setRestoring(null);
       toast.error(e instanceof ApiError ? e.message : t("page.loadError"));
     }
   };
 
   return (
     <div style={s.wrap}>
+      {restoring && (
+        <ConfirmDialog
+          title={t("versions.restoreTitle", { version: restoring.version })}
+          body={t("versions.restoreConfirm", {
+            version: restoring.version,
+            next: skill.version + 1,
+          })}
+          confirmLabel={t("versions.restore")}
+          busy={update.isPending}
+          onConfirm={restore}
+          onClose={() => setRestoring(null)}
+        />
+      )}
       <p style={s.count}>{t("versions.count", { count: versions.length })}</p>
       <p style={s.hint}>{t("versions.hint")}</p>
 
@@ -83,7 +103,7 @@ export function VersionsTab({ skill }: { skill: Skill }): React.JSX.Element {
                   <Button
                     kind="secondary"
                     size="sm"
-                    onClick={() => restore(v.version, v.body)}
+                    onClick={() => setRestoring({ version: v.version, body: v.body })}
                     disabled={update.isPending}
                   >
                     {t("versions.restore")}

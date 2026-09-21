@@ -18,6 +18,16 @@ export interface NavGroup {
   items: NavItemDef[];
 }
 
+/**
+ * HAND-EDITED, against `client/AGENTS.md` ("`src/vendor/` is vendored code — do
+ * not hand-edit"), and deliberately so.
+ *
+ * `Sidebar` imports this constant directly and `ShellContext` has no nav
+ * override, so there is no way to add a sidebar entry from outside this file.
+ * L02 ships the `/skills` screen; leaving it reachable only from the command
+ * palette was the alternative. If this library is ever re-vendored, re-apply
+ * the SKILLS LAB group and the `g s` shortcut below.
+ */
 export const NAV: NavGroup[] = [
   {
     section: "WORKSPACE",

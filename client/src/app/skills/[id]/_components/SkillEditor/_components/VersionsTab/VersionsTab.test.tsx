@@ -3,6 +3,8 @@ import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-li
 import { NextIntlClientProvider } from "next-intl";
 import type { Skill, SkillVersion } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/skills.json";
+// The confirm dialog's Cancel/Close come from the shared `common` namespace.
+import common from "../../../../../../../../messages/en/common.json";
 import { ToastProvider } from "@/lib/toast";
 
 const SKILL: Skill = {
@@ -53,7 +55,7 @@ afterEach(() => {
 
 function renderTab() {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
+    <NextIntlClientProvider locale="en" messages={{ skills: messages, common }}>
       <ToastProvider>
         <VersionsTab skill={SKILL} />
       </ToastProvider>
@@ -111,11 +113,23 @@ describe("Skill editor — Versions tab", () => {
     ).toBeInTheDocument();
   });
 
-  it("restores by saving the old body as a NEW version, after a confirm", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("asks in a dialog before restoring, and says it mints a new version", () => {
     renderTab();
-
     fireEvent.click(within(row(1)).getByRole("button", { name: "Restore" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("Restore v1?");
+    // The stakes are in the question: nothing is overwritten.
+    expect(dialog).toHaveTextContent("saved as a new version, v3");
+    expect(dialog).toHaveTextContent("nothing in the history is overwritten");
+    expect(updateAsync).not.toHaveBeenCalled();
+  });
+
+  it("restores by saving the old body as a NEW version once confirmed", async () => {
+    renderTab();
+    fireEvent.click(within(row(1)).getByRole("button", { name: "Restore" }));
+    // The dialog's affirmative button, not the row's.
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restore" }));
 
     // The save resolves and then raises a toast, so the assertion has to wait
     // for that second state update rather than racing it.
@@ -125,11 +139,12 @@ describe("Skill editor — Versions tab", () => {
     expect(await screen.findByText("Restored v1 — saved as v3")).toBeInTheDocument();
   });
 
-  it("writes nothing when the restore confirm is declined", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("writes nothing when the restore dialog is cancelled", () => {
     renderTab();
-
     fireEvent.click(within(row(1)).getByRole("button", { name: "Restore" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(updateAsync).not.toHaveBeenCalled();
   });
 });

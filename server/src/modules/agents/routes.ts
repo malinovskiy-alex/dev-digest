@@ -76,7 +76,18 @@ const SetSkillsBody = z
   })
   .refine((b) => b.skills !== undefined || b.skill_ids !== undefined || b.skill_id !== undefined, {
     message: 'Provide skills, skill_ids (set/reorder) or skill_id (link one)',
+  })
+  // A repeated id collides with the (agent_id, skill_id) primary key. That is
+  // bad input, so it fails validation with a 422 rather than reaching the
+  // insert and surfacing as a 500.
+  .refine((b) => uniqueIds(b.skills?.map((r) => r.skill_id) ?? b.skill_ids), {
+    message: 'skill ids must be unique',
   });
+
+/** True when the list is absent or has no repeats. */
+function uniqueIds(ids: string[] | undefined): boolean {
+  return ids === undefined || new Set(ids).size === ids.length;
+}
 
 export default async function agentsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();

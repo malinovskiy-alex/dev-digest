@@ -12,7 +12,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useDeleteSkill } from "@/lib/hooks/skills";
 import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
-import { needsVetting, typeColor } from "./helpers";
+import { typeColor } from "@/lib/skills";
+import { needsVetting } from "./helpers";
 import { s } from "./styles";
 
 export function SkillCard({

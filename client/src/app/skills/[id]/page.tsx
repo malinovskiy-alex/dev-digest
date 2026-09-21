@@ -9,18 +9,16 @@ import { useTranslations } from "next-intl";
 import { Badge, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { useSkill, useSkills, useUpdateSkill } from "@/lib/hooks/skills";
-import { filterSkills } from "@/lib/skills";
+import { filterSkills, typeColor } from "@/lib/skills";
 import { ApiError } from "@/lib/api";
 import { AddSkillButton } from "../_components/AddSkillButton";
 import { CreateSkillModal } from "../_components/CreateSkillModal";
 import { ImportSkillDrawer } from "../_components/ImportSkillDrawer";
 import { SkillCard } from "../_components/SkillCard";
-import { SkillEditor } from "./_components/SkillEditor";
-import { TABS } from "./_components/SkillEditor/constants";
-import { typeColor } from "../_components/SkillCard/helpers";
+import { SkillEditor, SKILL_EDITOR_TABS } from "./_components/SkillEditor";
 import { s } from "./styles";
 
-const VALID_TABS = TABS.map((t) => t.key);
+const VALID_TABS = SKILL_EDITOR_TABS.map((t) => t.key);
 
 export default function SkillEditorPage() {
   const t = useTranslations("skills");

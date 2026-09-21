@@ -126,7 +126,8 @@
     "restore": "Restore",
     "restoreConfirm": "Restore the body from v{version}? It is saved as a new version, v{next} — nothing in the history is overwritten.",
     "restored": "Restored v{from} — saved as v{version}",
-    "loadError": "Could not load the version history."
+    "loadError": "Could not load the version history.",
+    "restoreTitle": "Restore v{version}?"
   },
   "delete": {
     "title": "Delete “{name}”?",

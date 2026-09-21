@@ -1,10 +1,4 @@
-import type { Skill, SkillType } from "@devdigest/shared";
-import { TYPE_COLOR } from "./constants";
-
-/** Resolve the badge colour for a skill's type. */
-export function typeColor(type: SkillType): string {
-  return TYPE_COLOR[type];
-}
+import type { Skill } from "@devdigest/shared";
 
 /**
  * D6 (the trust model): a skill that came from outside is somebody else's

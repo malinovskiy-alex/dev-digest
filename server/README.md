@@ -120,8 +120,8 @@ those delimiters, so a delimiter-wrapped skill could never flag anything.
 
 The safety is in the lifecycle instead — an imported skill is stored disabled,
 shown in full before it is ever saved, and reaches no prompt until the user
-enables *and* attaches it. Before you "harden" this by wrapping skills in
-`<untrusted>`, read `specs/L02-skills-in-the-product.md` D6:
+enables it globally *and* checks its row on that agent — two independent gates.
+Before you "harden" this by wrapping skills in `<untrusted>`, read `specs/L02-skills-in-the-product.md` D6:
 `test/skills-prompt.test.ts` asserts the placement for exactly that reason.
 
 ## Review context (non-obvious)

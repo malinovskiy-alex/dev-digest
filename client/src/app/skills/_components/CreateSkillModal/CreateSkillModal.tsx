@@ -8,6 +8,7 @@ import { Button, FormField, Modal, SelectInput, TextInput, Textarea } from "@dev
 import type { Skill } from "@devdigest/shared";
 import { SKILL_TYPES } from "@/lib/skill-types";
 import { useCreateSkill } from "@/lib/hooks/skills";
+import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { BODY_ROWS, DEFAULT_TYPE, DESCRIPTION_ROWS, MODAL_WIDTH } from "./constants";
 import { s } from "./styles";
@@ -31,15 +32,22 @@ export function CreateSkillModal({
   const ready = name.trim().length > 0 && description.trim().length > 0 && body.trim().length > 0;
 
   const submit = async () => {
-    const skill = await create.mutateAsync({
-      name: name.trim(),
-      description: description.trim(),
-      type,
-      body,
-    });
-    toast.success(t("create.success", { name: skill.name }));
-    onCreated?.(skill);
-    onClose();
+    // mutateAsync rejects on a 4xx/5xx. Uncaught, that is an unhandled
+    // rejection inside an event handler — no error boundary sees it, the modal
+    // stays open, and the user presses Create and watches nothing happen.
+    try {
+      const skill = await create.mutateAsync({
+        name: name.trim(),
+        description: description.trim(),
+        type,
+        body,
+      });
+      toast.success(t("create.success", { name: skill.name }));
+      onCreated?.(skill);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("page.loadError"));
+    }
   };
 
   return (

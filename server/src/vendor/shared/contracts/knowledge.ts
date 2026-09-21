@@ -140,12 +140,15 @@ export const Skill = z.object({
   evidence_files: z.array(z.string()).nullish(),
   /**
    * How many agents actually send this skill — the reuse signal on the card and
-   * the weight behind a delete. Counts only rows an agent has checked, so it
-   * answers "who loses something if this goes away". Read-only: derived from
-   * `agent_skills`, never written through the skills endpoints. Defaults to 0
-   * so a payload written before the field existed still parses.
+   * the weight behind a delete. Counts only rows an agent has checked while the
+   * skill is enabled globally, so it answers "who loses something if this goes
+   * away". Read-only: derived from `agent_skills`, never written through the
+   * skills endpoints.
+   *
+   * Required on purpose — see `Agent.skill_count` for why a default would be
+   * worse than a missing field here.
    */
-  agent_count: z.number().int().default(0),
+  agent_count: z.number().int(),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -204,15 +207,91 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
+/**
+ * What kind of house-rule a candidate is. Broad on purpose: the value is a
+ * grouping label on the card, not a routing key — nothing branches on it.
+ */
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'error-handling',
+  'async',
+  'typing',
+  'testing',
+  'imports',
+  'api',
+  'docs',
+  'other',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+/**
+ * Two states, and a fresh candidate is `accepted`. The reader's job on this
+ * screen is to throw out what is wrong, not to re-click what is right — see
+ * specs/L02-conventions-extractor.md D3.
+ */
+export const ConventionStatus = z.enum(['accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
+/**
+ * One extracted house-rule, already verified against the clone: the path was
+ * one of the sampled files, the line range exists, and `evidence_snippet` was
+ * re-read FROM THAT FILE rather than taken from the model. An unverifiable
+ * candidate is dropped before it is stored, so every row here is grounded.
+ */
 export const ConventionCandidate = z.object({
   id: z.string(),
+  repo_id: z.string(),
+  category: ConventionCategory,
   rule: z.string(),
   evidence_path: z.string(),
+  evidence_start_line: z.number().int(),
+  evidence_end_line: z.number().int(),
   evidence_snippet: z.string(),
   confidence: z.number().min(0).max(1),
-  accepted: z.boolean(),
+  status: ConventionStatus,
+  created_at: z.string(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+/**
+ * One run of the extractor. `sample_count` is how many files were actually
+ * read (configs + top-ranked sources), which is what the screen's "Detected
+ * from N sample files" line reports. A re-scan replaces the previous scan and
+ * its candidates cascade with it.
+ */
+export const ConventionScan = z.object({
+  id: z.string(),
+  repo_id: z.string(),
+  sample_count: z.number().int(),
+  model: z.string(),
+  created_at: z.string(),
+});
+export type ConventionScan = z.infer<typeof ConventionScan>;
+
+/** The whole screen in one response. `scan: null` = this repo was never scanned. */
+export const ConventionsView = z.object({
+  scan: ConventionScan.nullable(),
+  candidates: z.array(ConventionCandidate),
+});
+export type ConventionsView = z.infer<typeof ConventionsView>;
+
+/**
+ * The skill a scan would produce, composed by CODE from the accepted
+ * candidates. The model never writes a skill body: it proposes rules, and this
+ * is the deterministic rendering of the ones a human kept. The create-skill
+ * modal is a full editor over these fields, and what it submits is what is
+ * stored.
+ */
+export const ConventionSkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  convention_ids: z.array(z.string()),
+  evidence_files: z.array(z.string()),
+});
+export type ConventionSkillDraft = z.infer<typeof ConventionSkillDraft>;
 
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
@@ -252,12 +331,17 @@ export const Agent = z.object({
   // agent's review prompt. Default on; gated again by the global flag.
   repo_intel: z.boolean().default(true),
   /**
-   * How many skills this agent actually sends — the checked rows of its Skills
-   * tab. Read-only: it is derived from `agent_skills`, never written through the
-   * agent endpoints. Defaults to 0 so a snapshot written before the field
-   * existed still parses.
+   * How many skills this agent actually sends — the rows of its Skills tab
+   * that are checked AND whose skill is enabled globally. Read-only: derived
+   * from `agent_skills`, never written through the agent endpoints.
+   *
+   * Required on purpose, with no `.default(0)`. No `Agent` DTO is ever
+   * persisted (the version snapshot is `AgentVersionConfig`, not this shape),
+   * so there is no old payload to stay compatible with — and a default would
+   * turn a missing count into a confident "0" in the sentence the delete
+   * dialog asks the user to act on.
    */
-  skill_count: z.number().int().default(0),
+  skill_count: z.number().int(),
 });
 export type Agent = z.infer<typeof Agent>;
 

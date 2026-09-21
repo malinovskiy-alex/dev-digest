@@ -15,7 +15,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Checkbox, Icon } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
-import { SKILL_TYPE_COLOR } from "./constants";
+import { typeColor } from "@/lib/skills";
 import { s } from "./styles";
 
 export interface SkillRowProps {
@@ -46,6 +46,8 @@ export function SkillRow({
   onDragEnd,
 }: SkillRowProps): React.JSX.Element {
   const t = useTranslations("agents");
+  // The type labels live in the `skills` namespace, with every other screen.
+  const tSkills = useTranslations("skills");
   // D6: a globally disabled skill can still hold a position and be checked, but
   // it will not reach the prompt until it is enabled on the Skills page. Saying
   // so is the whole point — otherwise checking it looks like it did nothing.
@@ -111,7 +113,9 @@ export function SkillRow({
       <div style={s.spacer} />
 
       {muted && <Badge color="var(--warn, var(--text-muted))">{t("skills.disabledNote")}</Badge>}
-      <Badge color={SKILL_TYPE_COLOR[skill.type]}>{skill.type}</Badge>
+      <Badge color={typeColor(skill.type)} bg={typeColor(skill.type) + "1a"}>
+        {tSkills(`listItem.type.${skill.type}`)}
+      </Badge>
     </li>
   );
 }
