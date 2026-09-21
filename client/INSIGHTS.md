@@ -19,6 +19,28 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-09-20 — `pnpm build` kills a running `pnpm dev`, and the wreckage looks like a flaky build
+**Symptom:** two failures that look unrelated. First `pnpm build` exits with
+`Failed to collect page data for /agents/[id]` and the very next run, with no
+code change, succeeds — easy to write off as flaky. Minutes later every page on
+:3000 returns 500, and the dev server's log reads
+`Error: Cannot find module './191.js'`, `requireStack: .next/server/webpack-runtime.js`,
+then `TypeError: Cannot read properties of undefined (reading '/_app')`.
+**Cause:** one `.next` directory, two writers. `next dev` serves lazily-compiled
+chunks out of `.next`; `next build` rewrites the same directory for production.
+The build trips over the dev server's half-written output (failure one), and the
+dev server then asks for chunk files the build has replaced (failure two). The
+dev server never exits, so the port stays bound and nothing says what happened —
+it just 500s everything until someone reads its log.
+**Rule:** never run `pnpm build` while `pnpm dev` is up. Stop the dev server
+first, or give the build its own output directory. If it has already happened,
+a restart is not enough: stop the dev server, `rm -rf client/.next`, then start
+it again — the first page after that takes ~70 s to compile from cold, which is
+normal and not a second fault. And do not accept "the build is flaky" as an
+explanation while a dev server is running.
+**Where:** `client/package.json:6` (`dev`) and `:7` (`build`), both writing
+`client/.next`
+
 ### 2026-09-20 — `findByRole` hides a duplicate accessible name, then `getByRole` fails three tests later
 **Symptom:** on the Conventions screen two buttons read *Run extraction* (the
 header action and the empty state's CTA). One test did
