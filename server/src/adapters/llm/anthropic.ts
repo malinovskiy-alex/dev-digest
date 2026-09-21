@@ -164,10 +164,27 @@ export class AnthropicProvider implements LLMProvider {
           attempts: attempt,
         };
       }
+      // The reprompt has to come back as a `tool_result` for the block we just
+      // received. Anthropic rejects the whole request with a 400 —
+      // "`tool_use` ids were found without `tool_result` blocks immediately
+      // after" — if a message containing `tool_use` is followed by plain text,
+      // so a schema miss on attempt 1 turned every retry into a hard failure
+      // instead of the second chance it was written to be. Only reachable when
+      // the first structured answer fails validation, which is why it stayed
+      // hidden: the happy path never builds a second message.
       messages.push({ role: 'assistant', content: res.content });
       messages.push({
         role: 'user',
-        content: parsed.repromptMessage,
+        content: toolUse
+          ? [
+              {
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                is_error: true,
+                content: parsed.repromptMessage,
+              },
+            ]
+          : parsed.repromptMessage,
       });
     }
 
