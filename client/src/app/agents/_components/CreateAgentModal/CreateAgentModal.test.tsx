@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import type { CreateAgentInput } from "@/lib/hooks/agents";
 import messages from "../../../../../messages/en/agents.json";
 import { ToastProvider } from "@/lib/toast";
 
@@ -19,7 +20,12 @@ const MODELS: Record<string, { id: string; provider: string }[]> = {
   openrouter: [],
 };
 
-const mutateAsync = vi.fn(async () => ({ id: "ag9" }));
+/**
+ * Typed on purpose. A `vi.fn(async () => …)` records its calls as `[]`, so
+ * `mock.calls[0]![0]` is an index into an empty tuple and `tsc` rejects it —
+ * which the client's `pnpm typecheck` catches, unlike the server's.
+ */
+const mutateAsync = vi.fn(async (_input: CreateAgentInput) => ({ id: "ag9" }));
 const push = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
