@@ -184,6 +184,31 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // L02 — skills in the prompt. Ordered, attached AND globally-enabled
+      // skills: `promptBodiesForAgent` joins `agent_skills` → `skills`, filters
+      // `skills.enabled = true` and sorts by `agent_skills.order`, so the order
+      // the user chose in the Agent editor IS the prompt order. Read off the
+      // container (never `new SkillsRepository(...)` here) — `reviews` must not
+      // construct another module's repository; `pnpm arch` rejects it.
+      //
+      // Trust model (spec D6): an enabled skill is INSTRUCTIONS, not data, so
+      // assemblePrompt renders it in a plain `## Skills / rules` section
+      // OUTSIDE the <untrusted> delimiters. Do NOT "harden" this by wrapping a
+      // skill body — INJECTION_GUARD (reviewer-core/src/prompt.ts:16) tells the
+      // model to ignore anything inside those delimiters, so a wrapped skill
+      // could never flag anything. The safety lives in the lifecycle: an
+      // imported skill lands disabled and nothing reaches this line until it is
+      // enabled AND attached.
+      const skills = await this.container.skillsRepo.promptBodiesForAgent(agent.id);
+      // Observability contract: an enabled skill is named in the Live Log; a
+      // disabled or detached one produces NO line here and nothing in the
+      // assembly — "enabled shows as its own block, disabled leaves no trace".
+      for (const s of skills) runLog.info(`skill: ${s.name} (v${s.version}) → prompt`);
+      if (skills.length > 0) {
+        const chars = skills.reduce((n, s) => n + s.body.length, 0);
+        runLog.info(`skills: ${skills.length} block(s), ${chars} chars added to the prompt`);
+      }
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -201,6 +226,13 @@ export class ReviewRunExecutor {
         ...(callersDigest ? { callers: callersDigest } : {}),
         // T3 — repo skeleton, same omit-when-empty contract.
         ...(repoMap ? { repoMap } : {}),
+        // L02 — skill bodies, same omit-when-empty contract. Spread only when
+        // there is at least one: assemblePrompt omits `## Skills / rules` for an
+        // empty array, so an agent with NO skills produces a byte-identical
+        // prompt to the pre-L02 build. That exactness is the "without skills"
+        // arm of the lesson's control experiment — not passing `[]` keeps it
+        // exact rather than merely equivalent.
+        ...(skills.length ? { skills: skills.map((s) => s.body) } : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -426,6 +458,11 @@ export class ReviewRunExecutor {
         source: 'local',
       },
       stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
+      // `skills: null` is correct, not an oversight: this trace is built for a
+      // PRE-WORK failure (provider resolution, diff load, cancel) — it is
+      // produced before `runOneAgent` ever resolves the agent's skills, so
+      // there is nothing to report. Do not "fix" it by reading the repository
+      // here; the populated assembly comes from assemblePrompt on the real path.
       prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
       tool_calls: [],
       raw_output: '',

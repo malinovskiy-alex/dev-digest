@@ -56,16 +56,38 @@ const UpdateAgentBody = z.object({
   enabled: z.boolean().optional(),
 });
 
-/** Either set the whole ordered set (`skill_ids`) or link one (`skill_id`). */
+/**
+ * Three shapes, one endpoint:
+ *  - `skills`    — the whole ordered list with a flag per row. What the editor
+ *                  posts, and the only form that can express "positioned but
+ *                  off".
+ *  - `skill_ids` — the whole ordered list, every row enabled. Kept because it
+ *                  is the documented shape and reads well from a script.
+ *  - `skill_id`  — append/move a single skill.
+ */
 const SetSkillsBody = z
   .object({
+    skills: z
+      .array(z.object({ skill_id: z.string().uuid(), enabled: z.boolean() }))
+      .optional(),
     skill_ids: z.array(z.string().uuid()).optional(),
     skill_id: z.string().uuid().optional(),
     order: z.number().int().optional(),
   })
-  .refine((b) => b.skill_ids !== undefined || b.skill_id !== undefined, {
-    message: 'Provide skill_ids (set/reorder) or skill_id (link one)',
+  .refine((b) => b.skills !== undefined || b.skill_ids !== undefined || b.skill_id !== undefined, {
+    message: 'Provide skills, skill_ids (set/reorder) or skill_id (link one)',
+  })
+  // A repeated id collides with the (agent_id, skill_id) primary key. That is
+  // bad input, so it fails validation with a 422 rather than reaching the
+  // insert and surfacing as a 500.
+  .refine((b) => uniqueIds(b.skills?.map((r) => r.skill_id) ?? b.skill_ids), {
+    message: 'skill ids must be unique',
   });
+
+/** True when the list is absent or has no repeats. */
+function uniqueIds(ids: string[] | undefined): boolean {
+  return ids === undefined || new Set(ids).size === ids.length;
+}
 
 export default async function agentsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
@@ -155,9 +177,12 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
       const body = req.body;
+      const entries =
+        body.skills?.map((row) => ({ skillId: row.skill_id, enabled: row.enabled })) ??
+        body.skill_ids?.map((skillId) => ({ skillId, enabled: true }));
       const links =
-        body.skill_ids !== undefined
-          ? await service.setSkills(workspaceId, req.params.id, body.skill_ids)
+        entries !== undefined
+          ? await service.setSkills(workspaceId, req.params.id, entries)
           : await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
       if (!links) throw new NotFoundError('Agent not found');
       return links;

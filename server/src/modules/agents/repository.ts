@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
@@ -46,6 +46,13 @@ export interface UpdateAgent {
 export interface LinkedSkillRow {
   skill: typeof t.skills.$inferSelect;
   order: number;
+  enabled: boolean;
+}
+
+/** One row of the agent's skill list as the editor posts it back: position + flag. */
+export interface SkillLinkInput {
+  skillId: string;
+  enabled: boolean;
 }
 
 export class AgentsRepository {
@@ -145,8 +152,18 @@ export class AgentsRepository {
     return row;
   }
 
+  /**
+   * Record one immutable config snapshot.
+   *
+   * `skills` here is the agent's enabled skill ids AT THE MOMENT THE CONFIG WAS
+   * SAVED — not a history of the skill set. Skill links are deliberately not
+   * versioned (see `setSkills`), so an agent can change which skills it sends
+   * without minting a new version, and this array then describes the links as
+   * they were when the last *config* edit happened. It is a snapshot of the
+   * config, and the skill list is context on it, nothing stronger.
+   */
   private async snapshotVersion(row: AgentRow, version: number): Promise<void> {
-    const skills = await this.skillIdsForAgent(row.id);
+    const skills = await this.enabledSkillIdsForAgent(row.id);
     await this.db
       .insert(t.agentVersions)
       .values({
@@ -191,27 +208,56 @@ export class AgentsRepository {
   /** Skills linked to an agent, in `order` ascending. */
   async linkedSkills(agentId: string): Promise<LinkedSkillRow[]> {
     const rows = await this.db
-      .select({ skill: t.skills, order: t.agentSkills.order })
+      .select({ skill: t.skills, order: t.agentSkills.order, enabled: t.agentSkills.enabled })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(eq(t.agentSkills.agentId, agentId))
       .orderBy(asc(t.agentSkills.order));
-    return rows.map((r) => ({ skill: r.skill, order: r.order }));
+    return rows.map((r) => ({ skill: r.skill, order: r.order, enabled: r.enabled }));
   }
 
-  async skillIdsForAgent(agentId: string): Promise<string[]> {
+  /**
+   * Checked-skill counts for several agents in ONE query, keyed by agent id.
+   * The agents list renders a count per card, and a per-card read would be a
+   * query per row. Agents with nothing checked are simply absent from the map.
+   */
+  async skillCountsFor(agentIds: string[]): Promise<Map<string, number>> {
+    if (agentIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ agentId: t.agentSkills.agentId, n: count() })
+      .from(t.agentSkills)
+      // Both gates, or the count says something the prompt does not. A skill
+      // switched off globally can still be checked on an agent, and counting
+      // it would promise a block that `promptBodiesForAgent` never emits.
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(
+        and(
+          inArray(t.agentSkills.agentId, agentIds),
+          eq(t.agentSkills.enabled, true),
+          eq(t.skills.enabled, true),
+        ),
+      )
+      .groupBy(t.agentSkills.agentId);
+    return new Map(rows.map((r) => [r.agentId, r.n]));
+  }
+
+  /**
+   * The ids that actually reach the prompt, in order — a row that is present
+   * but unchecked is a position the user parked, not part of the prompt.
+   */
+  async enabledSkillIdsForAgent(agentId: string): Promise<string[]> {
     const links = await this.linkedSkills(agentId);
-    return links.map((l) => l.skill.id);
+    return links.filter((l) => l.enabled).map((l) => l.skill.id);
   }
 
   /** Link a skill to an agent at a given order (idempotent: upserts order). */
   async linkSkill(agentId: string, skillId: string, order: number): Promise<void> {
     await this.db
       .insert(t.agentSkills)
-      .values({ agentId, skillId, order })
+      .values({ agentId, skillId, order, enabled: true })
       .onConflictDoUpdate({
         target: [t.agentSkills.agentId, t.agentSkills.skillId],
-        set: { order },
+        set: { order, enabled: true },
       });
   }
 
@@ -222,15 +268,41 @@ export class AgentsRepository {
   }
 
   /**
-   * Replace the full set of linked skills for an agent with `skillIds`, assigning
-   * order = index. Used by the "Skills" editor tab (attach/reorder). Skills not in
-   * the list are unlinked.
+   * Replace the agent's whole skill list with `entries`, assigning order = index.
+   * Used by the "Skills" editor tab, which posts every row it renders — enabled
+   * and disabled alike — so a position survives being unchecked. Rows absent
+   * from `entries` lose their position entirely.
    */
-  async setSkills(agentId: string, skillIds: string[]): Promise<void> {
-    await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (skillIds.length === 0) return;
-    await this.db
-      .insert(t.agentSkills)
-      .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+  async setSkills(agentId: string, entries: SkillLinkInput[]): Promise<void> {
+    // Re-posting the same list writes nothing. The Skills tab posts the whole
+    // array on every interaction, so this keeps a render-triggered retry from
+    // churning rows for no reason. Order AND the flag have to match: toggling a
+    // row off is a change even though the set of positioned ids is identical.
+    const current = await this.linkedSkills(agentId);
+    const unchanged =
+      current.length === entries.length &&
+      current.every(
+        (link, i) => link.skill.id === entries[i]!.skillId && link.enabled === entries[i]!.enabled,
+      );
+    if (unchanged) return;
+
+    // ONE transaction, because the two statements are one edit. Without it a
+    // failing insert — an id that was deleted in another tab, a duplicate in
+    // the array — leaves the delete committed and the agent with NO skills at
+    // all. There is nothing to restore from: links are deliberately not
+    // versioned, so the order and the flags the user parked are gone. The
+    // Skills tab posts this whole array on every checkbox, so that window
+    // would be open constantly rather than once per explicit save.
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (entries.length > 0) {
+        await tx
+          .insert(t.agentSkills)
+          .values(
+            entries.map((e, i) => ({ agentId, skillId: e.skillId, order: i, enabled: e.enabled })),
+          );
+      }
+    });
   }
+
 }

@@ -71,8 +71,9 @@ flowchart TB
   subgraph Review["Review & runs"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
-  subgraph Agents["Agents"]
-    agents["agents<br/>/agents · /agents/:id"]
+  subgraph Agents["Agents & skills"]
+    agents["agents<br/>/agents · /agents/:id · /agents/:id/skills"]
+    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions<br/>/skills/import/preview · /skills/import"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
@@ -106,7 +107,22 @@ through `SecretsProvider` (`~/.devdigest/secrets.json`, mode `0600`, with
 
 Migrations are **not** applied on boot — run `pnpm db:migrate` (pgvector is
 enabled by migration `0000`). `pnpm db:seed` is idempotent demo data
-(`acme/payments-api`, PR #482, the two built-in agents).
+(`acme/payments-api`, PR #482, the built-in agents, and — since L02 — the
+starter skills plus the two control-experiment PRs #483/#484).
+
+## Skills in the prompt (non-obvious)
+
+A skill is **text**, and an enabled one is rendered into the review prompt as
+*instructions* — in `## Skills / rules`, **outside** the `<untrusted>` blocks
+that wrap the diff, the PR body and the spec chunks. That placement is
+deliberate: `INJECTION_GUARD` tells the model to ignore instructions inside
+those delimiters, so a delimiter-wrapped skill could never flag anything.
+
+The safety is in the lifecycle instead — an imported skill is stored disabled,
+shown in full before it is ever saved, and reaches no prompt until the user
+enables it globally *and* checks its row on that agent — two independent gates.
+Before you "harden" this by wrapping skills in `<untrusted>`, read `specs/L02-skills-in-the-product.md` D6:
+`test/skills-prompt.test.ts` asserts the placement for exactly that reason.
 
 ## Review context (non-obvious)
 

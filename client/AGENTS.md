@@ -74,6 +74,11 @@ pnpm build
   (`@devdigest/shared`) holds the Zod contracts and must stay byte-compatible
   with `server/src/vendor/shared`.
 
+  **One standing exception:** `src/vendor/ui/nav.ts` — `Sidebar` imports `NAV`
+  directly and `ShellContext` offers no override, so a sidebar entry cannot be
+  added from outside that file. The file carries a header saying so. Adding a
+  nav item there is allowed; anything else in `src/vendor/ui` is not.
+
 ## Where things live
 
 - routes → `src/app/**/page.tsx`

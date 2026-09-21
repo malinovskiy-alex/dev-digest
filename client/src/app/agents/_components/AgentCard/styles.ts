@@ -48,4 +48,13 @@ export const s = {
     padding: "1px 8px",
     borderRadius: 4,
   }),
+  deleteBtn: (busy: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    padding: 4,
+    border: "none",
+    background: "none",
+    color: "var(--text-muted)",
+    cursor: busy ? "not-allowed" : "pointer",
+  }),
 } as const;

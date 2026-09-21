@@ -11,6 +11,43 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Doesn't Work
 
+### 2026-09-20 — a runtime import from `vendor/shared` breaks the whole client
+**Symptom:** every route 500s with
+`./src/vendor/shared/index.ts: Can't resolve './contracts/findings.js'`, while
+`pnpm typecheck` and all 111 client tests are green.
+**Cause:** the vendored barrel re-exports with Node-style `./contracts/*.js`
+specifiers. Vitest (vite) maps `.js` → `.ts`; the Next bundler does not. Until
+L02 every `@devdigest/shared` import in `client/` was `import type`, erased
+before any bundler saw it — so the barrel had never actually been bundled. The
+first runtime import (`SkillType.options` for a picker) was enough to break
+`next dev` and `next build` everywhere, not just on the new screen.
+**Rule:** in `client/`, import **types only** from `@devdigest/shared`. A
+runtime value belongs in `src/lib/` as a local const with a compile-time
+exhaustiveness check against the contract — see `src/lib/skill-types.ts`.
+And **run `pnpm build`**: neither the unit suite nor `tsc` can see this class of
+failure.
+**Where:** `client/src/vendor/shared/index.ts:17`, `client/src/lib/skill-types.ts`
+
+
+### 2026-09-20 — parallel integration files silently skip themselves
+**Symptom:** `pnpm exec vitest run .it.test` reports *3 passed, 6 skipped* with
+`Docker not available — skipping integration tests`, on a machine where Docker
+is running and where each of those files passes 12/12 when run **alone**. The
+suite stays green, so the skip is invisible unless you read the file counts.
+**Cause:** `test/helpers/pg.ts:27` probes with
+`execSync('docker info', { timeout: 5000 })`. Vitest runs the files in parallel
+workers, the cache (`dockerCache`) is per-worker, so every worker shells out at
+once. Under that contention Docker Desktop on Windows regularly takes longer
+than 5 s, the probe throws, and the worker caches `false` and skips the file.
+**Why it matters:** a genuinely failing integration test is reported as
+*skipped*, not as a failure. "Both suites pass" means much less than it looks.
+**Rule:** when an integration run matters, check the **passed/skipped counts**,
+not just the exit code — and re-run any skipped file on its own before believing
+it. Adding integration files makes this worse: L02 took the suite from 6 files
+to 9 and the skipping became routine.
+**Where:** `server/test/helpers/pg.ts:23-33`
+
+
 ### 2026-09-15 — a DB test named `*.test.ts` poisons the unit suite
 **Symptom:** the hermetic run (`--exclude '**/*.it.test.ts'`) suddenly needs
 Docker, and `server-unit.yml` fails on a machine without it.
@@ -29,6 +66,20 @@ per-instance scoping first.
 **Where:** `server/src/app.ts:75` (the run reaper)
 
 ## Codebase Patterns
+
+### 2026-09-20 — `pnpm typecheck` does not cover `test/`
+**Symptom:** a test file with a genuine type error passes `pnpm typecheck`
+clean, then fails at runtime — or, worse, never fails, because the error is in a
+branch vitest does not reach. Two people hit this independently in one day while
+building L02.
+**Cause:** `server/tsconfig.json` sets `"include": ["src/**/*.ts"]`. The test
+directory is outside it, so `tsc --noEmit -p tsconfig.json` never sees a single
+file under `test/`.
+**Rule:** when a test file's types matter, typecheck it explicitly — a scratch
+tsconfig that `extends` the server one and includes `test/**/*.ts` does it in one
+command. Do not assume a clean `pnpm typecheck` says anything about your tests.
+**Where:** `server/tsconfig.json`
+
 
 ### 2026-09-19 — four modules query Drizzle straight from `routes.ts`, with no service
 **Symptom:** `AGENTS.md` describes a routes → service → repository layering, but
