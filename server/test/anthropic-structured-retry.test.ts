@@ -84,6 +84,49 @@ describe('AnthropicProvider.completeStructured — the retry message', () => {
     expect(retry.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
   });
 
+  it('answers EVERY tool_use in the turn, not just the one it parsed', async () => {
+    // `disable_parallel_tool_use` should prevent this, but the 400 is about the
+    // ids in the message: answering one of two reproduces it exactly.
+    create
+      .mockResolvedValueOnce({
+        content: [
+          { type: 'tool_use', id: 'toolu_first', name: 'Findings', input: { count: 'no' } },
+          { type: 'tool_use', id: 'toolu_second', name: 'Findings', input: { count: 'no' } },
+        ],
+        usage: { input_tokens: 9, output_tokens: 4 },
+      })
+      .mockResolvedValueOnce(answer({ count: 2 }));
+
+    await call();
+
+    const retry = create.mock.calls[1]![0] as { messages: { content: unknown }[] };
+    const blocks = retry.messages.at(-1)!.content as { tool_use_id: string }[];
+    expect(blocks.map((b) => b.tool_use_id)).toEqual(['toolu_first', 'toolu_second']);
+  });
+
+  it('asks for one block only, so a parallel turn cannot happen in the first place', async () => {
+    create.mockResolvedValueOnce(answer({ count: 1 }));
+    await call();
+
+    const first = create.mock.calls[0]![0] as { tool_choice: Record<string, unknown> };
+    expect(first.tool_choice).toMatchObject({ disable_parallel_tool_use: true });
+  });
+
+  it('does not echo an empty assistant turn back', async () => {
+    // A turn that stopped on max_tokens before emitting a block comes back with
+    // `content: []`, and Anthropic rejects a message with empty content.
+    create
+      .mockResolvedValueOnce({ content: [], usage: { input_tokens: 3, output_tokens: 0 } })
+      .mockResolvedValueOnce(answer({ count: 5 }));
+
+    const result = await call();
+    expect(result.data).toEqual({ count: 5 });
+
+    const retry = create.mock.calls[1]![0] as { messages: { role: string; content: unknown }[] };
+    expect(retry.messages.map((m) => m.role)).toEqual(['user', 'user']);
+    expect(retry.messages.every((m) => (m.content as unknown[]).length > 0)).toBe(true);
+  });
+
   it('falls back to plain text when the model returned no tool_use at all', async () => {
     create
       .mockResolvedValueOnce({

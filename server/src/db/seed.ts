@@ -7,6 +7,7 @@ import {
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
   TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 import { SEED_SKILLS } from './seed-skills.js';
 import { FIXTURE_PULLS } from './seed-fixtures.js';
@@ -21,16 +22,21 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  *
  * Seeds: default workspace + system user + membership, default settings,
  * demo repo (acme/payments-api), PR #482 with files/commits, a sample review
- * with a few findings, and four built-in agents (General + Security +
- * Performance + Test Quality), all on the default openrouter/deepseek-v4-flash
- * provider+model.
+ * with a few findings, and five built-in agents — General, Security,
+ * Performance and Test Quality on the default openrouter/deepseek-v4-flash,
+ * plus API Contract Reviewer on anthropic/claude-sonnet-5.
  *
- * L02 added the skills half: four `skills` rows with their v1 `skill_versions`
+ * L02 added the skills half: `skills` rows with their v1 `skill_versions`
  * snapshots (bodies in ./seed-skills.ts), the `agent_skills` links that put
- * them in an agent's prompt, and the control-experiment pull requests
- * (#483, #484 for L02; #485, #486 for the L03 contract skills) from
- * ./seed-fixtures.ts. A fifth skill, `flake-patterns`, is
- * deliberately NOT seeded — it arrives through the UI import flow.
+ * them in an agent's prompt, and the control-experiment pull requests from
+ * ./seed-fixtures.ts — #483/#484 for L02, #485/#486 for L03.
+ *
+ * An agent, its skills and its fixture PRs are seeded as ONE set. A fixture
+ * whose note says "run this on X with skills Y" is useless if X and Y are not
+ * in the workspace, which is what made the L03 pair worth seeding rather than
+ * describing. `flake-patterns` is the deliberate exception: it is NOT seeded,
+ * because it ships as an archive and arrives through the UI import flow, which
+ * is the only end-to-end walk of that path.
  *
  * Later course lessons populate the remaining tables (conventions, memory,
  * eval, …) once their features are built — those still start empty here.
@@ -340,6 +346,49 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       })
       .onConflictDoNothing();
   }
+
+  // ---- API Contract Reviewer (the L03 agent) ----
+  // Seeded WITH its four skills and with PRs #485/#486 below, because those
+  // fixtures' notes name this agent and these skills: seeding the PRs alone
+  // leaves a demo pointing at an agent that is not in the picker.
+  //
+  // It runs on Anthropic rather than the shared openrouter default — that is
+  // the pair the A/B recorded in seed-fixtures.ts was measured on, and the
+  // contract reasoning is the kind of work the cheap default does worst.
+  const API_CONTRACT_REVIEWER_NAME = 'API Contract Reviewer';
+  let [apiContract] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, API_CONTRACT_REVIEWER_NAME)));
+  if (!apiContract) {
+    [apiContract] = await db
+      .insert(t.agents)
+      .values({
+        workspaceId,
+        name: API_CONTRACT_REVIEWER_NAME,
+        description:
+          'Flags changes that break an existing caller, or that make an endpoint disagree with its declared shape.',
+        provider: 'anthropic',
+        model: 'claude-sonnet-5',
+        systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+        enabled: true,
+        version: 1,
+        createdBy: userId,
+      })
+      .returning();
+  }
+
+  // Prompt order, worst-first: is it breaking at all, does the removal carry a
+  // deprecation, does the response still match its schema, does the version
+  // admit any of it.
+  await db
+    .insert(t.agentSkills)
+    .values(
+      ['breaking-change', 'deprecation-policy', 'response-schema', 'semver-discipline'].map(
+        (name, order) => ({ agentId: apiContract!.id, skillId: skillId(name), order }),
+      ),
+    )
+    .onConflictDoNothing();
 
   // ---- control-experiment fixture PRs (#483-#486) ----
   // Idempotent by (repo_id, number), like #482 above, and on the same

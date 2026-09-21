@@ -139,7 +139,11 @@ export class AnthropicProvider implements LLMProvider {
                 input_schema: jsonSchema.schema as Anthropic.Tool.InputSchema,
               },
             ],
-            tool_choice: { type: 'tool', name: toolName },
+            // One answer, one block. Forcing the tool does not stop the model
+            // emitting several `tool_use` blocks in one turn, and every one of
+            // them would need its own `tool_result` on a retry — see the
+            // reprompt below, which now answers all of them anyway.
+            tool_choice: { type: 'tool', name: toolName, disable_parallel_tool_use: true },
           }),
           req.timeoutMs ?? DEFAULT_TIMEOUT,
         ),
@@ -147,10 +151,10 @@ export class AnthropicProvider implements LLMProvider {
       tokensIn += res.usage.input_tokens;
       tokensOut += res.usage.output_tokens;
 
-      const toolUse = res.content.find(
+      const toolUses = res.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
       );
-      lastRaw = toolUse ? JSON.stringify(toolUse.input) : '';
+      lastRaw = toolUses[0] ? JSON.stringify(toolUses[0].input) : '';
 
       const parsed = parseWithRepair(req.schema, lastRaw);
       if (parsed.ok) {
@@ -172,20 +176,33 @@ export class AnthropicProvider implements LLMProvider {
       // instead of the second chance it was written to be. Only reachable when
       // the first structured answer fails validation, which is why it stayed
       // hidden: the happy path never builds a second message.
-      messages.push({ role: 'assistant', content: res.content });
-      messages.push({
-        role: 'user',
-        content: toolUse
-          ? [
-              {
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                is_error: true,
-                content: parsed.repromptMessage,
-              },
-            ]
-          : parsed.repromptMessage,
-      });
+      // EVERY `tool_use` in the turn needs its own `tool_result`, not just the
+      // one we parsed: the rule is about the ids in the message, and answering
+      // one of two reproduces the very 400 this code exists to avoid.
+      // `disable_parallel_tool_use` above should keep it at one, but the guard
+      // costs nothing and does not depend on that flag still being set.
+      //
+      // An empty assistant turn is skipped rather than echoed — a turn that
+      // stopped on `max_tokens` before emitting a block has `content: []`, and
+      // Anthropic rejects a message with empty content just as firmly, which
+      // would again turn a recoverable schema miss into a failed run.
+      if (res.content.length > 0) {
+        messages.push({ role: 'assistant', content: res.content });
+        messages.push({
+          role: 'user',
+          content:
+            toolUses.length > 0
+              ? toolUses.map((t) => ({
+                  type: 'tool_result' as const,
+                  tool_use_id: t.id,
+                  is_error: true,
+                  content: parsed.repromptMessage,
+                }))
+              : parsed.repromptMessage,
+        });
+      } else {
+        messages.push({ role: 'user', content: parsed.repromptMessage });
+      }
     }
 
     throw new ExternalServiceError('Anthropic structured output failed schema validation', {

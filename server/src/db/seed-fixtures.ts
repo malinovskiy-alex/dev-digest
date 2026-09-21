@@ -212,8 +212,8 @@ export const PR_485: FixturePull = {
     },
     {
       path: 'src/api/notifications.ts',
-      additions: 18,
-      deletions: 14,
+      additions: 9,
+      deletions: 6,
       patch: `@@ -8,26 +8,30 @@ import { notifications } from '../db/schema';
 
  export const NotificationResponse = z.object({
@@ -253,7 +253,7 @@ export const PR_485: FixturePull = {
     {
       path: 'src/api/routes.ts',
       additions: 0,
-      deletions: 6,
+      deletions: 5,
       patch: `@@ -21,12 +21,6 @@ export function registerNotificationRoutes(app: FastifyInstance) {
      return getNotification(req.params.id);
    });
@@ -269,7 +269,7 @@ export const PR_485: FixturePull = {
     },
     {
       path: 'test/notifications.test.ts',
-      additions: 22,
+      additions: 19,
       deletions: 9,
       patch: `@@ -4,15 +4,28 @@ import { getNotification } from '../src/api/notifications';
 
@@ -404,8 +404,8 @@ export const PR_486: FixturePull = {
     },
     {
       path: 'test/config.test.ts',
-      additions: 10,
-      deletions: 2,
+      additions: 11,
+      deletions: 3,
       patch: `@@ -3,8 +3,16 @@ import { DeliveryConfig } from '../src/config';
 
  describe('DeliveryConfig', () => {
