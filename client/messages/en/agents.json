@@ -57,6 +57,7 @@
     "name": "Name",
     "description": "Description",
     "provider": "Provider",
+    "providerSearch": "Search providers…",
     "model": "Model",
     "modelHint": "Models are loaded dynamically from the provider's /models.",
     "modelEmptyHint": "No models loaded — set the {provider} API key in Settings → API Keys.",
