@@ -166,30 +166,66 @@ export class SkillsRepository {
 
   // ---- agent_skills (read-only here; A2 owns the writes) ------------------
 
-  /** How many agents IN THIS WORKSPACE have this skill attached — the reuse
-   *  signal on the card and the "used by N agents" delete confirmation. */
+  /**
+   * Checked-row counts for several skills in ONE query, keyed by skill id.
+   * The grid renders a count per card, and a per-card read would be a query per
+   * row. Skills nothing uses are simply absent from the map.
+   */
+  async agentCountsFor(workspaceId: string, skillIds: string[]): Promise<Map<string, number>> {
+    if (skillIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ skillId: t.agentSkills.skillId, n: count() })
+      .from(t.agentSkills)
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .where(
+        and(
+          inArray(t.agentSkills.skillId, skillIds),
+          eq(t.agentSkills.enabled, true),
+          eq(t.agents.workspaceId, workspaceId),
+        ),
+      )
+      .groupBy(t.agentSkills.skillId);
+    return new Map(rows.map((r) => [r.skillId, r.n]));
+  }
+
+  /** How many agents IN THIS WORKSPACE actually use this skill — the reuse
+   *  signal on the card and the "used by N agents" delete confirmation. A row
+   *  the user unchecked is a parked position, not a use, so it does not count:
+   *  deleting the skill would change nothing about that agent's prompt. */
   async countAgentsUsing(workspaceId: string, skillId: string): Promise<number> {
     const [row] = await this.db
       .select({ n: count() })
       .from(t.agentSkills)
       .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
       .where(
-        and(eq(t.agentSkills.skillId, skillId), eq(t.agents.workspaceId, workspaceId)),
+        and(
+          eq(t.agentSkills.skillId, skillId),
+          eq(t.agentSkills.enabled, true),
+          eq(t.agents.workspaceId, workspaceId),
+        ),
       );
     return row?.n ?? 0;
   }
 
   /**
-   * The agents in this workspace that have this skill attached. Read BEFORE a
+   * The agents in this workspace whose PROMPT contains this skill. Read BEFORE a
    * delete: `agent_skills` cascades with the skill, so afterwards the answer is
-   * always empty — and those agents' versions still have to move.
+   * always empty — and those agents' versions still have to move. An unchecked
+   * row is excluded for the same reason it is excluded from `countAgentsUsing`:
+   * losing it does not change what that agent sends.
    */
   async agentIdsUsing(workspaceId: string, skillId: string): Promise<string[]> {
     const rows = await this.db
       .select({ agentId: t.agentSkills.agentId })
       .from(t.agentSkills)
       .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
-      .where(and(eq(t.agentSkills.skillId, skillId), eq(t.agents.workspaceId, workspaceId)));
+      .where(
+        and(
+          eq(t.agentSkills.skillId, skillId),
+          eq(t.agentSkills.enabled, true),
+          eq(t.agents.workspaceId, workspaceId),
+        ),
+      );
     return rows.map((r) => r.agentId);
   }
 
@@ -220,6 +256,9 @@ export class SkillsRepository {
       .where(
         and(
           eq(t.agentSkills.agentId, agentId),
+          // Two independent gates: the skill is on globally (Skills page) AND
+          // this agent has its row checked. Either one off keeps it out.
+          eq(t.agentSkills.enabled, true),
           eq(t.skills.enabled, true),
           eq(t.skills.workspaceId, t.agents.workspaceId),
         ),

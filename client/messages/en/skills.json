@@ -15,10 +15,6 @@
       "title": "No skills yet",
       "body": "A skill is a block of instructions an agent reads before it reviews. Write one, or import a markdown file or archive.",
       "cta": "Create skill"
-    },
-    "selectPrompt": {
-      "title": "Select a skill",
-      "body": "Pick a skill on the left to preview its body."
     }
   },
   "create": {
@@ -51,7 +47,8 @@
       "imported_url": "Imported",
       "extracted": "Extracted",
       "community": "Community"
-    }
+    },
+    "agentCount": "{count, plural, =0 {no agents} one {# agent} other {# agents}}"
   },
   "preview": {
     "enabled": "Enabled",
@@ -108,5 +105,32 @@
     "unsafe_entry_path": "That archive contains a file path that escapes the archive. Nothing was imported.",
     "archive_too_large": "That archive is too large — the limit is 2 MB, and 256 KB per file.",
     "import_changed": "The file changed since the preview. Pick it again."
+  },
+  "editor": {
+    "fallbackName": "Skill",
+    "loadErrorTitle": "Couldn’t load this skill",
+    "tabs": {
+      "config": "Config",
+      "preview": "Preview",
+      "versions": "Versioning"
+    }
+  },
+  "versions": {
+    "count": "Version history · {count} versions",
+    "hint": "Every save snapshots the body so eval runs stay reproducible.",
+    "current": "Current",
+    "diff": "Diff",
+    "diffLabel": "Show what changed between v{version} and the current body",
+    "diffIsCurrent": "This is the current body — nothing to compare.",
+    "emptyBody": "—",
+    "restore": "Restore",
+    "restoreConfirm": "Restore the body from v{version}? It is saved as a new version, v{next} — nothing in the history is overwritten.",
+    "restored": "Restored v{from} — saved as v{version}",
+    "loadError": "Could not load the version history."
+  },
+  "delete": {
+    "title": "Delete “{name}”?",
+    "body": "This cannot be undone. {count, plural, =0 {No agent currently sends this skill} one {# agent currently sends this skill and will lose it from its prompt} other {# agents currently send this skill and will lose it from their prompt}}.",
+    "label": "Delete “{name}”"
   }
 }

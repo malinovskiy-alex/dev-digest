@@ -3,7 +3,7 @@ import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-li
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Skill, SkillImportPreview } from "@devdigest/shared";
-import messages from "../../../../../../../messages/en/skills.json";
+import messages from "../../../../../messages/en/skills.json";
 import { ToastProvider } from "@/lib/toast";
 import { ImportSkillDrawer } from "./ImportSkillDrawer";
 
@@ -31,6 +31,7 @@ const IMPORTED: Skill = {
   body: PREVIEW.body,
   enabled: false,
   version: 1,
+  agent_count: 0,
 };
 
 const fetchMock = vi.fn();

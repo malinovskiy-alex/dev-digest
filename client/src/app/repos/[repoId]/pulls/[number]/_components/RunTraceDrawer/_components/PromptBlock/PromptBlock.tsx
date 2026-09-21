@@ -1,12 +1,18 @@
 /* PromptBlock — one labelled, collapsible prompt segment with copy + fullscreen
-   actions; fullscreen opens PromptModalBody in a Modal. */
+   actions; fullscreen opens PromptModalBody in a Modal.
+
+   Each block carries its own weight in tokens. That number is the point of the
+   section: it is what makes "the skills block costs a third of this prompt" a
+   thing you can read off the screen instead of guess at. It is an estimate —
+   see helpers.estimateTokens. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, Icon, Modal } from "@devdigest/ui";
+import { Badge, Button, Icon, Modal } from "@devdigest/ui";
 import { s } from "../../styles";
 import { PromptModalBody } from "../PromptModalBody";
+import { estimateTokens } from "./helpers";
 
 const miniBtnStyle: React.CSSProperties = {
   display: "inline-flex",
@@ -22,6 +28,7 @@ const miniBtnStyle: React.CSSProperties = {
 
 export function PromptBlock({ label, text, color }: { label: string; text: string; color: string }) {
   const t = useTranslations("runs");
+  const tokens = estimateTokens(text ?? "");
   const [open, setOpen] = React.useState(false);
   const [full, setFull] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -35,6 +42,9 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
       <div onClick={() => setOpen((o) => !o)} style={s.promptHead}>
         <span style={s.promptDot(color)} />
         <span style={s.promptLabel}>{label}</span>
+        <Badge color="var(--text-muted)" mono>
+          {t("trace.prompt.tokens", { count: tokens })}
+        </Badge>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"

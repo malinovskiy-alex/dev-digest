@@ -5,13 +5,13 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
+import { EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { useAgents, useUpdateAgent } from "@/lib/hooks/agents";
 import { AgentCard } from "../AgentCard";
-import { CreateAgentModal } from "./_components/CreateAgentModal";
-import { TEMPLATES } from "./constants";
-import { filterAgents } from "./helpers";
+import { AddAgentButton } from "../AddAgentButton";
+import { CreateAgentModal } from "../CreateAgentModal";
+import { filterAgents } from "@/lib/agents";
 import { s } from "./styles";
 
 export function AgentsListView() {
@@ -46,25 +46,7 @@ export function AgentsListView() {
               style={s.searchInput}
             />
           </div>
-          <Dropdown
-            width={220}
-            align="right"
-            trigger={
-              <Button kind="primary" size="sm" icon="Plus" iconRight="ChevronDown">
-                {t("list.addAgent")}
-              </Button>
-            }
-            items={[
-              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => setCreating(true) },
-              { divider: true },
-              ...TEMPLATES.map((tp) => ({
-                label: tp,
-                icon: "Cpu" as const,
-                muted: true,
-                onClick: () => setCreating(true),
-              })),
-            ]}
-          />
+          <AddAgentButton onCreate={() => setCreating(true)} />
         </div>
 
         {isLoading && (

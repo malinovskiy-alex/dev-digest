@@ -27,19 +27,6 @@ export function useShellCommands(): Command[] {
         run: () => router.push(resolveHref(it.href, repoId)),
       }))
     );
-    // Skills is NOT in `NAV`: that list lives in `src/vendor/ui/nav.ts`, which
-    // is vendored and must not be hand-edited, and `Sidebar` imports it
-    // directly rather than taking it as a prop. So the screen has no sidebar
-    // entry — until the vendored nav gains one, the palette (and the agent
-    // editor's "Manage skills" link) is how you reach it. `shell.json` already
-    // carries the label, and `activeKeyFor` already resolves /skills.
-    navCmds.push({
-      id: "skills",
-      label: t("commandPalette.goTo", { label: t("nav.skills") }),
-      group: "WORKSPACE",
-      icon: "Sparkles",
-      run: () => router.push("/skills"),
-    });
     navCmds.push({
       id: "settings",
       label: t("commandPalette.goToSettings"),

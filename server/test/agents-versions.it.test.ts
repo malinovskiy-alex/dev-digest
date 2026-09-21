@@ -175,4 +175,61 @@ d('GET /agents/:id/versions', () => {
     expect(await service.listVersions(defaultWs!, foreign.id)).toBeUndefined();
     expect(await service.getVersion(defaultWs!, foreign.id, 1)).toBeUndefined();
   });
+
+  /**
+   * L02 D7, reversed: skill links are NOT part of the agent's version. The
+   * number tracks the agent's own config, so checking, unchecking and
+   * reordering skills must all leave it alone — while a config edit still
+   * moves it. Locked down here because the reverse behaviour shipped once and
+   * the only thing that ever surfaced it was a toast.
+   */
+  it("changing the agent's skill list does not touch its version", async () => {
+    const app = await makeApp();
+    const created = await app.inject({ method: 'POST', url: '/agents', payload: createBody });
+    const agentId = created.json().id as string;
+
+    const skills = await app.inject({ method: 'GET', url: '/skills' });
+    const ids = (skills.json() as Array<{ id: string }>).map((s) => s.id);
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+
+    const versionOf = async () =>
+      (await app.inject({ method: 'GET', url: `/agents/${agentId}` })).json().version as number;
+    const post = (skillRows: Array<{ skill_id: string; enabled: boolean }>) =>
+      app.inject({ method: 'POST', url: `/agents/${agentId}/skills`, payload: { skills: skillRows } });
+
+    expect(await versionOf()).toBe(1);
+
+    // Attach two.
+    await post([
+      { skill_id: ids[0]!, enabled: true },
+      { skill_id: ids[1]!, enabled: true },
+    ]);
+    expect(await versionOf()).toBe(1);
+
+    // Uncheck one — it leaves the prompt but keeps its row.
+    await post([
+      { skill_id: ids[0]!, enabled: false },
+      { skill_id: ids[1]!, enabled: true },
+    ]);
+    expect(await versionOf()).toBe(1);
+
+    // Reorder.
+    await post([
+      { skill_id: ids[1]!, enabled: true },
+      { skill_id: ids[0]!, enabled: false },
+    ]);
+    expect(await versionOf()).toBe(1);
+
+    // Clear the list entirely.
+    await post([]);
+    expect(await versionOf()).toBe(1);
+
+    // A config edit still versions, so the counter is not simply frozen.
+    await app.inject({
+      method: 'PUT',
+      url: `/agents/${agentId}`,
+      payload: { system_prompt: 'Review the diff, but harder.' },
+    });
+    expect(await versionOf()).toBe(2);
+  });
 });

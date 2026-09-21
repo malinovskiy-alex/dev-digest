@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { CARD_GRID_COLS, SPLIT_COLS } from "./constants";
+import { CARD_GRID_COLS } from "./constants";
 
 /** Co-located styles for SkillsListView. The header mirrors AgentsListView so
     the two list screens read as one system. */
@@ -34,20 +34,5 @@ export const s = {
     outline: "none",
     color: "var(--text-primary)",
   } satisfies CSSProperties,
-  split: {
-    display: "grid",
-    gridTemplateColumns: SPLIT_COLS,
-    gap: 18,
-    alignItems: "start",
-  } satisfies CSSProperties,
   grid: { display: "grid", gridTemplateColumns: CARD_GRID_COLS, gap: 14, alignContent: "start" } satisfies CSSProperties,
-  rail: {
-    position: "sticky",
-    top: 18,
-    border: "1px solid var(--border)",
-    borderRadius: 8,
-    background: "var(--bg-elevated)",
-    maxHeight: "calc(100vh - 150px)",
-    overflow: "auto",
-  } satisfies CSSProperties,
 } as const;

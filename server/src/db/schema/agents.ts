@@ -74,6 +74,11 @@ export const agentSkills = pgTable(
       .notNull()
       .references(() => skills.id, { onDelete: 'cascade' }),
     order: integer('order').notNull().default(0),
+    // A row means "this skill has a position in this agent's list", NOT "it is
+    // in the prompt". `enabled` is the second thing: the Skills tab keeps a
+    // disabled row where the user left it instead of dropping it to the bottom,
+    // which a link-or-nothing model cannot express.
+    enabled: boolean('enabled').notNull().default(true),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
 );

@@ -37,7 +37,7 @@ export interface SkillVersionRowShape {
 }
 
 /** Map a persisted skill row to the public `Skill` DTO. */
-export function toSkillDto(row: SkillRowShape): Skill {
+export function toSkillDto(row: SkillRowShape, agentCount = 0): Skill {
   return {
     id: row.id,
     name: row.name,
@@ -48,6 +48,7 @@ export function toSkillDto(row: SkillRowShape): Skill {
     enabled: row.enabled,
     version: row.version,
     evidence_files: row.evidenceFiles ?? null,
+    agent_count: agentCount,
   };
 }
 

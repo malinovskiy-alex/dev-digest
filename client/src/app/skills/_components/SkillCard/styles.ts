@@ -42,4 +42,13 @@ export const s = {
     overflow: "hidden",
   } satisfies CSSProperties,
   metaRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } satisfies CSSProperties,
+  deleteBtn: (busy: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    padding: 4,
+    border: "none",
+    background: "none",
+    color: "var(--text-muted)",
+    cursor: busy ? "not-allowed" : "pointer",
+  }),
 } as const;

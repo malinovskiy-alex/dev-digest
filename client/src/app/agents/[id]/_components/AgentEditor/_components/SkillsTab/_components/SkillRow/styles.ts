@@ -2,67 +2,37 @@ import type { CSSProperties } from "react";
 
 /** Co-located styles for SkillRow. */
 export const s = {
-  row: (attached: boolean, muted: boolean): CSSProperties => ({
+  row: (enabled: boolean, muted: boolean, dragging: boolean, movable: boolean): CSSProperties => ({
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 12,
-    padding: "12px 14px",
+    padding: "10px 14px",
     borderRadius: 8,
-    border: `1px solid ${attached ? "var(--border-strong)" : "var(--border)"}`,
-    background: attached ? "var(--bg-elevated)" : "var(--bg-surface)",
+    border: `1px solid ${enabled ? "var(--border-strong)" : "var(--border)"}`,
+    // The checked rows carry the weight; the rest stay legible but recede.
+    background: enabled ? "var(--bg-elevated)" : "var(--bg-surface)",
     // A globally disabled skill is dimmed but never hidden (L02 D6).
-    opacity: muted ? 0.62 : 1,
+    opacity: dragging ? 0.4 : muted ? 0.62 : 1,
+    cursor: movable ? "grab" : "default",
   }),
-  position: {
-    width: 22,
-    flexShrink: 0,
-    paddingTop: 2,
-    fontSize: 12,
-    fontWeight: 700,
-    textAlign: "right",
-    color: "var(--text-muted)",
-  } satisfies CSSProperties,
-  main: { flex: 1, minWidth: 0 } satisfies CSSProperties,
-  nameRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 3 } satisfies CSSProperties,
-  name: { fontSize: 14, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
-  description: { fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.45 } satisfies CSSProperties,
-  disabledNote: {
-    marginTop: 5,
-    fontSize: 12,
-    color: "var(--warn, var(--text-muted))",
-    lineHeight: 1.45,
-  } satisfies CSSProperties,
-  reorder: { display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 } satisfies CSSProperties,
-  moveBtn: (disabled: boolean): CSSProperties => ({
+  handle: (inert: boolean): CSSProperties => ({
     display: "inline-grid",
     placeItems: "center",
-    width: 24,
+    width: 20,
     height: 20,
     padding: 0,
-    borderRadius: 4,
-    border: "1px solid var(--border)",
-    background: "transparent",
-    color: disabled ? "var(--border-strong)" : "var(--text-secondary)",
-    cursor: disabled ? "not-allowed" : "pointer",
-  }),
-  toggleLabel: (busy: boolean): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
     flexShrink: 0,
-    paddingTop: 2,
-    cursor: busy ? "wait" : "pointer",
-    opacity: busy ? 0.5 : 1,
+    border: "none",
+    background: "transparent",
+    // A handle that cannot move anything is dimmed, not hidden: the row still
+    // has to look like it will become draggable once its box is checked.
+    color: inert ? "var(--border-strong)" : "var(--text-muted)",
+    cursor: inert ? "not-allowed" : "grab",
   }),
-  /** Names the toggle for assistive tech without adding visual noise. */
-  srOnly: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-    margin: -1,
-    padding: 0,
-    overflow: "hidden",
-    clip: "rect(0 0 0 0)",
-    whiteSpace: "nowrap",
-    border: 0,
-  } satisfies CSSProperties,
+  name: (enabled: boolean): CSSProperties => ({
+    fontSize: 13,
+    fontWeight: 600,
+    color: enabled ? "var(--text-primary)" : "var(--text-secondary)",
+  }),
+  spacer: { flex: 1, minWidth: 8 } satisfies CSSProperties,
 } as const;

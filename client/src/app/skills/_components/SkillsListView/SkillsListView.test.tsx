@@ -12,6 +12,11 @@ vi.mock("@/components/app-shell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+// Selecting a card is a navigation now, not a local selection — the skill's own
+// screen at /skills/:id owns editing, preview and history.
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
 import { SkillsListView } from "./SkillsListView";
 
 const SKILL: Skill = {
@@ -23,6 +28,7 @@ const SKILL: Skill = {
   body: "# Uncovered branch gate\n\nEnumerate every branch of every changed function.",
   enabled: true,
   version: 1,
+  agent_count: 0,
 };
 
 const fetchMock = vi.fn();
@@ -38,6 +44,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  push.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -87,22 +94,15 @@ describe("SkillsListView", () => {
     expect(await screen.findByText("No skills yet")).toBeInTheDocument();
   });
 
-  it("renders the grid and opens the preview when a card is clicked", async () => {
+  it("opens the skill's own screen when a card is clicked", async () => {
     fetchMock.mockImplementation((url: string) =>
       String(url).endsWith("/skills") ? jsonResponse([SKILL]) : jsonResponse(SKILL),
     );
     renderList();
 
-    expect(await screen.findByText("uncovered-branch-gate")).toBeInTheDocument();
-    // Nothing is selected yet, so the rail prompts for a pick.
-    expect(screen.getByText("Select a skill")).toBeInTheDocument();
+    fireEvent.click(await screen.findByText("uncovered-branch-gate"));
 
-    fireEvent.click(screen.getByText("uncovered-branch-gate"));
-
-    expect(
-      await screen.findByText("Enumerate every branch of every changed function."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("v1")).toBeInTheDocument();
+    expect(push).toHaveBeenCalledWith("/skills/sk1?tab=config");
   });
 
   it("filters the grid by name", async () => {

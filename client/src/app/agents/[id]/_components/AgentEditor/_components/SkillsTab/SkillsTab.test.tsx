@@ -18,6 +18,7 @@ const AGENT: Agent = {
   repo_intel: true,
   enabled: true,
   version: 3,
+  skill_count: 2,
 };
 
 function skill(id: string, name: string, enabled = true): Skill {
@@ -30,10 +31,11 @@ function skill(id: string, name: string, enabled = true): Skill {
     body: `# ${name}`,
     enabled,
     version: 1,
+    agent_count: 0,
   };
 }
 
-// Deliberately not alphabetical: the tab must order attached ones by their
+// Deliberately not alphabetical: the tab must order positioned rows by their
 // stored `order` and the rest by name, not by whatever the API returned.
 const SKILLS: Skill[] = [
   skill("s1", "alpha-gate"),
@@ -42,16 +44,18 @@ const SKILLS: Skill[] = [
   skill("s4", "delta-extra"),
 ];
 
-// beta-rules is first in the prompt, alpha-gate second.
+// beta-rules is first in the prompt, alpha-gate second, and zeta-legacy holds
+// third place with its box cleared — the state a link-or-nothing model could
+// not represent.
 const LINKS: AgentSkillLink[] = [
-  { agent_id: "ag1", skill_id: "s2", order: 0 },
-  { agent_id: "ag1", skill_id: "s1", order: 1 },
+  { agent_id: "ag1", skill_id: "s2", order: 0, enabled: true },
+  { agent_id: "ag1", skill_id: "s1", order: 1, enabled: true },
+  { agent_id: "ag1", skill_id: "s3", order: 2, enabled: false },
 ];
 
 const setSkills = vi.fn();
 
 vi.mock("../../../../../../../lib/hooks/agents", () => ({
-  useAgent: () => ({ refetch: vi.fn().mockResolvedValue({ data: AGENT }) }),
   useAgentSkills: () => ({ data: LINKS, isLoading: false, isError: false, refetch: vi.fn() }),
   useSetAgentSkills: () => ({ mutate: setSkills, isPending: false }),
 }));
@@ -75,69 +79,118 @@ function renderTab() {
   );
 }
 
-/** The ids posted by the single `useSetAgentSkills` call the UI just made. */
-function postedIds(): string[] {
+/** The list posted by the single `useSetAgentSkills` call the UI just made. */
+function posted(): Array<{ skill_id: string; enabled: boolean }> {
   expect(setSkills).toHaveBeenCalledTimes(1);
-  const vars = setSkills.mock.calls[0]?.[0] as { agentId: string; skillIds: string[] };
+  const vars = setSkills.mock.calls[0]?.[0] as {
+    agentId: string;
+    skills: Array<{ skill_id: string; enabled: boolean }>;
+  };
   expect(vars.agentId).toBe("ag1");
-  return vars.skillIds;
+  return vars.skills;
 }
 
-/** The nth rendered skill row — attached rows come first, then the rest. */
+/** The nth rendered skill row — positioned rows first, then the rest. */
 function row(index: number): HTMLElement {
   const found = screen.getAllByRole("listitem")[index];
   if (!found) throw new Error(`no skill row at index ${index}`);
   return found;
 }
 
+/** The reorder handle of the row for `name`. */
+function handle(name: string): HTMLElement {
+  return screen.getByRole("button", {
+    name: `Reorder “${name}” — press the up or down arrow key`,
+  });
+}
+
 describe("Agent editor — Skills tab", () => {
-  it("lists the attached skills first, in their stored order, with their position", () => {
+  it("lists positioned skills in their stored order, then the rest alphabetically", () => {
     renderTab();
 
     expect(within(row(0)).getByText("beta-rules")).toBeInTheDocument();
-    expect(within(row(0)).getByText("1")).toBeInTheDocument();
     expect(within(row(1)).getByText("alpha-gate")).toBeInTheDocument();
-    expect(within(row(1)).getByText("2")).toBeInTheDocument();
-
-    // Then the unattached ones, alphabetically.
-    expect(within(row(2)).getByText("delta-extra")).toBeInTheDocument();
-    expect(within(row(3)).getByText("zeta-legacy")).toBeInTheDocument();
+    expect(within(row(2)).getByText("zeta-legacy")).toBeInTheDocument();
+    expect(within(row(3)).getByText("delta-extra")).toBeInTheDocument();
 
     expect(screen.getByText("2 of 4 enabled")).toBeInTheDocument();
   });
 
-  it("appends the skill to the ordered list when an unattached row is toggled on", () => {
+  it("reflects each row's flag in its checkbox, including a positioned row that is off", () => {
     renderTab();
-    fireEvent.click(screen.getByRole("switch", { name: "Attach “delta-extra” to this agent" }));
-    expect(postedIds()).toEqual(["s2", "s1", "s4"]);
+
+    expect(screen.getByRole("checkbox", { name: "beta-rules" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "zeta-legacy" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "delta-extra" })).not.toBeChecked();
   });
 
-  it("removes the skill from the ordered list when an attached row is toggled off", () => {
+  it("turns a row on without moving it, posting the whole list", () => {
     renderTab();
-    fireEvent.click(screen.getByRole("switch", { name: "Detach “beta-rules” from this agent" }));
-    expect(postedIds()).toEqual(["s1"]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "delta-extra" }));
+
+    expect(posted()).toEqual([
+      { skill_id: "s2", enabled: true },
+      { skill_id: "s1", enabled: true },
+      { skill_id: "s3", enabled: false },
+      { skill_id: "s4", enabled: true },
+    ]);
   });
 
-  it("swaps a skill with its predecessor when moved up, and cannot move the first one", () => {
+  it("keeps a row's position when it is turned off", () => {
     renderTab();
-    expect(screen.getByRole("button", { name: "Move “beta-rules” earlier in the prompt" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "beta-rules" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Move “alpha-gate” earlier in the prompt" }));
-    expect(postedIds()).toEqual(["s1", "s2"]);
+    // beta-rules is still first — cleared, not removed.
+    expect(posted()).toEqual([
+      { skill_id: "s2", enabled: false },
+      { skill_id: "s1", enabled: true },
+      { skill_id: "s3", enabled: false },
+      { skill_id: "s4", enabled: false },
+    ]);
   });
 
-  it("shows the disabled note on a globally disabled skill, which stays attachable", () => {
+  it("moves a row earlier when ArrowUp is pressed on its handle", () => {
     renderTab();
-    const disabled = row(3);
+    fireEvent.keyDown(handle("alpha-gate"), { key: "ArrowUp" });
 
-    expect(within(disabled).getByText("zeta-legacy")).toBeInTheDocument();
-    expect(
-      within(disabled).getByText(
-        "Disabled on the Skills page — it will not reach the prompt until you enable it there.",
-      ),
-    ).toBeInTheDocument();
+    expect(posted()).toEqual([
+      { skill_id: "s1", enabled: true },
+      { skill_id: "s2", enabled: true },
+      { skill_id: "s3", enabled: false },
+      { skill_id: "s4", enabled: false },
+    ]);
+  });
 
-    fireEvent.click(within(disabled).getByRole("switch"));
-    expect(postedIds()).toEqual(["s2", "s1", "s3"]);
+  it("writes nothing when the first row is moved up", () => {
+    renderTab();
+    fireEvent.keyDown(handle("beta-rules"), { key: "ArrowUp" });
+    expect(setSkills).not.toHaveBeenCalled();
+  });
+
+  it("marks a globally disabled skill as needing vetting, and still lets it be checked", () => {
+    renderTab();
+    const legacy = row(2);
+
+    expect(within(legacy).getByText("needs vetting")).toBeInTheDocument();
+
+    fireEvent.click(within(legacy).getByRole("checkbox", { name: "zeta-legacy" }));
+    expect(posted()).toEqual([
+      { skill_id: "s2", enabled: true },
+      { skill_id: "s1", enabled: true },
+      { skill_id: "s3", enabled: true },
+      { skill_id: "s4", enabled: false },
+    ]);
+  });
+
+  it("filters the rendered rows without touching the posted order", () => {
+    renderTab();
+    fireEvent.change(screen.getByLabelText("Filter skills…"), { target: { value: "delta" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(within(row(0)).getByText("delta-extra")).toBeInTheDocument();
+
+    // The write still carries every row, in the full list's order.
+    fireEvent.click(screen.getByRole("checkbox", { name: "delta-extra" }));
+    expect(posted().map((e) => e.skill_id)).toEqual(["s2", "s1", "s3", "s4"]);
   });
 });

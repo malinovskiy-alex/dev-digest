@@ -30,14 +30,13 @@ export const s = {
     lineHeight: 1.5,
     marginBottom: 22,
   } satisfies CSSProperties,
-  section: { marginBottom: 26 } satisfies CSSProperties,
   list: {
     listStyle: "none",
     margin: 0,
     padding: 0,
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 6,
   } satisfies CSSProperties,
   skeletons: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
 } as const;

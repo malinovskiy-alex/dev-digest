@@ -1,47 +1,43 @@
 import type { AgentSkillLink, Skill } from "@devdigest/shared";
+import type { AgentSkillEntry } from "@/lib/hooks/agents";
 
 /**
- * An attached skill plus its index in the FULL ordered list. Reorder maths must
- * use this index and never the position of a row in the filtered view.
+ * One line of the agent's skill list: the skill, and whether it reaches the
+ * prompt. A row exists for EVERY workspace skill — an unchecked one is a
+ * position the user parked, not an absence, which is why the list does not
+ * reshuffle when a box is cleared.
  */
-export interface AttachedSkill {
+export interface SkillListRow {
   skill: Skill;
-  index: number;
-}
-
-export interface SkillPartition {
-  /** Attached, in stored prompt order (`agent_skills.order` ascending). */
-  attached: AttachedSkill[];
-  /** Everything else, alphabetically by name. */
-  available: Skill[];
+  enabled: boolean;
 }
 
 /**
- * The attached skill ids in prompt order. The API already returns the links
- * ordered; sorting here makes the order a property of the data rather than of
- * the transport.
+ * The full list in display order: stored links first, in `agent_skills.order`,
+ * then every skill the agent has never been given a position for, alphabetically
+ * and off. A link whose skill is gone (deleted, or another workspace's) is
+ * dropped rather than rendered as a blank row.
  */
-export function orderedSkillIds(links: readonly AgentSkillLink[]): string[] {
-  return [...links].sort((a, b) => a.order - b.order).map((link) => link.skill_id);
-}
-
-/** Split the workspace's skills into the agent's ordered set and the rest. */
-export function partitionSkills(
+export function buildRows(
   skills: readonly Skill[],
-  orderedIds: readonly string[],
-): SkillPartition {
+  links: readonly AgentSkillLink[],
+): SkillListRow[] {
   const byId = new Map(skills.map((skill) => [skill.id, skill]));
-  // A link whose skill no longer exists (deleted, or another workspace's) is
-  // dropped rather than rendered as a blank row.
-  const attached = orderedIds
-    .map((id) => byId.get(id))
-    .filter((skill): skill is Skill => skill !== undefined)
-    .map((skill, index) => ({ skill, index }));
-  const linked = new Set(attached.map((entry) => entry.skill.id));
-  const available = skills
-    .filter((skill) => !linked.has(skill.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  return { attached, available };
+  const positioned = [...links]
+    .sort((a, b) => a.order - b.order)
+    .map((link) => {
+      const skill = byId.get(link.skill_id);
+      return skill ? { skill, enabled: link.enabled } : undefined;
+    })
+    .filter((row): row is SkillListRow => row !== undefined);
+
+  const seen = new Set(positioned.map((row) => row.skill.id));
+  const rest = skills
+    .filter((skill) => !seen.has(skill.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((skill) => ({ skill, enabled: false }));
+
+  return [...positioned, ...rest];
 }
 
 /** Case-insensitive match over the skill's name and description. */
@@ -55,17 +51,35 @@ export function matchesFilter(skill: Skill, query: string): boolean {
 }
 
 /**
- * A new ordered array with the entry at `index` swapped with its neighbour.
- * Out-of-range moves return the list unchanged, so a disabled button that is
- * somehow activated cannot corrupt the order.
+ * A new list with the row at `from` lifted out and dropped at `to`. Out-of-range
+ * indices return the list unchanged, so a drop on nothing — or a key press on a
+ * row that is already first — cannot corrupt the order.
  */
-export function moveSkill(ids: readonly string[], index: number, delta: -1 | 1): string[] {
-  const next = [...ids];
-  const target = index + delta;
-  const from = next[index];
-  const to = next[target];
-  if (from === undefined || to === undefined) return next;
-  next[index] = to;
-  next[target] = from;
+export function moveRow(rows: readonly SkillListRow[], from: number, to: number): SkillListRow[] {
+  if (from === to) return [...rows];
+  if (from < 0 || from >= rows.length || to < 0 || to >= rows.length) return [...rows];
+  const next = [...rows];
+  const [lifted] = next.splice(from, 1);
+  if (lifted === undefined) return [...rows];
+  next.splice(to, 0, lifted);
   return next;
+}
+
+/** Flip one row's flag, addressed by skill id rather than by a filtered index. */
+export function toggleRow(
+  rows: readonly SkillListRow[],
+  skillId: string,
+  enabled: boolean,
+): SkillListRow[] {
+  return rows.map((row) => (row.skill.id === skillId ? { ...row, enabled } : row));
+}
+
+/** The wire shape: the whole list, in order, each row with its flag. */
+export function toEntries(rows: readonly SkillListRow[]): AgentSkillEntry[] {
+  return rows.map((row) => ({ skill_id: row.skill.id, enabled: row.enabled }));
+}
+
+/** How many rows reach the prompt — the "{linked} of {total} enabled" numerator. */
+export function countEnabled(rows: readonly SkillListRow[]): number {
+  return rows.filter((row) => row.enabled).length;
 }

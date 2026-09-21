@@ -81,12 +81,15 @@ export class SkillsService {
   /** Every skill in the workspace, `name` ascending. */
   async list(workspaceId: string): Promise<Skill[]> {
     const rows = await this.repo.list(workspaceId);
-    return rows.map(toSkillDto);
+    const counts = await this.repo.agentCountsFor(workspaceId, rows.map((r) => r.id));
+    return rows.map((row) => toSkillDto(row, counts.get(row.id) ?? 0));
   }
 
   async get(workspaceId: string, id: string): Promise<Skill | undefined> {
     const row = await this.repo.getById(workspaceId, id);
-    return row ? toSkillDto(row) : undefined;
+    if (!row) return undefined;
+    const counts = await this.repo.agentCountsFor(workspaceId, [row.id]);
+    return toSkillDto(row, counts.get(row.id) ?? 0);
   }
 
   /** Create a hand-written skill: version 1, `source: 'manual'`, enabled unless
@@ -122,7 +125,11 @@ export class SkillsService {
       ...(patch.body !== undefined ? { body: patch.body } : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
     });
-    return row ? toSkillDto(row) : undefined;
+    if (!row) return undefined;
+    // The card that triggered this edit re-renders from the response, so the
+    // count has to ride along or it would blank out after every save.
+    const counts = await this.repo.agentCountsFor(workspaceId, [row.id]);
+    return toSkillDto(row, counts.get(row.id) ?? 0);
   }
 
   /**
@@ -137,15 +144,10 @@ export class SkillsService {
     const deleted = await this.repo.deleteById(workspaceId, id);
     if (!deleted) return undefined;
 
-    // Deleting a skill silently changes the prompt of every agent that had it.
-    // That is exactly the drift D7 closed on the attach/reorder path, and it
-    // reaches the same place: an agent left on v4 whose recorded v4 snapshot
-    // lists a skill that no longer exists. The lesson's whole question is
-    // "what changed between the run that missed it and the run that caught
-    // it?" — the version has to move here too.
-    for (const agentId of affectedAgentIds) {
-      await this.container.agentsRepo.bumpForSkillChange(agentId);
-    }
+    // The links cascade away with the skill, so the agents that used it just
+    // lost a block from their prompt. Their `version` deliberately does NOT
+    // move for it — see the repository's note on `agents.version`: the number
+    // tracks the agent's own config, not its skill set.
     return { unlinked_from: affectedAgentIds.length };
   }
 

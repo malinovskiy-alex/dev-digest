@@ -138,6 +138,14 @@ export const Skill = z.object({
   enabled: z.boolean(),
   version: z.number().int(),
   evidence_files: z.array(z.string()).nullish(),
+  /**
+   * How many agents actually send this skill — the reuse signal on the card and
+   * the weight behind a delete. Counts only rows an agent has checked, so it
+   * answers "who loses something if this goes away". Read-only: derived from
+   * `agent_skills`, never written through the skills endpoints. Defaults to 0
+   * so a payload written before the field existed still parses.
+   */
+  agent_count: z.number().int().default(0),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -243,6 +251,13 @@ export const Agent = z.object({
   // Inject repo-intel context (repo skeleton + callers + rank note) into this
   // agent's review prompt. Default on; gated again by the global flag.
   repo_intel: z.boolean().default(true),
+  /**
+   * How many skills this agent actually sends — the checked rows of its Skills
+   * tab. Read-only: it is derived from `agent_skills`, never written through the
+   * agent endpoints. Defaults to 0 so a snapshot written before the field
+   * existed still parses.
+   */
+  skill_count: z.number().int().default(0),
 });
 export type Agent = z.infer<typeof Agent>;
 
@@ -250,6 +265,12 @@ export const AgentSkillLink = z.object({
   agent_id: z.string(),
   skill_id: z.string(),
   order: z.number().int(),
+  /**
+   * Whether this skill reaches the agent's prompt. A link row records a
+   * POSITION, which a disabled skill keeps — so unchecking a row in the Skills
+   * tab leaves it where it is instead of sinking it below the enabled ones.
+   */
+  enabled: z.boolean(),
 });
 export type AgentSkillLink = z.infer<typeof AgentSkillLink>;
 

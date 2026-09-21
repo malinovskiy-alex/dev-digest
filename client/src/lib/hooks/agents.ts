@@ -90,7 +90,8 @@ export function useProviderModels(provider: Provider | null | undefined) {
   });
 }
 
-/** Skills attached to an agent, in prompt order (`agent_skills.order` asc). */
+/** The agent's skill list, in stored order (`agent_skills.order` asc). Includes
+ *  rows the user unchecked — they keep their position. */
 export function useAgentSkills(agentId: string | null | undefined) {
   return useQuery({
     queryKey: ["agent-skills", agentId],
@@ -99,17 +100,24 @@ export function useAgentSkills(agentId: string | null | undefined) {
   });
 }
 
+/** One row of the list the editor posts back: a skill id and whether it is on. */
+export interface AgentSkillEntry {
+  skill_id: string;
+  enabled: boolean;
+}
+
 /**
- * Attach, detach and reorder all write the WHOLE ordered array — one endpoint,
- * one invalidation, no partial states. Changing the links bumps the agent's
- * config version (the snapshot records the ordered skill ids), so the agent
- * query is invalidated too.
+ * Checking, unchecking and reordering all write the WHOLE ordered list — one
+ * endpoint, one invalidation, no partial states.
+ *
+ * This does not touch `agents.version`; the agent queries are invalidated
+ * because `skill_count` rides on the DTO and the cards render it.
  */
 export function useSetAgentSkills() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentId, skillIds }: { agentId: string; skillIds: string[] }) =>
-      api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_ids: skillIds }),
+    mutationFn: ({ agentId, skills }: { agentId: string; skills: AgentSkillEntry[] }) =>
+      api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skills }),
     onSuccess: (data, { agentId }) => {
       qc.setQueryData(["agent-skills", agentId], data);
       qc.invalidateQueries({ queryKey: ["agent", agentId] });

@@ -1,75 +1,119 @@
 /* SkillsTab — which skills this agent uses, and in which order.
 
-   The toggle IS attach/detach (L02 D2): there is no per-link enabled flag, so
-   turning a row on appends its id to the ordered list and turning it off drops
-   it. Attach, detach and reorder all post the WHOLE ordered array through the
-   one endpoint — one invalidation, no partial states — and a link change bumps
-   the agent's version (D7), which the success toast reports. */
+   Every workspace skill is one row in one flat list. A row carries a POSITION
+   and a flag: unchecking a box does not remove the row, it parks it where it
+   is. That is why `agent_skills` has an `enabled` column — a link-or-nothing
+   model cannot express "off, but seventh", and a list that reshuffles itself
+   every time a box is cleared is impossible to order deliberately.
+
+   Checking, unchecking and reordering all post the WHOLE ordered list through
+   the one endpoint — one invalidation, no partial states.
+
+   Changing this list does NOT version the agent: `agents.version` tracks the
+   agent's own config (model, prompt, strategy), and a number the user can only
+   ever glimpse in a toast was not worth moving on every checkbox. */
 "use client";
 
 import React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { EmptyState, ErrorState, Icon, SectionLabel, Skeleton } from "@devdigest/ui";
+import { Badge, EmptyState, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
-import { useAgent, useAgentSkills, useSetAgentSkills } from "@/lib/hooks/agents";
+import { useAgentSkills, useSetAgentSkills } from "@/lib/hooks/agents";
 import { useSkills } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { SkillRow } from "./_components/SkillRow";
-import { matchesFilter, moveSkill, orderedSkillIds, partitionSkills } from "./helpers";
+import {
+  buildRows,
+  countEnabled,
+  matchesFilter,
+  moveRow,
+  toEntries,
+  toggleRow,
+  type SkillListRow,
+} from "./helpers";
 import { s } from "./styles";
 
 export function SkillsTab({ agent }: { agent: Agent }): React.JSX.Element {
   const t = useTranslations("agents");
   const toast = useToast();
   const [filter, setFilter] = React.useState("");
+  // While a drag is in progress the list follows the pointer locally; the write
+  // happens once, on drop. Null means "show the server's order".
+  const [draft, setDraft] = React.useState<SkillListRow[] | null>(null);
+  const [dragIndex, setDragIndex] = React.useState<number | null>(null);
 
   const skills = useSkills();
   const links = useAgentSkills(agent.id);
   const setSkills = useSetAgentSkills();
-  const { refetch: refetchAgent } = useAgent(agent.id);
-
-  const all = skills.data ?? [];
-  const { attached, available } = partitionSkills(all, orderedSkillIds(links.data ?? []));
-  // What every write posts: the attached order, minus any link whose skill is
-  // gone. Reorder indices below address this array, never the filtered view.
-  const linkedIds = attached.map((entry) => entry.skill.id);
 
   const isLoading = skills.isLoading || links.isLoading;
   const isError = skills.isError || links.isError;
 
-  const commit = (skillIds: string[]) => {
+  const serverRows = React.useMemo(
+    () => buildRows(skills.data ?? [], links.data ?? []),
+    [skills.data, links.data],
+  );
+  const rows = draft ?? serverRows;
+
+  const commit = (next: SkillListRow[]) => {
     // A second write while the first is in flight would race it and could post
-    // an array built from stale links.
+    // a list built from stale links.
     if (setSkills.isPending) return;
     setSkills.mutate(
-      { agentId: agent.id, skillIds },
+      { agentId: agent.id, skills: toEntries(next) },
       {
-        onSuccess: async () => {
-          // D7: the link change bumped the agent's version. The hook already
-          // invalidated ["agent", id], so this read joins the refetch that is
-          // in flight rather than firing a second request.
-          const { data } = await refetchAgent();
-          toast.success(t("skills.saved", { version: (data ?? agent).version }));
+        onSuccess: () => {
+          setDraft(null);
+          toast.success(t("skills.saved"));
         },
+        onError: () => setDraft(null),
       },
     );
   };
 
-  const toggle = (skillId: string, attach: boolean) =>
-    commit(attach ? [...linkedIds, skillId] : linkedIds.filter((id) => id !== skillId));
+  const onToggle = (skillId: string, enabled: boolean) =>
+    commit(toggleRow(rows, skillId, enabled));
 
-  const visibleAttached = attached.filter((entry) => matchesFilter(entry.skill, filter));
-  const visibleAvailable = available.filter((skill) => matchesFilter(skill, filter));
+  /** Keyboard reorder: indices address the FULL list, never the filtered view. */
+  const onMove = (skillId: string, delta: -1 | 1) => {
+    const from = rows.findIndex((row) => row.skill.id === skillId);
+    const to = from + delta;
+    // ↑ on the first row (or ↓ on the last) is a no-op, not a write: the handle
+    // stays enabled everywhere, so this is the only place that refusal lives.
+    if (from === -1 || to < 0 || to >= rows.length) return;
+    commit(moveRow(rows, from, to));
+  };
+
+  const onDragEnter = (skillId: string) => {
+    if (dragIndex === null) return;
+    const to = rows.findIndex((row) => row.skill.id === skillId);
+    if (to === -1 || to === dragIndex) return;
+    setDraft(moveRow(rows, dragIndex, to));
+    setDragIndex(to);
+  };
+
+  const onDragEnd = () => {
+    setDragIndex(null);
+    // Nothing moved — drop the draft rather than posting an identical list.
+    if (draft === null) return;
+    const same =
+      draft.length === serverRows.length &&
+      draft.every((row, i) => row.skill.id === serverRows[i]?.skill.id);
+    if (same) setDraft(null);
+    else commit(draft);
+  };
+
+  const visible = rows.filter((row) => matchesFilter(row.skill, filter));
 
   return (
     <div style={s.wrap}>
       <div style={s.header}>
         <h2 style={s.h2}>{t("skills.title")}</h2>
         {!isLoading && !isError && (
-          <span style={s.count}>
-            {t("skills.enabledCount", { linked: attached.length, total: all.length })}
-          </span>
+          <Badge color="var(--accent)" bg="var(--accent-bg)">
+            {t("skills.enabledCount", { linked: countEnabled(rows), total: rows.length })}
+          </Badge>
         )}
         <div style={s.search}>
           <Icon.Search size={13} style={s.searchIcon} />
@@ -92,9 +136,9 @@ export function SkillsTab({ agent }: { agent: Agent }): React.JSX.Element {
 
       {isLoading && (
         <div style={s.skeletons}>
-          <Skeleton height={64} />
-          <Skeleton height={64} />
-          <Skeleton height={64} />
+          <Skeleton height={44} />
+          <Skeleton height={44} />
+          <Skeleton height={44} />
         </div>
       )}
 
@@ -108,52 +152,29 @@ export function SkillsTab({ agent }: { agent: Agent }): React.JSX.Element {
         />
       )}
 
-      {!isLoading && !isError && (
-        <>
-          <section style={s.section}>
-            <SectionLabel icon="Sparkles">{t("skills.attachedTitle")}</SectionLabel>
-            {attached.length === 0 ? (
-              <EmptyState icon="Sparkles" title={t("skills.attachedNone")} />
-            ) : (
-              <ul style={s.list}>
-                {visibleAttached.map(({ skill, index }) => (
-                  <SkillRow
-                    key={skill.id}
-                    skill={skill}
-                    position={index + 1}
-                    busy={setSkills.isPending}
-                    onToggle={(attach) => toggle(skill.id, attach)}
-                    onMoveUp={index === 0 ? null : () => commit(moveSkill(linkedIds, index, -1))}
-                    onMoveDown={
-                      index === attached.length - 1
-                        ? null
-                        : () => commit(moveSkill(linkedIds, index, 1))
-                    }
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
+      {!isLoading && !isError && rows.length === 0 && (
+        <EmptyState icon="Sparkles" title={t("skills.none")} />
+      )}
 
-          {visibleAvailable.length > 0 && (
-            <section style={s.section}>
-              <SectionLabel icon="Boxes">{t("skills.availableTitle")}</SectionLabel>
-              <ul style={s.list}>
-                {visibleAvailable.map((skill) => (
-                  <SkillRow
-                    key={skill.id}
-                    skill={skill}
-                    position={null}
-                    busy={setSkills.isPending}
-                    onToggle={(attach) => toggle(skill.id, attach)}
-                    onMoveUp={null}
-                    onMoveDown={null}
-                  />
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
+      {!isLoading && !isError && rows.length > 0 && (
+        <ul style={s.list}>
+          {visible.map((row) => (
+            <SkillRow
+              key={row.skill.id}
+              skill={row.skill}
+              enabled={row.enabled}
+              dragging={dragIndex !== null && rows[dragIndex]?.skill.id === row.skill.id}
+              busy={setSkills.isPending}
+              onToggle={(enabled) => onToggle(row.skill.id, enabled)}
+              onMove={(delta) => onMove(row.skill.id, delta)}
+              onDragStart={() =>
+                setDragIndex(rows.findIndex((r) => r.skill.id === row.skill.id))
+              }
+              onDragEnter={() => onDragEnter(row.skill.id)}
+              onDragEnd={onDragEnd}
+            />
+          ))}
+        </ul>
       )}
     </div>
   );

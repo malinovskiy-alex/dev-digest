@@ -1,7 +1,7 @@
 {
   "card": {
     "noDescription": "No description",
-    "skillCount": "{count} skills"
+    "skillCount": "{count, plural, =0 {no skills} one {# skill} other {# skills}}"
   },
   "list": {
     "breadcrumbLab": "Skills Lab",
@@ -91,21 +91,23 @@
     "title": "Skills",
     "enabledCount": "{linked} of {total} enabled",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach.",
-    "attachedNone": "No skills attached — this agent reviews with its system prompt alone.",
-    "attachedTitle": "Attached",
-    "availableTitle": "Available",
-    "moveUp": "Move “{name}” earlier in the prompt",
-    "moveDown": "Move “{name}” later in the prompt",
-    "attach": "Attach “{name}” to this agent",
-    "detach": "Detach “{name}” from this agent",
-    "disabledNote": "Disabled on the Skills page — it will not reach the prompt until you enable it there.",
-    "position": "{index}",
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Check a skill to put it in the prompt, then drag its handle (or press ↑ / ↓) to reorder.",
+    "disabledNote": "needs vetting",
     "manageLink": "Manage skills",
     "loadError": "Could not load skills.",
-    "saved": "Skills updated (v{version})"
+    "saved": "Skill list updated",
+    "reorder": "Reorder “{name}” — press the up or down arrow key",
+    "none": "No skills in this workspace yet — create one on the Skills page.",
+    "reorderDisabled": "“{name}” is off — check it to move it in the prompt"
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."
+  },
+  "delete": {
+    "title": "Delete “{name}”?",
+    "body": "This cannot be undone. The agent and its config history go with it{count, plural, =0 {} one {, along with its # linked skill} other {, along with its # linked skills}}; past review runs keep their findings.",
+    "confirm": "Delete agent",
+    "label": "Delete “{name}”",
+    "done": "Deleted “{name}”"
   }
 }
