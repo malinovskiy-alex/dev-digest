@@ -3,6 +3,10 @@ import { render, screen, cleanup, fireEvent, within } from "@testing-library/rea
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent, AgentSkillLink, Skill } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
+// SkillRow renders the type badge from the `skills` namespace. Without it
+// next-intl logs MISSING_MESSAGE and renders the raw key — the suite stays
+// green over a component that is rendering wrongly.
+import skills from "../../../../../../../../messages/en/skills.json";
 import { ToastProvider } from "@/lib/toast";
 
 const AGENT: Agent = {
@@ -71,7 +75,7 @@ afterEach(cleanup);
 
 function renderTab() {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ agents: messages }}>
+    <NextIntlClientProvider locale="en" messages={{ agents: messages, skills }}>
       <ToastProvider>
         <SkillsTab agent={AGENT} />
       </ToastProvider>
@@ -114,6 +118,15 @@ describe("Agent editor — Skills tab", () => {
     expect(within(row(3)).getByText("delta-extra")).toBeInTheDocument();
 
     expect(screen.getByText("2 of 4 enabled")).toBeInTheDocument();
+  });
+
+  it("labels each row with its translated type, not the raw enum value", () => {
+    renderTab();
+
+    // Guards the `skills` namespace this tab needs but does not own: a missing
+    // one renders "listItem.type.rubric" and next-intl only logs about it.
+    expect(within(row(0)).getByText("rubric")).toBeInTheDocument();
+    expect(screen.queryByText(/listItem\.type/)).not.toBeInTheDocument();
   });
 
   it("reflects each row's flag in its checkbox, including a positioned row that is off", () => {
