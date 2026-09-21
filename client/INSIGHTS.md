@@ -19,6 +19,26 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-09-20 — `findByRole` hides a duplicate accessible name, then `getByRole` fails three tests later
+**Symptom:** on the Conventions screen two buttons read *Run extraction* (the
+header action and the empty state's CTA). One test did
+`fireEvent.click(await screen.findByRole("button", { name: /Run extraction/ }))`
+and passed; another did `getByRole` with the same name and failed with
+*Found multiple elements*. Same DOM, opposite results.
+**Cause:** `findBy*` polls and resolves on its FIRST successful attempt. On the
+first poll only the header button exists — the empty state is still behind the
+query's loading skeleton — so it matches one element and returns. The `getBy*`
+test had awaited the empty-state text first, so by then both buttons were
+mounted.
+**Rule:** never use `findByRole` to reach an element whose accessible name is not
+unique once the screen has settled. Await something that only appears in the
+final state, then `getAllByRole(...)` and index deliberately — `[0]` for the
+header action — so the test says which of the two it means. A `findBy*` that
+passes today passes because of render timing, not because the query is
+unambiguous.
+**Where:** `client/src/app/repos/[repoId]/conventions/_components/ConventionsView/ConventionsView.test.tsx:102`
+(the `getAllByRole` assertion), `:165` and `:178` (the deliberate `[0]`)
+
 ### 2026-09-18 — closing an overlay on the trigger's `blur` dismisses it as soon as the reader touches it
 **Symptom:** a findings popover pinned open by a click vanished on the first
 click inside it, and on any attempt to drag its scrollbar.
@@ -174,6 +194,11 @@ the shorthand/longhand mix React warns about — the existing comment claiming
   (`FindingsCell` + `FindingsPopover` + `FindingPreview`) and `lib/finding-format.ts`.
   The finding action label is now "Reject"; the action kind behind it is still
   `dismiss`.
+- 2026-09-20 — Conventions screen (L02): `/repos/:repoId/conventions` with
+  `ConventionsView` + `ConventionCard` + `CreateSkillFromConventionsModal`,
+  `lib/hooks/conventions.ts`, `lib/convention-categories.ts` (runtime list, per
+  the vendored-barrel rule above), and a `Conventions` entry in
+  `vendor/ui/nav.ts` (`g c`). 24 tests.
 - 2026-09-18 — extended the findings preview to the PR detail timeline (L02
   follow-up): the panel, the finding row and the open/close hook moved to
   `src/components/findings-popover/`, the PR list's `FindingsPopover` became a

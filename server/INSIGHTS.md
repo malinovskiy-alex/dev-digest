@@ -11,6 +11,27 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Doesn't Work
 
+### 2026-09-20 — `drizzle-kit generate` blocks forever when one migration both adds and drops a column
+**Symptom:** `pnpm db:generate` printed
+`Is scan_id column in conventions table created or renamed from another column?`
+with a two-option arrow menu and never returned; the 120 s tool timeout killed
+it and nothing was written. `yes '' | pnpm db:generate` failed the same way
+(exit 143) — the prompt reads the TTY, not stdin, so it cannot be answered from
+a non-interactive shell at all.
+**Cause:** drizzle-kit asks, per added column, whether it is a rename of a column
+dropped in the same diff. The schema change that triggered it added six columns
+to `conventions` and dropped `accepted`, so every added column was a rename
+candidate.
+**Rule:** never let one schema edit add and drop columns in the same
+`db:generate`. Generate in two passes — keep the doomed column in the schema for
+the first (adds + new tables only, no prompt), remove it for the second (a pure
+drop prompts nothing) — then fold the second SQL file into the first, delete the
+second's journal entry, and move its snapshot over the first's with `prevId`
+re-pointed at the migration before them. Confirm with a third `db:generate`: it
+must say *No schema changes*.
+**Where:** `server/src/db/migrations/0013_conventions_extract.sql:21` (the folded
+`DROP COLUMN`), `server/package.json:15` (`db:generate`)
+
 ### 2026-09-20 — a runtime import from `vendor/shared` breaks the whole client
 **Symptom:** every route 500s with
 `./src/vendor/shared/index.ts: Can't resolve './contracts/findings.js'`, while
@@ -66,6 +87,24 @@ per-instance scoping first.
 **Where:** `server/src/app.ts:75` (the run reaper)
 
 ## Codebase Patterns
+
+### 2026-09-20 — a feature module resolves its model through the container, never by importing `settings`
+**Symptom:** the conventions service needs a provider+model, and the obvious
+`import { resolveFeatureModel } from '../settings/feature-models.js'` fails
+`pnpm arch` with `no-cross-module`. Moving the call behind the Container then
+failed `no-circular`, because `feature-models.ts` took a `Container` and the
+Container now imported it.
+**Cause:** two arch rules close the obvious routes from both ends. Only the
+composition root may know about several modules at once, and it can only do that
+if the module it calls does not know about *it*.
+**Rule:** call `container.featureModel(workspaceId, id)`. Anything else the
+`settings` module owns and another module needs gets the same treatment: a thin
+accessor on the Container, and the underlying function takes `Db` (or another
+leaf dependency), never the Container. `tsPreCompilationDeps: true` means a
+type-only `import type { Container }` still counts as the cycle.
+**Where:** `server/src/platform/container.ts:247` (`featureModel`),
+`server/src/modules/settings/feature-models.ts:56` (`resolveFeatureModel`, now
+`db: Db`)
 
 ### 2026-09-20 — `pnpm typecheck` does not cover `test/`
 **Symptom:** a test file with a genuine type error passes `pnpm typecheck`
@@ -204,6 +243,30 @@ model costs determinism, while sending it costs the whole run.
 
 ## Recurring Errors & Fixes
 
+### 2026-09-20 — `--no-file-parallelism` is the fix for the integration suite skipping itself
+**Symptom:** `pnpm exec vitest run .it.test` reported **3 passed / 7 skipped**
+(20 of 73 tests) on a machine with Docker running — the failure mode already
+recorded under *What Doesn't Work* (2026-09-20, "parallel integration files
+silently skip themselves"). That entry's advice is to re-run each skipped file
+alone, which is nine commands and several minutes.
+**Cause:** same one — `dockerAvailable()` shells out to `docker info` with a 5 s
+timeout, per worker, all at once. Serialising the files serialises the probes, so
+the first one warms Docker Desktop and the rest hit the per-worker cache well
+inside the timeout.
+**Rule:** run the integration suite as
+`pnpm exec vitest run .it.test --no-file-parallelism`. It reported **10 passed /
+73 tests / 0 skipped** on the same tree that had just skipped seven files. Treat
+a parallel run's green as unproven — check the skipped count either way.
+**Correction (2026-09-20):** the title overstates it. A second session on this
+machine ran the same `.it.test` command WITHOUT the flag and got 10 files /
+73 tests / 0 skipped, having seen 3 passed / 6 skipped from it earlier the same
+day. So the parallel run is flaky under machine load, not deterministically
+broken, and `--no-file-parallelism` buys reliability rather than fixing a
+certain failure. The Rule stands and its second sentence is the load-bearing
+one: **read the skipped count**, because a suite that reports only "passed" is
+saying nothing about the files it never ran.
+**Where:** `server/test/helpers/pg.ts:27` (`execSync('docker info', …)`)
+
 ### 2026-09-16 — the PR list is empty while GitHub has PRs
 **Symptom:** `/repos/:id/pulls` renders an empty state and `GET /repos/:id/pulls`
 returns `[]`, with no error in the UI. The API log shows
@@ -234,6 +297,11 @@ before anything else. The fix is a fresh token in Settings (written to
 - 2026-09-19 — planned an `onion-architecture` skill: audited the server's rings
   (ports in `shared/adapters.ts`, adapters, container, modules) and recorded the
   layering divergences found.
+- 2026-09-20 — Conventions extractor (L02): new `modules/conventions/` (sample →
+  model → evidence gate → store), migration `0013_conventions_extract`
+  (`convention_scans` + six columns on `conventions`, `accepted` dropped), the
+  first caller of `FEATURE_MODELS`, and `src/prompts/conventions.system.md`.
+  18 unit + 13 integration tests.
 - 2026-09-19 — built the skill on branch `skill/onion-architecture`: four rings
   documented in `.claude/skills/onion-architecture/`, enforced by
   `server/.dependency-cruiser.cjs` + `pnpm arch` with the 21 current violations

@@ -4,7 +4,7 @@ import {
   FeatureModelChoice,
   type FeatureModelId,
 } from '@devdigest/shared';
-import type { Container } from '../../platform/container.js';
+import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import { rowsToSettings } from './helpers.js';
 
@@ -32,13 +32,18 @@ export function defaultFeatureModel(id: FeatureModelId): FeatureModelChoice {
  * that keep their own dynamic default (e.g. conventions) use this directly so
  * that default is preserved; callers with a static default use
  * `resolveFeatureModel` instead.
+ *
+ * Takes a `Db` rather than the Container on purpose: the Container is what
+ * calls this (as `container.featureModel`), so a feature module can resolve its
+ * model without importing a sibling module — and a Container parameter here
+ * would close that import cycle.
  */
 export async function getFeatureModelOverride(
-  container: Container,
+  db: Db,
   workspaceId: string,
   id: FeatureModelId,
 ): Promise<FeatureModelChoice | undefined> {
-  const rows = await container.db
+  const rows = await db
     .select({ key: t.settings.key, value: t.settings.value })
     .from(t.settings)
     .where(eq(t.settings.workspaceId, workspaceId));
@@ -49,9 +54,9 @@ export async function getFeatureModelOverride(
 
 /** Resolve `id` to a concrete provider+model: workspace override, else registry default. */
 export async function resolveFeatureModel(
-  container: Container,
+  db: Db,
   workspaceId: string,
   id: FeatureModelId,
 ): Promise<FeatureModelChoice> {
-  return (await getFeatureModelOverride(container, workspaceId, id)) ?? DEFAULTS[id];
+  return (await getFeatureModelOverride(db, workspaceId, id)) ?? DEFAULTS[id];
 }

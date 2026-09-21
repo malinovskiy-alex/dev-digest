@@ -77,6 +77,7 @@ flowchart TB
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
+    conventions["conventions<br/>/repos/:id/conventions · /conventions/extract<br/>/conventions/:id · /conventions/skill-draft · /conventions/skill"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
@@ -123,6 +124,27 @@ shown in full before it is ever saved, and reaches no prompt until the user
 enables it globally *and* checks its row on that agent — two independent gates.
 Before you "harden" this by wrapping skills in `<untrusted>`, read `specs/L02-skills-in-the-product.md` D6:
 `test/skills-prompt.test.ts` asserts the placement for exactly that reason.
+
+## Extracted conventions (non-obvious)
+
+`POST /repos/:id/conventions/extract` is the one place in the server where a
+model reads the *repository* rather than a diff, and the thing that makes its
+output usable is not the model call — it is the code on either side of it:
+
+1. **the sample set is chosen by code** (config probes + `repoIntel.getConventionSamples`),
+   so the set of files the model may cite is known before it is asked;
+2. **every candidate is verified against the clone** before it is stored — the
+   path must be one we sampled, the quoted snippet must really be in that file,
+   and the stored snippet is then re-read *from the file*. A rule whose evidence
+   cannot be found is dropped, and a rule whose line number drifted is corrected.
+
+So a card on the Conventions screen quotes the repo's own bytes by
+construction, the same guarantee the review path's grounding gate gives a
+finding. The skill a scan produces is composed by code too
+(`modules/conventions/skill-draft.ts`) and shown in full in an editor before the
+first write — that, not a disabled flag, is the vetting gate for an extracted
+skill. Details and the decisions behind them:
+`specs/L02-conventions-extractor.md`.
 
 ## Review context (non-obvious)
 

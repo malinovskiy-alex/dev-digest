@@ -39,6 +39,30 @@ payload the test asserts on)
 
 ## What Doesn't Work
 
+### 2026-09-20 — two agent sessions in ONE checkout: a `git checkout --` and a branch switch both hit the other's work
+**Symptom:** an uncommitted refactor of
+`server/src/modules/settings/feature-models.ts` reverted itself mid-session — a
+second Claude session saw the file failing `tsc` (it was half-applied: the
+signature had changed, the callers had not) and ran `git checkout --` on it,
+assuming stray output from one of its own subagents. Separately, that session's
+three L02 commits landed on `lesson/L03-conventions`, because a checkout has one
+HEAD and this one had been switched to the L03 branch.
+**Cause:** this repo is a single working tree. Two sessions share its index, its
+HEAD and its branch; neither can tell another agent's unfinished edit from its
+own debris, and `git commit` writes to whatever branch HEAD points at, not to
+the branch its author had in mind.
+**Rule:** before starting parallel work here, say which paths you own — the two
+sessions did, and nothing else collided afterwards. Never `git checkout --` a
+file you did not write; ask the other session instead, because a half-applied
+refactor is indistinguishable from garbage and looks exactly like a `tsc`
+failure worth reverting. Commits already on the wrong branch are recoverable
+without a checkout: `git branch -f <other-branch> <sha>` fast-forwards it in
+place, and `git push origin <branch>` / `gh pr create --head <branch>` both work
+by refspec. For genuinely independent work, use `git worktree add` instead of
+sharing this one.
+**Where:** `server/src/modules/settings/feature-models.ts:56`
+(`resolveFeatureModel`, the file that was reverted)
+
 ### 2026-09-19 — a PreToolUse Bash hook sees raw command TEXT, so a substring matcher blocks innocent commands
 **Symptom:** the `pr-self-review` guard, matching `/\bgh pr create\b/`, refused a
 `node -e "…"` command whose only sin was containing that phrase inside a quoted
@@ -170,6 +194,9 @@ whole-file diff means you flipped the endings, not that you edited the file.
 - 2026-09-16 — implemented L01 Run Cost Badge across shared contracts, server
   and client. The plan leaned on the removal commit `d45ab0d`; that approach is
   now ruled out for lesson work (see *Codebase Patterns*).
+- 2026-09-20 — L03 Conventions extractor, built across `server/`, `client/` and
+  both `vendor/shared` copies from `specs/L02-conventions-extractor.md`, in a
+  checkout shared with a second session finishing L02.
 - 2026-09-19 — built the `pr-self-review` skill: a pre-PR router and gate that
   maps the open diff onto the repo's other skills, runs deterministic gates
   G1–G12 plus `pnpm arch`, and blocks `gh pr create` through the first

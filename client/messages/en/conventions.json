@@ -10,17 +10,76 @@
     "runExtraction": "Run extraction",
     "extractionFailed": "Extraction failed",
     "loadError": "Could not load conventions.",
+    "noRepo": "Add a repository first — there is nothing to scan yet.",
+    "scanMeta": "Detected from {count, plural, one {# sample file} other {# sample files}} · last scan {when}",
+    "scanMetaNever": "Not scanned yet",
     "empty": {
       "title": "No conventions extracted yet",
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
       "cta": "Run extraction"
     },
-    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files"
+    "emptyAfterScan": {
+      "title": "Nothing survived the evidence check",
+      "body": "Every rule the model proposed was dropped because its evidence was not in the repo. Try re-scanning, or pick a different model in Settings.",
+      "cta": "Re-scan"
+    },
+    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files",
+    "acceptedOf": "{accepted} of {total} accepted",
+    "deselectAll": "Deselect all",
+    "selectAll": "Select all",
+    "createSkill": "Create skill"
   },
   "card": {
     "confidence": "Confidence",
     "accepted": "Accepted",
     "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "acceptAsSkill": "Accept as Skill",
+    "accept": "Accept",
+    "reject": "Reject",
+    "rejected": "Rejected",
+    "edit": "Edit rule",
+    "save": "Save",
+    "cancel": "Cancel",
+    "ruleLabel": "Rule",
+    "categoryLabel": "Category",
+    "copyEvidence": "Copy evidence",
+    "copied": "Copied",
+    "updateFailed": "Could not save that change."
+  },
+  "category": {
+    "naming": "naming",
+    "structure": "structure",
+    "error-handling": "error handling",
+    "async": "async",
+    "typing": "typing",
+    "testing": "testing",
+    "imports": "imports",
+    "api": "api",
+    "docs": "docs",
+    "other": "other"
+  },
+  "createSkill": {
+    "title": "Create skill from conventions",
+    "mergedFrom": "Merged from {count, plural, one {# accepted convention} other {# accepted conventions}} in {repo}. Everything below is editable before you save.",
+    "nameLabel": "Name",
+    "descriptionLabel": "Description",
+    "typeLabel": "Type",
+    "enabledLabel": "Enabled",
+    "enabledHint": "Whether this block is added to agents' prompts.",
+    "bodyLabel": "Skill body",
+    "bodyFile": "{name}.md",
+    "unsaved": "unsaved",
+    "tokens": "{count} tokens",
+    "savedAs": "Saved as v1 · added to Skills Lab",
+    "cancel": "Cancel",
+    "submit": "Create skill",
+    "submitting": "Creating…",
+    "success": "Created \"{name}\" from {count, plural, one {# convention} other {# conventions}}.",
+    "failed": "Could not create the skill.",
+    "draftError": "Could not build a draft from the accepted conventions."
+  },
+  "errors": {
+    "no_samples": "Nothing to sample — this repository has no readable files yet. Make sure it finished cloning and indexing, then try again.",
+    "no_accepted_conventions": "Accept at least one convention first."
   }
 }
