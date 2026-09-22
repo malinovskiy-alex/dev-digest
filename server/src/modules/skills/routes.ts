@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { SkillType } from '@devdigest/shared';
+import { SkillSource, SkillType } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
@@ -65,6 +65,24 @@ const ArchiveUpload = z.object({
 const ImportBody = z.discriminatedUnion('kind', [MarkdownUpload, ArchiveUpload]);
 
 /**
+ * The response shape of a single skill.
+ *
+ * Declaring it makes the route self-documenting and lets fastify serialize
+ * exactly these fields instead of whatever the service happens to hand back.
+ */
+const SkillResponse = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  source: SkillSource,
+  body: z.string(),
+  enabled: z.boolean(),
+  version: z.number().int(),
+  agent_count: z.number().int(),
+});
+
+/**
  * What confirm adds to the upload: the `token` the preview handed out, plus
  * the three fields the user may have corrected in the preview form.
  *
@@ -106,12 +124,16 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
     return service.list(workspaceId);
   });
 
-  app.get('/skills/:id', { schema: { params: IdParams } }, async (req) => {
-    const { workspaceId } = await getContext(app.container, req);
-    const skill = await service.get(workspaceId, req.params.id);
-    if (!skill) throw new NotFoundError('Skill not found');
-    return skill;
-  });
+  app.get(
+    '/skills/:id',
+    { schema: { params: IdParams, response: { 200: SkillResponse } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const skill = await service.get(workspaceId, req.params.id);
+      if (!skill) throw new NotFoundError('Skill not found');
+      return skill;
+    },
+  );
 
   app.post('/skills', { schema: { body: CreateSkillBody } }, async (req, reply) => {
     const { workspaceId } = await getContext(app.container, req);
@@ -138,7 +160,7 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(app.container, req);
     const result = await service.delete(workspaceId, req.params.id);
     if (!result) throw new NotFoundError('Skill not found');
-    return { ok: true, unlinked_from: result.unlinked_from };
+    return { ok: true, unlinked: result.unlinked_from };
   });
 
   app.get('/skills/:id/versions', { schema: { params: IdParams } }, async (req) => {
