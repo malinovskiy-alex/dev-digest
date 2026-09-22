@@ -228,15 +228,19 @@ describe('conventions · the skill draft', () => {
     },
   ];
 
-  it('names the skill after the repo, not the owner', () => {
+  it('proposes one fixed name, with the repo in the description', () => {
+    // Fixed rather than derived: a reader looking for "the house rules skill"
+    // finds the same name whichever repo produced it, and which repo that was
+    // is in the description instead of encoded in an identifier.
+    const draft = composeSkillDraft('acme/payments-api', candidates);
+    expect(draft.name).toBe('repo-conventions');
+    expect(draft.description).toContain('payments-api');
     expect(repoSlug('acme/payments-api')).toBe('payments-api');
-    expect(composeSkillDraft('acme/payments-api', candidates).name).toBe(
-      'payments-api-conventions',
-    );
   });
 
   it('writes a heading per rule and fences the evidence with the file’s language', () => {
     const draft = composeSkillDraft('acme/payments-api', candidates);
+    expect(draft.body).toContain('# repo-conventions');
     expect(draft.body).toContain('## async-await-instead');
     expect(draft.body).toContain('Detected in `src/api/users.ts:4-5`:');
     expect(draft.body).toContain('```ts');

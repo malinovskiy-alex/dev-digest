@@ -116,19 +116,36 @@ export function ConventionsView(): React.JSX.Element {
               <p style={s.subtitle}>{t("page.subtitle")}</p>
             )}
           </div>
+          {/*
+            Two buttons, not one that renames itself. A control whose label
+            changes under you is a control you have to re-read; these say what
+            they do and which one applies is legible from which is live. Both
+            run the same scan — the difference is whether there is already one
+            to replace, which is also why exactly one of them is ever enabled.
+          */}
           {repoId && (
-            <Button
-              kind="secondary"
-              icon="RefreshCw"
-              loading={extract.isPending}
-              onClick={runScan}
-            >
-              {extract.isPending
-                ? t("page.scanning")
-                : scanned
-                  ? t("page.rescan")
-                  : t("page.runExtraction")}
-            </Button>
+            <div style={s.scanActions}>
+              <Button
+                kind="primary"
+                icon="Play"
+                loading={extract.isPending && !scanned}
+                disabled={scanned || extract.isPending}
+                title={scanned ? t("page.runScanHint") : undefined}
+                onClick={runScan}
+              >
+                {extract.isPending && !scanned ? t("page.scanning") : t("page.runScan")}
+              </Button>
+              <Button
+                kind="secondary"
+                icon="RefreshCw"
+                loading={extract.isPending && scanned}
+                disabled={!scanned || extract.isPending}
+                title={!scanned ? t("page.rescanHint") : undefined}
+                onClick={runScan}
+              >
+                {extract.isPending && scanned ? t("page.scanning") : t("page.rescan")}
+              </Button>
+            </div>
           )}
         </div>
 
@@ -174,14 +191,17 @@ export function ConventionsView(): React.JSX.Element {
               <span style={s.toolbarCount}>
                 {t("page.acceptedOf", { accepted, total: candidates.length })}
               </span>
-              <Button
-                kind="primary"
-                icon="Sparkles"
-                disabled={accepted === 0}
-                onClick={() => setCreating(true)}
-              >
-                {t("page.createSkill")}
-              </Button>
+              {/*
+                Absent until something is accepted, rather than present and
+                disabled. A greyed button invites a click that does nothing and
+                says nothing; its absence is the honest signal that the next
+                step has not been unlocked yet.
+              */}
+              {accepted > 0 && (
+                <Button kind="primary" icon="Sparkles" onClick={() => setCreating(true)}>
+                  {t("page.createSkill")}
+                </Button>
+              )}
             </div>
 
             <div style={s.list}>

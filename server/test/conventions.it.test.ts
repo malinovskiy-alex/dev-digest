@@ -197,7 +197,7 @@ d('/conventions routes', () => {
     const res = await app.inject({ method: 'GET', url: `/repos/${repoId}/conventions/skill-draft` });
     expect(res.statusCode).toBe(200);
     const draft = res.json();
-    expect(draft.name).toBe('payments-api-conventions');
+    expect(draft.name).toBe('repo-conventions');
     expect(draft.body).toContain('Never chain .then(); await instead.');
     expect(draft.body).toContain('const user = await db.users.find(id);');
     expect(draft.convention_ids).toEqual([id]);
@@ -224,7 +224,7 @@ d('/conventions routes', () => {
       method: 'POST',
       url: `/repos/${repoId}/conventions/skill`,
       payload: {
-        name: 'payments-api-conventions',
+        name: 'repo-conventions',
         description: '1 house convention extracted from payments-api',
         type: 'convention',
         body: '# payments-api-conventions\n\nEdited by hand before saving.',
@@ -258,7 +258,7 @@ d('/conventions routes', () => {
       method: 'POST',
       url: `/repos/${repoId}/conventions/skill`,
       payload: {
-        name: 'payments-api-conventions',
+        name: 'repo-conventions',
         description: 'x',
         type: 'convention',
         body: '# x',
@@ -287,7 +287,7 @@ d('/conventions routes', () => {
       method: 'POST',
       url: `/repos/${repoId}/conventions/skill`,
       payload: {
-        name: 'payments-api-conventions',
+        name: 'repo-conventions',
         description: 'x',
         type: 'convention',
         body: '# x',
@@ -298,6 +298,68 @@ d('/conventions routes', () => {
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('no_accepted_conventions');
     expect(await pg.handle.db.select().from(t.skills)).toHaveLength(0);
+  });
+
+  /**
+   * A skill nobody sends changes no review, so attaching is part of the same
+   * step — and the link has to land at the END of the agent's list, because the
+   * order IS the prompt order and an extracted rule-set should not jump ahead
+   * of rules someone placed deliberately.
+   */
+  it('attaches the new skill to the agent, at the end of its list', async () => {
+    const view = await extract();
+    const [agent] = await pg.handle.db
+      .select()
+      .from(t.agents)
+      .where(eq(t.agents.name, 'General Reviewer'));
+    const before = await pg.handle.db
+      .select()
+      .from(t.agentSkills)
+      .where(eq(t.agentSkills.agentId, agent!.id));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/repos/${repoId}/conventions/skill`,
+      payload: {
+        name: 'repo-conventions',
+        description: 'x',
+        type: 'convention',
+        body: '# x',
+        enabled: true,
+        convention_ids: [view.candidates[0].id],
+        agent_id: agent!.id,
+      },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const after = await pg.handle.db
+      .select()
+      .from(t.agentSkills)
+      .where(eq(t.agentSkills.agentId, agent!.id));
+    expect(after).toHaveLength(before.length + 1);
+
+    const link = after.find((l) => l.skillId === res.json().id);
+    expect(link, 'the new skill is not linked').toBeDefined();
+    expect(link!.enabled).toBe(true);
+    expect(link!.order).toBe(Math.max(-1, ...before.map((l) => l.order)) + 1);
+  });
+
+  it('refuses to attach to an agent in another workspace', async () => {
+    const view = await extract();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/repos/${repoId}/conventions/skill`,
+      payload: {
+        name: 'repo-conventions',
+        description: 'x',
+        type: 'convention',
+        body: '# x',
+        enabled: true,
+        convention_ids: [view.candidates[0].id],
+        agent_id: '00000000-0000-0000-0000-000000000000',
+      },
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('is a 404 for a repo in another workspace, never a 403', async () => {

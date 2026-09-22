@@ -16,6 +16,7 @@ import {
   FormField,
   Icon,
   Modal,
+  SearchableSelect,
   SelectInput,
   Skeleton,
   TextInput,
@@ -27,6 +28,7 @@ import { SKILL_TYPES } from "@/lib/skill-types";
 import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { useCreateConventionSkill, useSkillDraft } from "@/lib/hooks/conventions";
+import { useAgents } from "@/lib/hooks/agents";
 import { BODY_ROWS, CHARS_PER_TOKEN, MODAL_WIDTH } from "./constants";
 import { s } from "./styles";
 
@@ -55,7 +57,19 @@ export function CreateSkillFromConventionsModal({
   const [type, setType] = React.useState<SkillType>("convention");
   const [body, setBody] = React.useState("");
   const [enabled, setEnabled] = React.useState(true);
+  const [agentId, setAgentId] = React.useState("");
   const [touched, setTouched] = React.useState(false);
+
+  /**
+   * Which agent sends it. Extracting a skill nobody sends changes no review, so
+   * the attach belongs in the same step as the write — but it stays optional:
+   * a scan is also a legitimate way to capture the rules and decide later.
+   */
+  const agents = useAgents();
+  const agentOptions = [
+    { value: "", label: t("createSkill.agentNone") },
+    ...(agents.data ?? []).map((a) => ({ value: a.id, label: a.name })),
+  ];
 
   /**
    * Seed the form from the draft once it arrives, and never again — a refetch
@@ -89,6 +103,7 @@ export function CreateSkillFromConventionsModal({
         body,
         enabled,
         convention_ids: draft.data.convention_ids,
+        ...(agentId ? { agent_id: agentId } : {}),
       });
       toast.success(
         t("createSkill.success", { name: skill.name, count: draft.data.convention_ids.length }),
@@ -174,6 +189,15 @@ export function CreateSkillFromConventionsModal({
               </div>
             </FormField>
           </div>
+
+          <FormField label={t("createSkill.agentLabel")} hint={t("createSkill.agentHint")}>
+            <SearchableSelect
+              value={agentId}
+              onChange={setAgentId}
+              options={agentOptions}
+              placeholder={t("createSkill.agentSearch")}
+            />
+          </FormField>
 
           <FormField label={t("createSkill.bodyLabel")} required>
             <div style={s.fileBar}>

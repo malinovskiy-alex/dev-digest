@@ -97,6 +97,8 @@ export interface CreateConventionSkillInput {
   body: string;
   enabled: boolean;
   convention_ids: string[];
+  /** Attach the new skill to this agent, at the end of its list. */
+  agent_id?: string;
 }
 
 export function useCreateConventionSkill(repoId: string | null | undefined) {
@@ -109,6 +111,10 @@ export function useCreateConventionSkill(repoId: string | null | undefined) {
       // row's own cache entry both have to know about it.
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.setQueryData(["skill", skill.id], skill);
+      // An attach writes `agent_skills`, so the agent's own list and every
+      // card's `skill_count` are now stale.
+      qc.invalidateQueries({ queryKey: ["agent-skills"] });
+      qc.invalidateQueries({ queryKey: ["agents"] });
     },
   });
 }

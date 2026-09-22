@@ -16,6 +16,17 @@ import type { ConventionCandidate, ConventionSkillDraft } from '@devdigest/share
 /** The skill type every extracted rule-set gets. */
 const DRAFT_TYPE = 'convention' as const;
 
+/**
+ * The name a scan proposes.
+ *
+ * Fixed rather than derived from the repository, so a reader looking for "the
+ * house rules skill" finds the same name whichever repo produced it. Which repo
+ * it came from is in the description and in `evidence_files`, where it does not
+ * have to be parsed back out of an identifier. The field is editable in the
+ * modal, so a workspace tracking several repositories can rename per scan.
+ */
+const DRAFT_NAME = 'repo-conventions';
+
 /** `acme/payments-api` → `payments-api`. */
 export function repoSlug(fullName: string): string {
   const tail = fullName.includes('/') ? fullName.slice(fullName.lastIndexOf('/') + 1) : fullName;
@@ -106,7 +117,7 @@ export function composeSkillDraft(
   candidates: ConventionCandidate[],
 ): ConventionSkillDraft {
   const slug = repoSlug(repoFullName);
-  const name = `${slug}-conventions`;
+  const name = DRAFT_NAME;
 
   const intro =
     `House conventions for \`${repoFullName}\`. Flag changes that violate any rule ` +

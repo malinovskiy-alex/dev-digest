@@ -102,7 +102,6 @@ export function ConventionCard({
           <div style={s.ruleRow}>
             <span style={s.rule(accepted)}>{candidate.rule}</span>
             <Badge color="var(--text-secondary)">{t(`category.${candidate.category}`)}</Badge>
-            <IconBtn icon="Edit" label={t("card.edit")} size={26} onClick={open} />
           </div>
         )}
 
@@ -159,6 +158,17 @@ export function ConventionCard({
         >
           {accepted ? t("card.reject") : t("card.rejected")}
         </Button>
+        {/*
+          Edit sits with the other two rather than as a bare icon by the rule.
+          The three are one decision — keep it, drop it, or fix the wording
+          first — and an icon-only control makes the third look like a lesser
+          affordance than it is.
+        */}
+        {!editing && (
+          <Button kind="ghost" icon="Edit" disabled={busy} onClick={open}>
+            {t("card.edit")}
+          </Button>
+        )}
       </div>
     </div>
   );

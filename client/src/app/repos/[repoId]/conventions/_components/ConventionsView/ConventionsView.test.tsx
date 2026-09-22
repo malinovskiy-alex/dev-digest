@@ -97,10 +97,10 @@ describe("ConventionsView", () => {
     fetchMock.mockImplementation(() => jsonResponse({ scan: null, candidates: [] }));
     renderView();
     expect(await screen.findByText("No conventions extracted yet")).toBeInTheDocument();
-    // Two ways in on purpose — the header action and the empty state's CTA —
-    // and neither says "Re-scan", which would claim a scan that never ran.
-    expect(screen.getAllByRole("button", { name: /Run extraction/ })).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /Re-scan/ })).not.toBeInTheDocument();
+    // Two separate controls, not one that renames itself: only the first-run
+    // button is live before a scan exists.
+    expect(screen.getByRole("button", { name: /Run Scan/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /ReScan/ })).toBeDisabled();
   });
 
   /**
@@ -144,12 +144,22 @@ describe("ConventionsView", () => {
     expect(await screen.findByText("0 of 1 accepted")).toBeInTheDocument();
   });
 
-  it("will not open the create-skill modal with nothing accepted", async () => {
+  it("hides the create-skill button until something is accepted", async () => {
     fetchMock.mockImplementation(() =>
       jsonResponse({ ...SCANNED, candidates: [{ ...CANDIDATE, status: "rejected" }] }),
     );
     renderView();
-    expect(await screen.findByRole("button", { name: /Create skill/ })).toBeDisabled();
+    // A greyed button invites a click that does nothing; absence is the signal.
+    await screen.findByText("0 of 1 accepted");
+    expect(screen.queryByRole("button", { name: /Create skill/ })).not.toBeInTheDocument();
+  });
+
+  it("offers ReScan, not Run Scan, once a scan exists", async () => {
+    fetchMock.mockImplementation(() => jsonResponse(SCANNED));
+    renderView();
+    await screen.findByText("1 of 1 accepted");
+    expect(screen.getByRole("button", { name: /ReScan/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Run Scan/ })).toBeDisabled();
   });
 
   it("scans on demand and renders what came back", async () => {
@@ -161,8 +171,7 @@ describe("ConventionsView", () => {
     renderView();
 
     await screen.findByText("No conventions extracted yet");
-    // [0] is the header action; the empty state's CTA runs the same scan.
-    fireEvent.click(screen.getAllByRole("button", { name: /Run extraction/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /Run Scan/ }));
     expect(await screen.findByText(CANDIDATE.rule)).toBeInTheDocument();
   });
 
@@ -175,12 +184,13 @@ describe("ConventionsView", () => {
     renderView();
 
     await screen.findByText("No conventions extracted yet");
-    fireEvent.click(screen.getAllByRole("button", { name: /Run extraction/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /Run Scan/ }));
     expect(await screen.findByText("Nothing to sample.")).toBeInTheDocument();
   });
 
   it("opens the create-skill modal on the server's draft", async () => {
     fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/agents")) return jsonResponse([{ id: "ag1", name: "General Reviewer" }]);
       if (url.includes("skill-draft")) {
         return jsonResponse({
           name: "payments-api-conventions",

@@ -48,6 +48,12 @@ const CreateSkillBody = z.object({
   body: z.string().min(1),
   enabled: z.boolean(),
   convention_ids: z.array(z.string().uuid()),
+  /**
+   * Attach the new skill to this agent, at the end of its list. Optional
+   * because a scan is also a legitimate way to WRITE a skill without deciding
+   * yet who sends it — the Skills tab can attach it later like any other.
+   */
+  agent_id: z.string().uuid().optional(),
 });
 
 export default async function conventionsRoutes(appBase: FastifyInstance) {
@@ -110,6 +116,7 @@ export default async function conventionsRoutes(appBase: FastifyInstance) {
         body: req.body.body,
         enabled: req.body.enabled,
         conventionIds: req.body.convention_ids,
+        ...(req.body.agent_id !== undefined ? { agentId: req.body.agent_id } : {}),
       });
       reply.status(201);
       return skill;

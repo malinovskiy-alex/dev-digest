@@ -49,6 +49,8 @@ export interface CreateSkillFromConventionsInput {
   enabled: boolean;
   /** The candidates the draft was built from — their paths become `evidence_files`. */
   conventionIds: string[];
+  /** Attach the new skill to this agent, at the end of its list. */
+  agentId?: string;
 }
 
 export class ConventionsService {
@@ -207,6 +209,20 @@ export class ConventionsService {
       enabled: input.enabled,
       evidenceFiles,
     });
+
+    // Attaching is the point of extracting: a skill nobody sends changes no
+    // review. It is resolved through the agents repository on the container —
+    // a module never reaches into a sibling module's folder — and the agent is
+    // confirmed in THIS workspace first, because the id comes from the request
+    // and `agent_skills` carries no workspace of its own.
+    if (input.agentId) {
+      const agent = await this.container.agentsRepo.getById(workspaceId, input.agentId);
+      if (!agent) throw new NotFoundError(`Agent ${input.agentId} not found`);
+      const linked = await this.container.agentsRepo.linkedSkills(agent.id);
+      const nextOrder = linked.reduce((max, l) => Math.max(max, l.order + 1), 0);
+      await this.container.agentsRepo.linkSkill(agent.id, row.id, nextOrder);
+    }
+
     return toSkillDto(row);
   }
 

@@ -20,6 +20,7 @@ export const s = {
     maxWidth: 620,
     lineHeight: 1.45,
   } satisfies CSSProperties,
+  scanActions: { display: "flex", gap: 8, flexShrink: 0 } satisfies CSSProperties,
   toolbar: {
     display: "flex",
     alignItems: "center",

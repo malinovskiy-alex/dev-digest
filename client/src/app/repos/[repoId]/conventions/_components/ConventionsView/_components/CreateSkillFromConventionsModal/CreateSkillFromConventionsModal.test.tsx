@@ -8,13 +8,18 @@ import { ToastProvider } from "@/lib/toast";
 import { CreateSkillFromConventionsModal } from "./CreateSkillFromConventionsModal";
 
 const DRAFT = {
-  name: "payments-api-conventions",
+  name: "repo-conventions",
   description: "2 house conventions extracted from payments-api",
   type: "convention",
   body: "# payments-api-conventions\n\n## async-await-instead\nAlways await.\n",
   convention_ids: ["c1", "c2"],
   evidence_files: ["src/api/users.ts"],
 };
+
+const AGENTS = [
+  { id: "ag1", name: "General Reviewer" },
+  { id: "ag2", name: "API Contract Reviewer" },
+];
 
 const fetchMock = vi.fn();
 
@@ -70,13 +75,15 @@ function postedBody() {
 
 describe("CreateSkillFromConventionsModal", () => {
   it("opens on the server's draft, with every field filled in", async () => {
-    fetchMock.mockImplementation(() => jsonResponse(DRAFT));
+    fetchMock.mockImplementation((url: string) =>
+      url.includes("/agents") ? jsonResponse(AGENTS) : jsonResponse(DRAFT),
+    );
     renderModal();
 
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue(DRAFT.name));
     expect(screen.getByLabelText("Description")).toHaveValue(DRAFT.description);
     expect(screen.getByRole("textbox", { name: "" })).toBeInTheDocument();
-    expect(screen.getByText("payments-api-conventions.md")).toBeInTheDocument();
+    expect(screen.getByText("repo-conventions.md")).toBeInTheDocument();
   });
 
   /**
@@ -85,10 +92,12 @@ describe("CreateSkillFromConventionsModal", () => {
    * draft on the way out.
    */
   it("stores the edited body, not the draft", async () => {
-    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
       init?.method === "POST"
-        ? jsonResponse({ id: "sk1", name: "payments-api-conventions" }, 201)
-        : jsonResponse(DRAFT),
+        ? jsonResponse({ id: "sk1", name: "repo-conventions" }, 201)
+        : url.includes("/agents")
+          ? jsonResponse(AGENTS)
+          : jsonResponse(DRAFT),
     );
     const { onCreated, onClose } = renderModal();
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue(DRAFT.name));
@@ -104,8 +113,12 @@ describe("CreateSkillFromConventionsModal", () => {
   });
 
   it("sends the enabled choice the user made", async () => {
-    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
-      init?.method === "POST" ? jsonResponse({ id: "sk1", name: "x" }, 201) : jsonResponse(DRAFT),
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === "POST"
+        ? jsonResponse({ id: "sk1", name: "x" }, 201)
+        : url.includes("/agents")
+          ? jsonResponse(AGENTS)
+          : jsonResponse(DRAFT),
     );
     renderModal();
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue(DRAFT.name));
@@ -120,7 +133,9 @@ describe("CreateSkillFromConventionsModal", () => {
   });
 
   it("will not submit an empty name", async () => {
-    fetchMock.mockImplementation(() => jsonResponse(DRAFT));
+    fetchMock.mockImplementation((url: string) =>
+      url.includes("/agents") ? jsonResponse(AGENTS) : jsonResponse(DRAFT),
+    );
     renderModal();
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue(DRAFT.name));
 
@@ -129,10 +144,12 @@ describe("CreateSkillFromConventionsModal", () => {
   });
 
   it("keeps the modal open and says why when the write fails", async () => {
-    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
       init?.method === "POST"
         ? jsonResponse({ error: { code: "validation_error", message: "Name is taken." } }, 422)
-        : jsonResponse(DRAFT),
+        : url.includes("/agents")
+          ? jsonResponse(AGENTS)
+          : jsonResponse(DRAFT),
     );
     const { onClose } = renderModal();
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue(DRAFT.name));
