@@ -86,9 +86,10 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
  * surfaced as a typed object for the well-known keys.
  */
 export const SettingsKnown = z.object({
-  polling_interval_min: z.number().int().min(1).default(5),
+  polling_interval_min: z.number().int().min(1).max(60).default(15),
   theme: z.enum(['dark', 'light']).default('dark'),
   density: z.enum(['regular', 'compact']).default('regular'),
+  /** @deprecated */
   sync_to_folder: z.boolean().default(true),
   automatic_reviews: z.boolean().default(false),
   /** Per-feature model overrides (provider+model), keyed by FeatureModelId. */
@@ -243,7 +244,7 @@ export const PrCommentInput = z.object({
   path: z.string().min(1),
   line: z.number().int().positive(),
   side: z.enum(['LEFT', 'RIGHT']).optional(),
-  body: z.string().min(1),
+  body: z.string().min(1).max(2000),
   /** Reply to an existing review comment thread (its comment id). */
   in_reply_to: z.number().int().optional(),
 });
