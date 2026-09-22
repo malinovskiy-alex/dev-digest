@@ -11,7 +11,7 @@ import { z } from 'zod';
 export const Severity = z.enum(['CRITICAL', 'WARNING', 'SUGGESTION']);
 export type Severity = z.infer<typeof Severity>;
 
-export const FindingCategory = z.enum(['bug', 'security', 'perf', 'style', 'test']);
+export const FindingCategory = z.enum(['bug', 'security', 'perf', 'style', 'test', 'docs']);
 export type FindingCategory = z.infer<typeof FindingCategory>;
 
 export const FindingKind = z.enum([
@@ -70,8 +70,9 @@ export const Finding = z.object({
   kind: FindingKind.nullish(),
   // Lethal-trifecta variant fields (present only when kind === 'lethal_trifecta')
   trifecta_components: z.array(TrifectaComponent).nullish(),
+  /** @deprecated */
   evidence: z.array(TrifectaEvidence).nullish(),
-});
+}).passthrough();
 export type Finding = z.infer<typeof Finding>;
 
 /** Review — the consolidated structured output of a single agent run. */

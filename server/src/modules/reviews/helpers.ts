@@ -79,6 +79,18 @@ export function reviewToDto(
  * The TRUSTED part (ours) states the task and the non-negotiable rule: review
  * the whole diff and never withhold a security/correctness finding.
  */
+/**
+ * Cut a string to `max` characters on a word boundary, appending an ellipsis
+ * when anything was dropped. Used for the task line and the run-log preview,
+ * which both truncated by hand and disagreed by one character.
+ */
+export function truncateWords(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…';
+}
+
 export function taskLine(pull: PullRow): string {
   return (
     `Review pull request #${pull.number} "${pull.title}" by ${pull.author}. ` +
