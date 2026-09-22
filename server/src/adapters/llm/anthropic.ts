@@ -17,6 +17,18 @@ const DEFAULT_TIMEOUT = 60_000;
 const DEFAULT_MAX_TOKENS = 4096;
 
 /**
+ * Structured output gets a bigger budget than a plain completion.
+ *
+ * A review is one JSON document holding every finding, and nothing on the
+ * review path sets `maxTokens` — `reviewer-core` passes none, so this default
+ * IS the ceiling for every Anthropic review. At 4096 a review with several
+ * findings and honest rationales runs out mid-document, the truncated tool_use
+ * input fails schema validation, and the run dies. OpenRouter never showed it
+ * because it sends no limit at all when `maxTokens` is absent.
+ */
+const DEFAULT_STRUCTURED_MAX_TOKENS = 16_384;
+
+/**
  * Models that still accept the sampling parameters.
  *
  * Anthropic removed `temperature` / `top_p` / `top_k` with the current
@@ -130,7 +142,7 @@ export class AnthropicProvider implements LLMProvider {
             model: req.model,
             system: system || undefined,
             messages,
-            max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
+            max_tokens: req.maxTokens ?? DEFAULT_STRUCTURED_MAX_TOKENS,
             ...samplingFor(req.model, req.temperature ?? 0),
             tools: [
               {
@@ -155,6 +167,18 @@ export class AnthropicProvider implements LLMProvider {
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
       );
       lastRaw = toolUses[0] ? JSON.stringify(toolUses[0].input) : '';
+
+      // Truncation is not a transient failure: the next attempt hits the same
+      // ceiling and produces the same half-written document, so retrying burns
+      // the budget three times over and reports a schema error that says
+      // nothing about the real cause.
+      if (res.stop_reason === 'max_tokens') {
+        const cap = req.maxTokens ?? DEFAULT_STRUCTURED_MAX_TOKENS;
+        throw new ExternalServiceError(
+          `Anthropic stopped at the ${cap}-token output limit, so the ${req.schemaName} document is incomplete. Raise maxTokens, or narrow what the model is asked to return.`,
+          { raw: lastRaw },
+        );
+      }
 
       const parsed = parseWithRepair(req.schema, lastRaw);
       if (parsed.ok) {

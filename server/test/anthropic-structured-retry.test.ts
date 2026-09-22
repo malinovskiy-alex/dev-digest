@@ -127,6 +127,29 @@ describe('AnthropicProvider.completeStructured — the retry message', () => {
     expect(retry.messages.every((m) => (m.content as unknown[]).length > 0)).toBe(true);
   });
 
+  it('fails fast on a truncated answer instead of retrying into the same ceiling', async () => {
+    // `stop_reason: 'max_tokens'` is deterministic: the next attempt writes the
+    // same half-finished document. Retrying spends the budget three times and
+    // reports a schema error that says nothing about the real cause.
+    create.mockResolvedValue({
+      ...answer({ count: 'truncated' }),
+      stop_reason: 'max_tokens',
+    });
+
+    await expect(call()).rejects.toThrow(/output limit/);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for a bigger budget than a plain completion', async () => {
+    // Nothing on the review path sets maxTokens, so this default IS the ceiling
+    // for every Anthropic review.
+    create.mockResolvedValueOnce(answer({ count: 1 }));
+    await call();
+
+    const req = create.mock.calls[0]![0] as { max_tokens: number };
+    expect(req.max_tokens).toBeGreaterThan(4096);
+  });
+
   it('falls back to plain text when the model returned no tool_use at all', async () => {
     create
       .mockResolvedValueOnce({
