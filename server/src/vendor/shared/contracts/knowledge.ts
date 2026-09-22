@@ -137,6 +137,7 @@ export const Skill = z.object({
   body: z.string(),
   enabled: z.boolean(),
   version: z.number().int(),
+  /** @deprecated */
   evidence_files: z.array(z.string()).nullish(),
   /**
    * How many agents actually send this skill — the reuse signal on the card and
