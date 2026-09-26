@@ -17,6 +17,18 @@ const DEFAULT_TIMEOUT = 60_000;
 const DEFAULT_MAX_TOKENS = 4096;
 
 /**
+ * Structured output gets a bigger budget than a plain completion.
+ *
+ * A review is one JSON document holding every finding, and nothing on the
+ * review path sets `maxTokens` — `reviewer-core` passes none, so this default
+ * IS the ceiling for every Anthropic review. At 4096 a review with several
+ * findings and honest rationales runs out mid-document, the truncated tool_use
+ * input fails schema validation, and the run dies. OpenRouter never showed it
+ * because it sends no limit at all when `maxTokens` is absent.
+ */
+const DEFAULT_STRUCTURED_MAX_TOKENS = 16_384;
+
+/**
  * Models that still accept the sampling parameters.
  *
  * Anthropic removed `temperature` / `top_p` / `top_k` with the current
@@ -130,7 +142,7 @@ export class AnthropicProvider implements LLMProvider {
             model: req.model,
             system: system || undefined,
             messages,
-            max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
+            max_tokens: req.maxTokens ?? DEFAULT_STRUCTURED_MAX_TOKENS,
             ...samplingFor(req.model, req.temperature ?? 0),
             tools: [
               {
@@ -139,7 +151,11 @@ export class AnthropicProvider implements LLMProvider {
                 input_schema: jsonSchema.schema as Anthropic.Tool.InputSchema,
               },
             ],
-            tool_choice: { type: 'tool', name: toolName },
+            // One answer, one block. Forcing the tool does not stop the model
+            // emitting several `tool_use` blocks in one turn, and every one of
+            // them would need its own `tool_result` on a retry — see the
+            // reprompt below, which now answers all of them anyway.
+            tool_choice: { type: 'tool', name: toolName, disable_parallel_tool_use: true },
           }),
           req.timeoutMs ?? DEFAULT_TIMEOUT,
         ),
@@ -147,10 +163,22 @@ export class AnthropicProvider implements LLMProvider {
       tokensIn += res.usage.input_tokens;
       tokensOut += res.usage.output_tokens;
 
-      const toolUse = res.content.find(
+      const toolUses = res.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
       );
-      lastRaw = toolUse ? JSON.stringify(toolUse.input) : '';
+      lastRaw = toolUses[0] ? JSON.stringify(toolUses[0].input) : '';
+
+      // Truncation is not a transient failure: the next attempt hits the same
+      // ceiling and produces the same half-written document, so retrying burns
+      // the budget three times over and reports a schema error that says
+      // nothing about the real cause.
+      if (res.stop_reason === 'max_tokens') {
+        const cap = req.maxTokens ?? DEFAULT_STRUCTURED_MAX_TOKENS;
+        throw new ExternalServiceError(
+          `Anthropic stopped at the ${cap}-token output limit, so the ${req.schemaName} document is incomplete. Raise maxTokens, or narrow what the model is asked to return.`,
+          { raw: lastRaw },
+        );
+      }
 
       const parsed = parseWithRepair(req.schema, lastRaw);
       if (parsed.ok) {
@@ -164,11 +192,41 @@ export class AnthropicProvider implements LLMProvider {
           attempts: attempt,
         };
       }
-      messages.push({ role: 'assistant', content: res.content });
-      messages.push({
-        role: 'user',
-        content: parsed.repromptMessage,
-      });
+      // The reprompt has to come back as a `tool_result` for the block we just
+      // received. Anthropic rejects the whole request with a 400 —
+      // "`tool_use` ids were found without `tool_result` blocks immediately
+      // after" — if a message containing `tool_use` is followed by plain text,
+      // so a schema miss on attempt 1 turned every retry into a hard failure
+      // instead of the second chance it was written to be. Only reachable when
+      // the first structured answer fails validation, which is why it stayed
+      // hidden: the happy path never builds a second message.
+      // EVERY `tool_use` in the turn needs its own `tool_result`, not just the
+      // one we parsed: the rule is about the ids in the message, and answering
+      // one of two reproduces the very 400 this code exists to avoid.
+      // `disable_parallel_tool_use` above should keep it at one, but the guard
+      // costs nothing and does not depend on that flag still being set.
+      //
+      // An empty assistant turn is skipped rather than echoed — a turn that
+      // stopped on `max_tokens` before emitting a block has `content: []`, and
+      // Anthropic rejects a message with empty content just as firmly, which
+      // would again turn a recoverable schema miss into a failed run.
+      if (res.content.length > 0) {
+        messages.push({ role: 'assistant', content: res.content });
+        messages.push({
+          role: 'user',
+          content:
+            toolUses.length > 0
+              ? toolUses.map((t) => ({
+                  type: 'tool_result' as const,
+                  tool_use_id: t.id,
+                  is_error: true,
+                  content: parsed.repromptMessage,
+                }))
+              : parsed.repromptMessage,
+        });
+      } else {
+        messages.push({ role: 'user', content: parsed.repromptMessage });
+      }
     }
 
     throw new ExternalServiceError('Anthropic structured output failed schema validation', {

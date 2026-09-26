@@ -25,12 +25,21 @@ export function ConfigTab({ agent }: { agent: Agent }) {
   const [repoIntel, setRepoIntel] = React.useState(agent.repo_intel);
   const [enabled, setEnabled] = React.useState(agent.enabled);
 
+  /**
+   * Which provider the currently-selected `model` belongs to. A model id is
+   * only meaningful for one provider, so this is what tells an edit ("the user
+   * switched provider, the model is now stale") apart from a load ("this agent
+   * was saved with this pair").
+   */
+  const modelProvider = React.useRef(agent.provider);
+
   // Reset local form when switching agents.
   React.useEffect(() => {
     setName(agent.name);
     setDescription(agent.description);
     setProvider(agent.provider);
     setModel(agent.model);
+    modelProvider.current = agent.provider;
     setSystemPrompt(agent.system_prompt);
     setStrategy(agent.strategy);
     setCiFailOn(agent.ci_fail_on);
@@ -39,6 +48,28 @@ export function ConfigTab({ agent }: { agent: Agent }) {
   }, [agent.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: models } = useProviderModels(provider);
+
+  /**
+   * Follow the provider. Switching to Anthropic used to leave `gpt-4.1` in the
+   * field — an id that provider has never heard of — and the list below then
+   * pinned it to the top as if it were a real choice, so the next save sent a
+   * pair that cannot run.
+   *
+   * It waits for the list because it arrives async, and it only moves the model
+   * when the new provider actually offers something: an empty list means the
+   * key is missing or `listModels` failed, and blanking the field there would
+   * destroy the user's setting over a transient error. `modelEmptyHint` already
+   * explains that case.
+   */
+  React.useEffect(() => {
+    if (provider === modelProvider.current) return;
+    if (!models || models.length === 0) return;
+    modelProvider.current = provider;
+    if (!models.some((m) => m.id === model)) setModel(models[0]!.id);
+    // `model` is deliberately not a dependency: this runs when the PROVIDER
+    // changes, not every time the user picks a different model for it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, models]);
   // Show the price (USD per 1M in/out tokens) in the label when the provider
   // exposes it (OpenRouter) so a cheap model is easy to pick; value stays the id.
   const modelOptions = toModelOptions(models);
@@ -90,11 +121,15 @@ export function ConfigTab({ agent }: { agent: Agent }) {
       <FormField label={t("config.description")}>
         <TextInput value={description} onChange={setDescription} />
       </FormField>
+      {/* The same control as Model, deliberately: these two fields are one
+          decision (a model id only means something to its provider), and a
+          native <select> next to a styled one read as two unrelated widgets. */}
       <FormField label={t("config.provider")}>
-        <SelectInput
+        <SearchableSelect
           value={provider}
           onChange={(v) => setProvider(v as Provider)}
           options={[...PROVIDER_OPTIONS]}
+          placeholder={t("config.providerSearch")}
         />
       </FormField>
       <FormField

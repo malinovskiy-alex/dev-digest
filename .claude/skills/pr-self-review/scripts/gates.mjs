@@ -88,7 +88,11 @@ for (const p of paths) {
 }
 
 // ---------------------------------------------------------------- G5 migrations
-const migrations = has(/^server\/drizzle\/.*\.sql$/);
+// `server/drizzle/` has never existed in this repo — drizzle.config.ts sets
+// `out: './src/db/migrations'`. Under the old pattern G5 could never fire at
+// all, so its warning (migrations are not applied on boot, and on Windows
+// `db:migrate` exits 0 without doing anything) never reached anyone.
+const migrations = has(/^server\/src\/db\/migrations\/.*\.sql$/);
 if (migrations.length) {
   flag('G5', 'WARNING', 'Нова міграція — застосуй її вручну',
     'Міграції не застосовуються на старті. На Windows `pnpm db:migrate` виходить із кодом 0, нічого не зробивши, — перевіряй кількість таблиць, а не exit-код.',
@@ -106,10 +110,15 @@ for (const p of has(/^server\/src\/modules\/[^/]+\/routes\.ts$/)) {
 }
 
 // ---------------------------------------------------------------- G9 schema <-> migration
-if (has(/^server\/src\/db\/schema\.ts$/).length && !migrations.length) {
+// The barrel alone is not the schema: tables live in `db/schema/<domain>.ts`,
+// and the barrel changes only when a whole TABLE is added. Adding a COLUMN —
+// the commonest schema change, and the one that needs a migration just as much
+// — touches a subfile only, so keying on `schema.ts` let those through clean.
+const schemaFiles = has(/^server\/src\/db\/schema(\.ts|\/[^/]+\.ts)$/);
+if (schemaFiles.length && !migrations.length) {
   flag('G9', 'CRITICAL', 'Схему змінено без міграції',
-    'server/src/db/schema.ts у діфі, а нової міграції в server/drizzle/ немає. Прожени `pnpm db:generate`.',
-    'server/src/db/schema.ts');
+    `${schemaFiles[0]} у діфі, а нової міграції в server/src/db/migrations/ немає. Прожени \`pnpm db:generate\`.`,
+    schemaFiles[0]);
 }
 
 // ---------------------------------------------------------------- G10 contract <-> consumer

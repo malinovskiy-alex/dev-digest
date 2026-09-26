@@ -1,4 +1,6 @@
 import type {
+  FeatureModelChoice,
+  FeatureModelId,
   AuthProvider,
   SecretsProvider,
   GitHubClient,
@@ -27,6 +29,7 @@ import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import { RepoRepository } from '../modules/repos/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
+import { resolveFeatureModel } from '../modules/settings/feature-models.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
@@ -229,6 +232,20 @@ export class Container {
     const openai = await this.llm('openai');
     this._embedder = new OpenAIEmbedder(openai);
     return this._embedder;
+  }
+
+  /**
+   * Which provider+model a SYSTEM feature (onboarding, intent, risk brief,
+   * conformance, conventions) should use: the workspace's Settings choice, else
+   * the registry default in `FEATURE_MODELS`.
+   *
+   * It lives here rather than being imported where it is needed because the
+   * resolution is owned by the `settings` module, and a module never imports a
+   * sibling module's folder. Every feature that runs a model of its own goes
+   * through this one accessor.
+   */
+  async featureModel(workspaceId: string, id: FeatureModelId): Promise<FeatureModelChoice> {
+    return resolveFeatureModel(this.db, workspaceId, id);
   }
 
   /**

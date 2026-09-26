@@ -19,6 +19,48 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-09-20 — `pnpm build` kills a running `pnpm dev`, and the wreckage looks like a flaky build
+**Symptom:** two failures that look unrelated. First `pnpm build` exits with
+`Failed to collect page data for /agents/[id]` and the very next run, with no
+code change, succeeds — easy to write off as flaky. Minutes later every page on
+:3000 returns 500, and the dev server's log reads
+`Error: Cannot find module './191.js'`, `requireStack: .next/server/webpack-runtime.js`,
+then `TypeError: Cannot read properties of undefined (reading '/_app')`.
+**Cause:** one `.next` directory, two writers. `next dev` serves lazily-compiled
+chunks out of `.next`; `next build` rewrites the same directory for production.
+The build trips over the dev server's half-written output (failure one), and the
+dev server then asks for chunk files the build has replaced (failure two). The
+dev server never exits, so the port stays bound and nothing says what happened —
+it just 500s everything until someone reads its log.
+**Rule:** never run `pnpm build` while `pnpm dev` is up. Stop the dev server
+first, or give the build its own output directory. If it has already happened,
+a restart is not enough: stop the dev server, `rm -rf client/.next`, then start
+it again — the first page after that takes ~70 s to compile from cold, which is
+normal and not a second fault. And do not accept "the build is flaky" as an
+explanation while a dev server is running.
+**Where:** `client/package.json:6` (`dev`) and `:7` (`build`), both writing
+`client/.next`
+
+### 2026-09-20 — `findByRole` hides a duplicate accessible name, then `getByRole` fails three tests later
+**Symptom:** on the Conventions screen two buttons read *Run extraction* (the
+header action and the empty state's CTA). One test did
+`fireEvent.click(await screen.findByRole("button", { name: /Run extraction/ }))`
+and passed; another did `getByRole` with the same name and failed with
+*Found multiple elements*. Same DOM, opposite results.
+**Cause:** `findBy*` polls and resolves on its FIRST successful attempt. On the
+first poll only the header button exists — the empty state is still behind the
+query's loading skeleton — so it matches one element and returns. The `getBy*`
+test had awaited the empty-state text first, so by then both buttons were
+mounted.
+**Rule:** never use `findByRole` to reach an element whose accessible name is not
+unique once the screen has settled. Await something that only appears in the
+final state, then `getAllByRole(...)` and index deliberately — `[0]` for the
+header action — so the test says which of the two it means. A `findBy*` that
+passes today passes because of render timing, not because the query is
+unambiguous.
+**Where:** `client/src/app/repos/[repoId]/conventions/_components/ConventionsView/ConventionsView.test.tsx:102`
+(the `getAllByRole` assertion), `:165` and `:178` (the deliberate `[0]`)
+
 ### 2026-09-18 — closing an overlay on the trigger's `blur` dismisses it as soon as the reader touches it
 **Symptom:** a findings popover pinned open by a click vanished on the first
 click inside it, and on any attempt to drag its scrollbar.
@@ -174,6 +216,11 @@ the shorthand/longhand mix React warns about — the existing comment claiming
   (`FindingsCell` + `FindingsPopover` + `FindingPreview`) and `lib/finding-format.ts`.
   The finding action label is now "Reject"; the action kind behind it is still
   `dismiss`.
+- 2026-09-20 — Conventions screen (L02): `/repos/:repoId/conventions` with
+  `ConventionsView` + `ConventionCard` + `CreateSkillFromConventionsModal`,
+  `lib/hooks/conventions.ts`, `lib/convention-categories.ts` (runtime list, per
+  the vendored-barrel rule above), and a `Conventions` entry in
+  `vendor/ui/nav.ts` (`g c`). 24 tests.
 - 2026-09-18 — extended the findings preview to the PR detail timeline (L02
   follow-up): the panel, the finding row and the open/close hook moved to
   `src/components/findings-popover/`, the PR list's `FindingsPopover` became a

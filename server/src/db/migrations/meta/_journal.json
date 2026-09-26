@@ -92,6 +92,13 @@
       "when": 1789926639418,
       "tag": "0012_agent_skill_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789956889368,
+      "tag": "0013_conventions_extract",
+      "breakpoints": true
     }
   ]
 }

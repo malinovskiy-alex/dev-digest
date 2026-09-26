@@ -40,12 +40,18 @@ touch the pipeline internals:
 - `getCallerSignatures(repoId, files, limit)` → callers of changed symbols.
 - `getBlastRadius(repoId, files)` → impacted symbols / callers (used by L04).
 - `getUnresolvedReferences(repoId, …)` → phantom-symbol detection (used by L06).
-- `getConventionSamples(repoId)` → top-ranked files for convention extraction (L02).
+- `getConventionSamples(repoId, n)` → top-ranked files for convention extraction,
+  wired into `modules/conventions/service.ts` (L02). It is half the sample set;
+  the other half is a fixed list of config files probed by path, so an
+  un-indexed repo still scans.
 
 In the starter, only `getRepoMap` / `getFileRank` / `getCallerSignatures` are
 wired — into `modules/reviews/run-executor.ts`, which adds the repo map and a
 high-blast-radius note to the prompt. Toggled by `REPO_INTEL_ENABLED` (global)
-and a per-agent `repo_intel` flag.
+and a per-agent `repo_intel` flag. L02 adds one more consumer:
+`modules/conventions/service.ts` calls `getConventionSamples`, and degrades the
+same way — an unindexed repo yields no ranked paths and the scan falls back to
+the config files it can probe by name.
 
 ## Routes
 

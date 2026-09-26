@@ -4,6 +4,34 @@
    web fonts. */
 @import "../vendor/ui/styles.css";
 
+/* Native controls follow the theme.
+
+   A `<select>`'s dropdown is painted by the browser, not by us: the popup takes
+   each `<option>`'s own background, and `SelectInput` only styles the closed
+   control. So in the dark theme the options inherited the light `color` we set
+   on the select and kept the user-agent's white background — white on white,
+   unreadable, on every provider/type/category picker in the app.
+
+   `color-scheme` is the real fix (it also themes scrollbars, spinners and the
+   focus ring), and the explicit `option` colours are the belt-and-braces for
+   platforms that paint the popup themselves. It lives here rather than in
+   `SelectInput` because `src/vendor/ui` is vendored and not ours to hand-edit,
+   and because this has to hold for every native control, not just that one. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+select option,
+select optgroup {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
 @font-face {
   font-family: "Inter";
   font-style: normal;
