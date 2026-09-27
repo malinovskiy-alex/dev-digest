@@ -8,6 +8,8 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { IntentService } from './intent/service.js';
+import { describeSources, formatIntentForPrompt } from './intent/sources.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -41,11 +43,16 @@ export type RunOutcome = {
  * review. Per-agent failures are isolated.
  */
 export class ReviewRunExecutor {
+  private intents: IntentService;
+
   constructor(
     private container: Container,
     private repo: ReviewRepository,
     private agents: Container['agentsRepo'],
-  ) {}
+    intents?: IntentService,
+  ) {
+    this.intents = intents ?? new IntentService(container, repo);
+  }
 
   /**
    * Background execution of the queued agent runs (NOT awaited by the route).
@@ -105,6 +112,8 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    const intent = await this.deriveIntent(workspaceId, pull.id, runLog, logger);
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -112,7 +121,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent);
         logger?.info(
           {
             runId,
@@ -144,6 +153,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intent?: string,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -236,6 +246,9 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // L03 — derived intent, same omit-when-empty contract: no intent (the
+        // derive failed, or produced nothing) → byte-identical pre-L03 prompt.
+        ...(intent ? { intent } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -346,6 +359,45 @@ export class ReviewRunExecutor {
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
+    }
+  }
+
+  /**
+   * L03 — the shared "Deriving PR intent" step: once for ALL queued agents,
+   * streamed into every run's Live Log. Returns the text for the prompt's
+   * `## PR intent` section, or `undefined` — and a failure here NEVER fails the
+   * review: it is logged and every agent runs without the section.
+   */
+  private async deriveIntent(
+    workspaceId: string,
+    prId: string,
+    runLog: RunLogger,
+    logger?: Logger,
+  ): Promise<string | undefined> {
+    try {
+      const result = await runLog.step(
+        'Deriving PR intent',
+        () => this.intents.get(workspaceId, prId, logger ? { logger } : {}),
+        { kind: 'tool' },
+      );
+      const r = result.record;
+      runLog.info(
+        result.cacheHit
+          ? `intent: cache hit (derived ${r.generated_at ?? 'earlier'}, model ${r.provider}/${r.model})`
+          : 'intent: cache miss — derived now',
+      );
+      runLog.info(`intent: sources — ${describeSources(r.sources)}`);
+      const cost = r.cost_usd == null ? 'cost unknown' : `$${r.cost_usd.toFixed(4)}`;
+      const tokens = (r.tokens_in ?? 0) + (r.tokens_out ?? 0);
+      runLog.info(
+        `intent: ${r.kind ?? 'unclassified'}, confidence ${r.confidence}, model ${r.provider}/${r.model}, ${tokens} tok, ${cost}${result.cacheHit ? ' (cached, not charged again)' : ''}`,
+      );
+      const text = formatIntentForPrompt(r);
+      return text.length > 0 ? text : undefined;
+    } catch (err) {
+      runLog.error(`Intent derivation failed: ${(err as Error).message}; continuing without intent`);
+      logger?.warn({ prId, err: (err as Error).message }, 'review: intent derivation failed');
+      return undefined;
     }
   }
 

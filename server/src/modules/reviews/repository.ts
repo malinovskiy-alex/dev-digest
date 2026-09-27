@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
+import type { Finding, PrIntentRecord, RunSummary, RunTrace } from '@devdigest/shared';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -15,6 +15,8 @@ import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
 
 import type { FindingRow, PullRow } from '../../db/rows.js';
 export type { FindingRow, PullRow };
+import type { StoredIntent } from './repository/pull.repo.js';
+export type { StoredIntent };
 
 export type ReviewRow = typeof t.reviews.$inferSelect;
 
@@ -127,12 +129,18 @@ export class ReviewRepository {
 
   // ---- intent -------------------------------------------------------------
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
-    return pullRepo.upsertIntent(this.db, prId, intent);
+  /** Write the derived intent + the input hash that keys the cache. */
+  upsertIntent(prId: string, record: PrIntentRecord, inputHash: string): Promise<void> {
+    return pullRepo.upsertIntent(this.db, prId, record, inputHash);
   }
 
-  getIntent(prId: string): Promise<Intent | undefined> {
+  getIntent(prId: string): Promise<StoredIntent | undefined> {
     return pullRepo.getIntent(this.db, prId);
+  }
+
+  /** Commit messages for a PR, oldest first. */
+  getPrCommitMessages(prId: string): Promise<string[]> {
+    return pullRepo.getPrCommitMessages(this.db, prId);
   }
 
   // ---- observability: agent_runs + run_traces ----------------------------

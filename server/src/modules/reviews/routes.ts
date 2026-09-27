@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { RunRequest } from '@devdigest/shared';
+import { PrIntentRecord, RunRequest } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { ReviewService } from './service.js';
+import { IntentService } from './intent/service.js';
 
 /**
  * reviews module.
@@ -13,6 +14,8 @@ import { ReviewService } from './service.js';
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
+ *   GET    /pulls/:id/intent                           → derived PR intent (cached by input hash)
+ *   POST   /pulls/:id/intent/refresh                   → force a re-derive
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
  */
 const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
@@ -20,6 +23,7 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
   const service = new ReviewService(container);
+  const intents = new IntentService(container);
 
   // ---- Run a review (manual trigger) -------------------------------
   // Tight per-route limit: each call can fan out to expensive LLM runs.
@@ -137,6 +141,38 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(container, req);
     return service.reviewsForPull(workspaceId, req.params.id);
   });
+
+  // ---- PR intent (L03) ----------------------------------------------------
+  // GET derives lazily: served from the cache while its inputs are unchanged,
+  // re-derived by the cheap `review_intent` model otherwise. 409
+  // `intent_unavailable` when that model's provider has no key.
+  app.get(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams, response: { 200: PrIntentRecord } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      const { record } = await intents.get(workspaceId, req.params.id, { logger: req.log });
+      return record;
+    },
+  );
+
+  // Forced re-derive (the ↻ on the card). Every call is a model call, so it is
+  // rate-limited like the review trigger.
+  app.post(
+    '/pulls/:id/intent/refresh',
+    {
+      schema: { params: IdParams, response: { 200: PrIntentRecord } },
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      const { record } = await intents.get(workspaceId, req.params.id, {
+        force: true,
+        logger: req.log,
+      });
+      return record;
+    },
+  );
 
   // ---- Delete a whole review run (one agent's pass) + its findings --------
   app.delete('/reviews/:id', { schema: { params: IdParams } }, async (req) => {
