@@ -6,10 +6,54 @@ import { z } from 'zod';
  */
 
 // ---- Intent ----
+
+/** What kind of change the PR is, as classified by the intent model. */
+export const IntentKind = z.enum([
+  'feature',
+  'bugfix',
+  'refactor',
+  'perf',
+  'security',
+  'docs',
+  'chore',
+  'test',
+]);
+export type IntentKind = z.infer<typeof IntentKind>;
+
+/**
+ * How much the derived intent can be trusted. Computed deterministically from
+ * WHICH sources were really available (never the model's self-assessment):
+ * the model may only lower it.
+ */
+export const IntentConfidence = z.enum(['high', 'medium', 'low']);
+export type IntentConfidence = z.infer<typeof IntentConfidence>;
+
+/** One input the intent was (or failed to be) derived from. Paths/refs only, never content. */
+export const IntentSource = z.object({
+  type: z.enum(['title', 'description', 'ticket', 'spec', 'branch', 'commits', 'files']),
+  /** e.g. `#12`, `specs/intent-layer.md`, `ABC-123`, `feat/rate-limit`. */
+  ref: z.string(),
+  /** used = in the prompt; failed = found but could not be read; unresolved = not fetchable by design. */
+  status: z.enum(['used', 'failed', 'unresolved']),
+  /** Why a source is not `used`: not_found, too_large, outside_repo, external, … */
+  reason: z.string().nullish(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
 export const Intent = z.object({
   intent: z.string(),
   in_scope: z.array(z.string()),
   out_of_scope: z.array(z.string()),
+  // L03 — the fields below default so a bare { intent, in_scope, out_of_scope }
+  // (the pre-L03 shape) still parses.
+  kind: IntentKind.nullish(),
+  risk_areas: z.array(z.string()).default([]),
+  /** Where a resolved spec contradicts the PR description (the spec wins). */
+  conflicts: z.array(z.string()).default([]),
+  confidence: IntentConfidence.default('low'),
+  sources: z.array(IntentSource).default([]),
+  /** ISO timestamp of the derive; null for a pre-L03 row. */
+  generated_at: z.string().nullish(),
 });
 export type Intent = z.infer<typeof Intent>;
 
