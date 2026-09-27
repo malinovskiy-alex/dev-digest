@@ -36,6 +36,19 @@ export function wrapUntrusted(label: string, content: string): string {
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
 
+/**
+ * Trusted rule rendered above the (untrusted) derived intent. Intent is FOCUS,
+ * never a filter: it must not lower a severity or remove a finding. Uses the
+ * `Severity` enum's own vocabulary (CRITICAL / WARNING / SUGGESTION).
+ */
+export const INTENT_SCOPE_RULE =
+  'Scope tells you where the author meant to change code. It never excuses a defect. ' +
+  'A real defect outside the stated scope (or inside an out-of-scope area) MUST still be ' +
+  'reported at its true severity — a CRITICAL stays CRITICAL; say in its rationale that it ' +
+  'is outside the stated scope. A change that only strays outside the stated scope, with ' +
+  'no defect of its own, is at most a WARNING. A low-confidence intent is a guess, not the ' +
+  "author's statement.";
+
 export interface PromptParts {
   /** Agent's system prompt (trusted). */
   system: string;
@@ -66,6 +79,14 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Derived PR intent (L03): intent, scope, risk areas, confidence, sources —
+   * already formatted by the caller. Untrusted (derived from author text), so
+   * delimiter-wrapped, under a trusted scope rule. Rendered right after the
+   * task line, before `## PR description`. Empty / undefined → section
+   * omitted and the prompt is byte-identical to the pre-intent build.
+   */
+  intent?: string;
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
@@ -101,8 +122,14 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       ? parts.prDescription.slice(0, MAX_PR_DESCRIPTION_CHARS)
       : undefined;
 
+  const intentSection =
+    parts.intent && parts.intent.trim().length > 0
+      ? `## PR intent\n${INTENT_SCOPE_RULE}\n${wrapUntrusted('intent', parts.intent)}`
+      : undefined;
+
   const userSections: string[] = [];
   if (parts.task) userSections.push(parts.task);
+  if (intentSection) userSections.push(intentSection);
   if (prDescription) {
     userSections.push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`);
   }
@@ -134,6 +161,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intentSection ?? null,
     user,
   };
 
