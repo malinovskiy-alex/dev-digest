@@ -21,6 +21,10 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [engineering-insights](engineering-insights/SKILL.md) | Shared | Capture-learnings loop — appends session lessons to the right `INSIGHTS.md` |
 | [pr-self-review](pr-self-review/SKILL.md) | Shared | Pre-PR gate — routes the open diff to the skills that apply, runs the `AGENTS.md` gates, blocks on any CRITICAL |
 
+## Agents
+
+Subagents live in [`../agents/`](../agents/README.md) — roster, permissions and artifacts are mapped there. Seven of them now. `planner`, `implementer`, `test-writer`, `architecture-reviewer` and `doc-writer` each declare a `skills:` list, and all of them derive which skill covers which file from [`pr-self-review/references/routing.md`](pr-self-review/references/routing.md), the same table the pre-PR gate uses. `researcher` declares none because it cites rather than applies; `plan-verifier` declares none **on purpose** — a loaded best-practices skill is exactly what would turn a per-item verdict into general advice.
+
 ## What Are Skills?
 
 Skills are modular packages that extend the AI agent with specialized knowledge and workflows. Unlike rules (always applied) or agents (invoked for specific tasks), skills are loaded on-demand when the agent determines they're relevant.
