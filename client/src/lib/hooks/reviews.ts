@@ -4,10 +4,11 @@
 
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, API_BASE } from "@/lib/api";
+import { api, API_BASE, ApiError } from "@/lib/api";
 import { notify } from "@/lib/toast";
 import type {
   FindingActionKind,
+  PrIntentRecord,
   PrReviewComment,
   ReviewRecord,
   ReviewRunResponse,
@@ -44,6 +45,34 @@ export function usePrRuns(prId: string | null | undefined) {
     enabled: !!prId,
     refetchInterval: (query) =>
       (query.state.data ?? []).some((r) => r.status === "running") ? 4000 : false,
+  });
+}
+
+// ---- PR intent (L03) ----
+export const prIntentKey = (prId: string | null | undefined) => ["pr-intent", prId] as const;
+
+/** The PR's derived intent. The server serves it from cache while its inputs
+   are unchanged, so opening the Overview repeatedly costs no model call. A 409
+   (`intent_unavailable`: no key for the intent model) is a state, not a
+   transient error — it is not retried. */
+export function usePrIntent(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: prIntentKey(prId),
+    queryFn: () => api.get<PrIntentRecord>(`/pulls/${prId}/intent`),
+    enabled: !!prId,
+    staleTime: 60_000,
+    retry: (count, err) => !(err instanceof ApiError && err.status === 409) && count < 1,
+  });
+}
+
+/** Force a re-derive (the ↻ on the intent card). */
+export function useRefreshIntent(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<PrIntentRecord>(`/pulls/${prId}/intent/refresh`),
+    onSuccess: (data) => {
+      qc.setQueryData(prIntentKey(prId), data);
+    },
   });
 }
 

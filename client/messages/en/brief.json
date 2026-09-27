@@ -10,6 +10,64 @@
   "overlap": "{count} overlap",
   "unavailable": "Brief not available yet.",
   "unavailableHint": "Run a review or open the PR to compute it.",
+  "intent": {
+    "refresh": "Re-derive intent",
+    "loading": "Deriving intent…",
+    "error": "Could not derive the intent.",
+    "retry": "Try again",
+    "unavailableHint": "Add an API key for the intent model in Settings, or pick another model for “PR Review · Intent”.",
+    "inScope": "In scope",
+    "outOfScope": "Out of scope",
+    "riskAreas": "Risk areas",
+    "conflicts": "Spec ↔ description conflicts",
+    "conflictsHint": "The linked spec wins over the PR description.",
+    "noneStated": "None stated",
+    "sources": "Sources",
+    "derived": "derived {ago}",
+    "derivedFor": "derived {ago} for {sha}",
+    "model": "model {model}",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Inferred · low confidence"
+    },
+    "lowHint": "PR has no description — intent inferred from title, branch, commits and files.",
+    "kind": {
+      "feature": "Feature",
+      "bugfix": "Bug fix",
+      "refactor": "Refactor",
+      "perf": "Performance",
+      "security": "Security",
+      "docs": "Docs",
+      "chore": "Chore",
+      "test": "Tests"
+    },
+    "sourceType": {
+      "title": "Title",
+      "description": "Description",
+      "ticket": "Ticket",
+      "spec": "Spec",
+      "branch": "Branch",
+      "commits": "Commits",
+      "files": "Files"
+    },
+    "status": {
+      "used": "used",
+      "failed": "not read",
+      "unresolved": "not fetched"
+    },
+    "reason": {
+      "empty": "empty",
+      "template_only": "template only",
+      "not_found": "not found",
+      "too_large": "too large",
+      "outside_repo": "outside the repo",
+      "external": "external link",
+      "limit_exceeded": "over the limit",
+      "fetch_failed": "could not be fetched",
+      "github_unavailable": "GitHub not connected"
+    }
+  },
   "why": {
     "title": "git-why",
     "blame": "blame",

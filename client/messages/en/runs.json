@@ -44,6 +44,7 @@
     },
     "prompt": {
       "system": "System",
+      "intent": "PR intent — scope rule + derived intent (dynamic)",
       "skills": "Skills (dynamic)",
       "memory": "Memory (dynamic)",
       "repoMap": "Repo skeleton — repo-intel (dynamic)",
