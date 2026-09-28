@@ -79,6 +79,30 @@ into the right `INSIGHTS.md`.
 before you open a pull request → `pr-self-review`, which reviews every open
 change and refuses to open the PR while a CRITICAL stands.
 
+## Agents
+
+Delegate when the work does not need this conversation's context. Roster,
+permissions and the handoff rules → [.claude/agents/README.md](.claude/agents/README.md).
+
+a fact has to be looked up and cited → `researcher`, which writes nothing.
+something does not exist yet → `planner`, which writes the plan to `specs/` and
+names the skills the implementation will use.
+the plan exists → `implementer`, which executes it and runs the package's own
+tests. It does not review its own architecture or security, and it never commits,
+pushes or opens a PR — you do that, after `pr-self-review`.
+tests are missing or a suite was promised → `test-writer`, which writes them, runs
+them and pastes the output.
+code is finished and the plan needs checking item by item → `plan-verifier`, which
+returns a verdict per item and writes nothing.
+the change leans on a boundary → `architecture-reviewer`, which runs `pnpm arch`
+first and writes nothing.
+a shipped feature needs its lasting explanation → `doc-writer`, which writes one
+page into `docs/`.
+
+State passes between them through **files**, never through a retold summary: a
+subagent starts with an empty context window and sees neither this conversation
+nor what the previous one read.
+
 ## Where to write what
 
 | You have | It goes to |
