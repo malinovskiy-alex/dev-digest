@@ -27,6 +27,17 @@ const DIFF = `diff --git a/src/config.ts b/src/config.ts
    redisUrl: x,`;
 
 /** A Review fixture: one valid finding (line 11), one hallucinated (line 999). */
+/** What the mocked intent classifier answers with (the `IntentLLMOutput` shape). */
+const INTENT_FIXTURE = {
+  intent: 'Wire the auth handler to the session store.',
+  kind: 'feature',
+  in_scope: ['src/auth.ts'],
+  out_of_scope: [],
+  risk_areas: [],
+  conflicts: [],
+  ambiguous: false,
+};
+
 const REVIEW_FIXTURE: Review = {
   verdict: 'request_changes',
   summary: 'Hardcoded Stripe secret introduced.',
@@ -119,6 +130,11 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
         git: new MockGitClient({ diff: DIFF }),
         llm: {
           [provider]: new MockLLMProvider(provider, { structured }),
+          // Every review derives the PR's intent first, on the `review_intent`
+          // model (default provider: openrouter). Without a mock here the
+          // container builds a REAL OpenRouter client from the local secrets
+          // file — a paid network call that outlasts waitForPrRuns.
+          openrouter: new MockLLMProvider('openai', { structured: INTENT_FIXTURE }),
         },
       },
     });
