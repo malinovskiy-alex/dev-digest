@@ -1,5 +1,5 @@
 import type { IconName } from "@devdigest/ui";
-import type { IntentConfidence, IntentSource } from "@devdigest/shared";
+import type { IntentSource } from "@devdigest/shared";
 
 /** Constants for the PR intent card (L03). */
 
@@ -8,17 +8,6 @@ export const SHORT_SHA_LENGTH = 7;
 
 /** Refresh the "derived 3m ago" line once a minute. */
 export const AGE_TICK_MS = 60_000;
-
-/**
- * Badge colours per confidence level. `low` is the warning colour on purpose:
- * it means "a guess from indirect signals" and the reader should know that
- * before trusting the scope below it.
- */
-export const CONFIDENCE_TONE: Record<IntentConfidence, { color: string; bg: string; icon: IconName }> = {
-  high: { color: "var(--ok)", bg: "var(--ok-bg)", icon: "CheckCircle" },
-  medium: { color: "var(--accent-text)", bg: "var(--accent-bg)", icon: "Info" },
-  low: { color: "var(--warn)", bg: "var(--warn-bg)", icon: "AlertTriangle" },
-};
 
 /** Icon + colour per source status: ✓ used, ✗ not read, ? deliberately not fetched. */
 export const SOURCE_STATUS_TONE: Record<IntentSource["status"], { icon: IconName; className: string }> = {

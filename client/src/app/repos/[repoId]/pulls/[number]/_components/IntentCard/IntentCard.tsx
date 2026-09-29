@@ -2,21 +2,21 @@
    description, the linked ticket and specs, and (when those are missing) the
    title, branch, commits and files.
 
-   The confidence badge and the sources row are not decoration: they say how
-   much of the scope below is the author's statement and how much is a guess,
-   and which linked document was actually read. Intent focuses the review; it
+   The card follows the PR-brief design: no confidence badge. Confidence is
+   still derived and handed to the review prompt ("Confidence: low — a
+   guess"); on the card, what the intent could NOT read is said by the
+   Missing-context block and the sources row. Intent focuses the review; it
    never filters it — that rule lives in the review prompt, not here. */
 "use client";
 
 import React from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import { Badge, Button, Icon, Skeleton } from "@devdigest/ui";
+import { Button, Icon, Skeleton } from "@devdigest/ui";
 import type { IntentSource, PrIntentRecord } from "@devdigest/shared";
 import { usePrActiveRuns, usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
-import { AGE_TICK_MS, CONFIDENCE_TONE, SOURCE_STATUS_TONE } from "./constants";
+import { AGE_TICK_MS, SOURCE_STATUS_TONE } from "./constants";
 import {
   derivedAt,
-  hasUsableDescription,
   isIntentNotDerived,
   isIntentUnavailable,
   knownReason,
@@ -61,7 +61,6 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generatedAt]);
   const loadError = data ? null : intent.error;
-  const tone = data ? CONFIDENCE_TONE[data.confidence] : null;
 
   return (
     <section aria-label={t("block.intent")} aria-busy={intent.isLoading || deriving} className={cx.card}>
@@ -69,11 +68,6 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
         <Icon.Target size={14} className={cx.headerIcon} aria-hidden />
         <span className={cx.headerLabel}>{t("block.intent")}</span>
         <div className={cx.headerRight}>
-          {data && tone && (
-            <Badge color={tone.color} bg={tone.bg} icon={tone.icon}>
-              {t(`intent.confidence.${data.confidence}`)}
-            </Badge>
-          )}
           {data && (
             <Button size="sm" icon="RefreshCw" loading={deriving} disabled={deriving} onClick={derive}>
               {deriving ? t("intent.deriving") : t("intent.rederive")}
@@ -144,11 +138,6 @@ function IntentBody({ record }: { record: PrIntentRecord }): React.JSX.Element {
   return (
     <>
       <blockquote className={cx.quote}>“{record.intent}”</blockquote>
-      {record.confidence === "low" && (
-        <p className={cx.hint}>
-          {hasUsableDescription(record.sources) ? t("intent.ambiguousHint") : t("intent.lowHint")}
-        </p>
-      )}
       <MissingContext sources={record.sources} />
 
       <div className={cx.columns}>

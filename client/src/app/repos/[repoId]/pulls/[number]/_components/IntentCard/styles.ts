@@ -6,7 +6,6 @@ export const cx = {
   headerLabel: "text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-muted)]",
   headerRight: "ml-auto flex items-center gap-2",
   quote: "m-0 text-[15px] italic leading-relaxed text-[var(--text-primary)]",
-  hint: "m-0 -mt-2 text-xs text-[var(--warn)]",
   columns: "grid grid-cols-1 gap-4 sm:grid-cols-2",
   scopeLabel: "mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.07em]",
   scopeIn: "text-[var(--ok)]",

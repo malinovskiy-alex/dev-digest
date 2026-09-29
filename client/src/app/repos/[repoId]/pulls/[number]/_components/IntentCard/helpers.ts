@@ -42,11 +42,6 @@ export function missingContext(sources: IntentSource[]): IntentSource[] {
   );
 }
 
-/** Whether the author's description was actually used (vs empty / template only). */
-export function hasUsableDescription(sources: IntentSource[]): boolean {
-  return sources.some((s) => s.type === "description" && s.status === "used");
-}
-
 /** Icon + colour for a risk-area chip, from keywords in its label. */
 export function riskIcon(area: string): { icon: (typeof RISK_ICON_FALLBACK)["icon"]; className: string } {
   const rule = RISK_ICON_RULES.find((r) => r.pattern.test(area));

@@ -25,12 +25,6 @@
     "derived": "derived {ago}",
     "derivedFor": "derived {ago} for {sha}",
     "model": "model {model}",
-    "confidence": {
-      "high": "High confidence",
-      "medium": "Medium confidence",
-      "low": "Inferred · low confidence"
-    },
-    "lowHint": "PR has no description — intent inferred from the title, branch, commits, files and hunk headers.",
     "kind": {
       "feature": "Feature",
       "bugfix": "Bug fix",
@@ -68,7 +62,6 @@
       "github_unavailable": "GitHub not connected",
       "truncated": "truncated"
     },
-    "ambiguousHint": "The sources are thin or contradict each other — treat this intent as a guess.",
     "missingContext": "Missing context",
     "missingContextHint": "Referenced by the author but not available to the intent. Their content was not guessed.",
     "derive": "Derive intent",
