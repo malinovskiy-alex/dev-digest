@@ -43,3 +43,16 @@ export const KNOWN_REASONS = [
   "github_unavailable",
 ] as const;
 export type KnownReason = (typeof KNOWN_REASONS)[number];
+
+/**
+ * Risk-area chip icon, picked from the label the model wrote. First match wins;
+ * the fallback is the neutral warning triangle. Colour only on the icon — the
+ * chip itself stays neutral so a long list does not read as a wall of alerts.
+ */
+export const RISK_ICON_RULES: { pattern: RegExp; icon: IconName; className: string }[] = [
+  { pattern: /auth|token|secret|credential|password|permission|security|vulnerab|injection/i, icon: "Shield", className: "text-[var(--crit)]" },
+  { pattern: /dependenc|package|library|upgrade|version/i, icon: "Boxes", className: "text-[var(--warn)]" },
+  { pattern: /perf|latency|round-trip|slow|n\+1|query|throughput|memory|cache/i, icon: "Zap", className: "text-[var(--text-muted)]" },
+  { pattern: /migration|schema|database|\bdb\b|data loss/i, icon: "Database", className: "text-[var(--warn)]" },
+];
+export const RISK_ICON_FALLBACK = { icon: "AlertTriangle" as IconName, className: "text-[var(--text-muted)]" };

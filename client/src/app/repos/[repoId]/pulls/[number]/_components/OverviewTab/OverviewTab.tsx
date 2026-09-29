@@ -3,7 +3,7 @@
 import React from "react";
 import { SectionLabel } from "@devdigest/ui";
 import { IntentCard } from "../IntentCard";
-import { s } from "./styles";
+import { briefGridClass, s } from "./styles";
 
 interface OverviewTabProps {
   prId: string;
@@ -13,7 +13,9 @@ interface OverviewTabProps {
 export function OverviewTab({ prId, prBody }: OverviewTabProps) {
   return (
     <>
-      <IntentCard prId={prId} />
+      <div className={briefGridClass}>
+        <IntentCard prId={prId} />
+      </div>
       {prBody && (
         <section>
           <SectionLabel icon="MessageSquare">Description</SectionLabel>
