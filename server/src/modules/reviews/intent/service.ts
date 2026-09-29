@@ -19,10 +19,12 @@ import { IntentLLMOutput } from './schema.js';
 import {
   capCommits,
   capFiles,
+  capHunks,
   capTicket,
   clampOutput,
   computeConfidence,
   intentInputHash,
+  missingContext,
   isMeaningfulDescription,
   normalizeDescription,
   parseClosingIssues,
@@ -199,8 +201,11 @@ export class IntentService {
       }
       try {
         const content = await this.container.git.readFileAt(repoRef, pull.headSha, link.path);
+        // A long plan is still the plan: read its start rather than skip it,
+        // and say so — the classifier and the UI both see `truncated`.
         if (content.length > MAX_SPEC_CHARS) {
-          sources.push({ type: 'spec', ref: link.path, status: 'failed', reason: 'too_large' });
+          specs.push({ path: link.path, content: content.slice(0, MAX_SPEC_CHARS), truncated: true });
+          sources.push({ type: 'spec', ref: link.path, status: 'used', reason: 'truncated' });
           continue;
         }
         specs.push({ path: link.path, content });
@@ -230,6 +235,24 @@ export class IntentService {
         ? { type: 'files', ref: `${files.length} file(s)`, status: 'used' }
         : { type: 'files', ref: '0 files', status: 'failed', reason: 'empty' },
     );
+    // No usable description → the classifier also gets WHERE each change
+    // lands: the `@@ … @@` hunk headers, never the changed lines.
+    const hunks = meaningfulDescription
+      ? []
+      : capHunks(prFiles.map((f) => ({ path: f.path, patch: f.patch })));
+    if (!meaningfulDescription) {
+      const count = hunks.reduce((n, h) => n + h.headers.length, 0);
+      sources.push(
+        count > 0
+          ? { type: 'hunks', ref: `${count} hunk header(s)`, status: 'used' }
+          : { type: 'hunks', ref: '0 hunk headers', status: 'failed', reason: 'empty' },
+      );
+    }
+    const unavailable = missingContext(sources).map((m) => ({
+      type: m.type as 'ticket' | 'spec',
+      ref: m.ref,
+      reason: m.reason,
+    }));
 
     return {
       inputs: {
@@ -239,8 +262,10 @@ export class IntentService {
         branch: pull.branch,
         commits,
         files,
+        hunks,
         ticket,
         specs,
+        unavailable,
       },
       sources,
     };

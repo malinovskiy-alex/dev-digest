@@ -14,7 +14,15 @@ import { Badge, Button, Icon, IconBtn, Skeleton } from "@devdigest/ui";
 import type { IntentSource, PrIntentRecord } from "@devdigest/shared";
 import { usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
 import { AGE_TICK_MS, CONFIDENCE_TONE, SOURCE_STATUS_TONE } from "./constants";
-import { derivedAt, isIntentUnavailable, knownReason, riskIcon, shortSha } from "./helpers";
+import {
+  derivedAt,
+  hasUsableDescription,
+  isIntentUnavailable,
+  knownReason,
+  missingContext,
+  riskIcon,
+  shortSha,
+} from "./helpers";
 import { cx } from "./styles";
 
 export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
@@ -81,7 +89,12 @@ function IntentBody({ record }: { record: PrIntentRecord }): React.JSX.Element {
   return (
     <>
       <blockquote className={cx.quote}>“{record.intent}”</blockquote>
-      {record.confidence === "low" && <p className={cx.hint}>{t("intent.lowHint")}</p>}
+      {record.confidence === "low" && (
+        <p className={cx.hint}>
+          {hasUsableDescription(record.sources) ? t("intent.ambiguousHint") : t("intent.lowHint")}
+        </p>
+      )}
+      <MissingContext sources={record.sources} />
 
       <div className={cx.columns}>
         <ScopeList
@@ -176,6 +189,31 @@ function ScopeList({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Referenced tickets/specs the intent could not read — said out loud, never papered over. */
+function MissingContext({ sources }: { sources: IntentSource[] }): React.JSX.Element | null {
+  const t = useTranslations("brief");
+  const missing = missingContext(sources);
+  if (missing.length === 0) return null;
+  return (
+    <div className={cx.missing} role="note">
+      <div className={cx.groupLabel}>
+        <Icon.AlertTriangle size={12} aria-hidden />
+        {t("intent.missingContext")}
+      </div>
+      {missing.map((s) => {
+        const reason = knownReason(s.reason);
+        return (
+          <p key={`${s.type}:${s.ref}`} className="m-0">
+            {t(`intent.sourceType.${s.type}`)} <span className={cx.sourceRef}>{s.ref}</span> —{" "}
+            {reason ? t(`intent.reason.${reason}`) : (s.reason ?? t(`intent.status.${s.status}`))}
+          </p>
+        );
+      })}
+      <p className={cx.stateHint}>{t("intent.missingContextHint")}</p>
     </div>
   );
 }

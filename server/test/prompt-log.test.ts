@@ -89,6 +89,8 @@ describe('logPromptAssembly', () => {
       branch: 'feat/limiter',
       commits: ['feat: limiter'],
       files: [{ path: 'src/limiter.ts', additions: 10, deletions: 0 }],
+      hunks: [],
+      unavailable: [],
     } as Parameters<typeof buildClassifierInput>[0]);
     const { lines, sink } = capture();
     logPromptAssembly(sink, { ...ctx, kind: 'intent' }, intentSections, true);

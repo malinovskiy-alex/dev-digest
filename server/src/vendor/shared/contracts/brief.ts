@@ -30,7 +30,7 @@ export type IntentConfidence = z.infer<typeof IntentConfidence>;
 
 /** One input the intent was (or failed to be) derived from. Paths/refs only, never content. */
 export const IntentSource = z.object({
-  type: z.enum(['title', 'description', 'ticket', 'spec', 'branch', 'commits', 'files']),
+  type: z.enum(['title', 'description', 'ticket', 'spec', 'branch', 'commits', 'files', 'hunks']),
   /** e.g. `#12`, `specs/intent-layer.md`, `ABC-123`, `feat/rate-limit`. */
   ref: z.string(),
   /** used = in the prompt; failed = found but could not be read; unresolved = not fetchable by design. */

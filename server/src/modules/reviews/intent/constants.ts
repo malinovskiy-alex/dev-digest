@@ -10,7 +10,7 @@ export const INTENT_PROMPT_FILE = 'intent-classifier.system.md';
  * rendered changes: it is part of the cache key, so every cached intent is
  * re-derived on the next read.
  */
-export const INTENT_PROMPT_VERSION = 'intent-v1';
+export const INTENT_PROMPT_VERSION = 'intent-v2';
 
 export const INTENT_SCHEMA_NAME = 'PrIntent';
 export const INTENT_TEMPERATURE = 0;
@@ -27,7 +27,7 @@ export const MAX_TICKET_CHARS = 4_000;
 
 /** At most this many linked specs are read; every further link is recorded as failed, never dropped. */
 export const MAX_SPEC_DOCS = 3;
-/** A spec longer than this is not read (recorded as `too_large`). */
+/** A spec longer than this is cut to its first MAX_SPEC_CHARS characters and recorded as `used` / `truncated`. */
 export const MAX_SPEC_CHARS = 8_000;
 /** Only these are read as specs — never code, never config, never dotfiles. */
 export const SPEC_EXTENSIONS = ['.md', '.mdx', '.txt'] as const;
@@ -36,6 +36,14 @@ export const SPEC_EXTENSIONS = ['.md', '.mdx', '.txt'] as const;
 export const MAX_COMMITS = 40;
 export const MAX_COMMIT_CHARS = 300;
 export const MAX_FILES = 150;
+
+/**
+ * Hunk headers (`@@ -a,b +c,d @@ context`) — the only part of a patch the
+ * classifier ever sees, and only when the PR has no usable description. Never
+ * the changed lines themselves.
+ */
+export const MAX_HUNK_HEADERS = 60;
+export const MAX_HUNK_HEADER_CHARS = 160;
 
 /** Output limits the classifier is asked for — and clamped to after parsing. */
 export const MAX_INTENT_CHARS = 300;

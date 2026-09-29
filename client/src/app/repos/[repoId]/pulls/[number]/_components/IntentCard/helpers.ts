@@ -1,3 +1,4 @@
+import type { IntentSource } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
 import { KNOWN_REASONS, RISK_ICON_FALLBACK, RISK_ICON_RULES, SHORT_SHA_LENGTH, type KnownReason } from "./constants";
 
@@ -23,6 +24,22 @@ export function derivedAt(iso: string | null | undefined): Date | null {
   if (!iso) return null;
   const t = Date.parse(iso);
   return Number.isNaN(t) ? null : new Date(t);
+}
+
+/**
+ * Tickets and specs the author referenced that the intent could not fully use
+ * (failed, not fetched, or truncated). Mirrors `missingContext` on the server,
+ * so the card and the review prompt name the same gaps.
+ */
+export function missingContext(sources: IntentSource[]): IntentSource[] {
+  return sources.filter(
+    (s) => (s.type === "ticket" || s.type === "spec") && (s.status !== "used" || s.reason === "truncated"),
+  );
+}
+
+/** Whether the author's description was actually used (vs empty / template only). */
+export function hasUsableDescription(sources: IntentSource[]): boolean {
+  return sources.some((s) => s.type === "description" && s.status === "used");
 }
 
 /** Icon + colour for a risk-area chip, from keywords in its label. */

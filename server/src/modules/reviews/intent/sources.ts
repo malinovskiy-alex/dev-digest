@@ -8,6 +8,8 @@ import {
   MAX_COMMITS,
   MAX_DESCRIPTION_CHARS,
   MAX_FILES,
+  MAX_HUNK_HEADER_CHARS,
+  MAX_HUNK_HEADERS,
   MAX_INTENT_CHARS,
   MAX_LIST_ITEM_CHARS,
   MAX_LIST_ITEMS,
@@ -92,9 +94,15 @@ export function parseExternalTickets(text: string): string[] {
     /https?:\/\/[^\s)>\]"']*(?:atlassian\.net\/browse\/|linear\.app\/|notion\.so\/|notion\.site\/)[^\s)>\]"']*/gi;
   for (const m of text.matchAll(urlRe)) out.add(m[0]);
   // A Jira-style key only after a ticket keyword: a bare `UTF-8` / `SHA-256`
-  // has the same shape and is not a ticket.
-  const keyRe = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|ticket|jira|refs?)\b\s*:?\s+([A-Z][A-Z0-9]{1,9}-\d{1,7})\b/g;
-  for (const m of text.matchAll(keyRe)) if (m[1]) out.add(m[1]);
+  // has the same shape and is not a ticket. The keyword is case-insensitive
+  // ("JIRA", "Ticket:") and may be followed by up to two filler words ("Ticket:
+  // see JIRA DEV-4521"); the key itself must still be upper-case.
+  const keyRe =
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|ticket|jira|refs?)\b[\s:]+(?:[a-z]+\s+){0,2}([a-z][a-z0-9]{1,9}-\d{1,7})\b/gi;
+  for (const m of text.matchAll(keyRe)) {
+    const key = m[1];
+    if (key && /^[A-Z][A-Z0-9]{1,9}-\d{1,7}$/.test(key)) out.add(key);
+  }
   return [...out];
 }
 
@@ -256,6 +264,15 @@ export interface IntentTicket {
 export interface IntentSpec {
   path: string;
   content: string;
+  /** True when the file was longer than MAX_SPEC_CHARS and only its start is here. */
+  truncated?: boolean;
+}
+
+/** A ticket or spec the author referenced that could not be read. */
+export interface UnavailableRef {
+  type: 'ticket' | 'spec';
+  ref: string;
+  reason: string;
 }
 
 /** Everything the classifier sees, already fetched and capped. */
@@ -267,8 +284,51 @@ export interface IntentInputs {
   branch: string;
   commits: string[];
   files: { path: string; additions: number; deletions: number }[];
+  /** `@@ … @@` headers per file — only filled when there is no usable description. */
+  hunks: { path: string; headers: string[] }[];
   ticket: IntentTicket | null;
   specs: IntentSpec[];
+  /** Referenced but unreadable: shown to the classifier so it does not invent their content. */
+  unavailable: UnavailableRef[];
+}
+
+/**
+ * The hunk headers of a unified-diff patch: `@@ -a,b +c,d @@ <enclosing context>`.
+ * Only these lines — never an added, removed or context line of the change.
+ */
+export function extractHunkHeaders(patch: string | null | undefined): string[] {
+  if (!patch) return [];
+  const out: string[] = [];
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('@@')) out.push(line.trimEnd().slice(0, MAX_HUNK_HEADER_CHARS));
+  }
+  return out;
+}
+
+/** Headers for every file, capped in total so one huge PR cannot flood the classifier. */
+export function capHunks(files: { path: string; patch: string | null }[]): { path: string; headers: string[] }[] {
+  const out: { path: string; headers: string[] }[] = [];
+  let left = MAX_HUNK_HEADERS;
+  for (const f of files) {
+    if (left <= 0) break;
+    const headers = extractHunkHeaders(f.patch).slice(0, left);
+    if (headers.length === 0) continue;
+    out.push({ path: f.path, headers });
+    left -= headers.length;
+  }
+  return out;
+}
+
+/**
+ * Tickets and specs the author referenced that the intent could NOT fully use:
+ * failed, deliberately not fetched, or truncated. The single source for the
+ * classifier's "referenced but unavailable" section, the review prompt's
+ * "Missing context" line and the UI block, so all three always agree.
+ */
+export function missingContext(sources: IntentSource[]): { type: string; ref: string; reason: string }[] {
+  return sources
+    .filter((s) => (s.type === 'ticket' || s.type === 'spec') && (s.status !== 'used' || s.reason === 'truncated'))
+    .map((s) => ({ type: s.type, ref: s.ref, reason: s.reason ?? s.status }));
 }
 
 export function capCommits(messages: string[]): string[] {
@@ -303,10 +363,12 @@ export function intentInputHash(
     inputs.title,
     inputs.description,
     inputs.ticket ? `#${inputs.ticket.number}\n${inputs.ticket.title}\n${inputs.ticket.body}` : '',
-    ...inputs.specs.map((s) => `${s.path}:${sha256(s.content)}`),
+    ...inputs.specs.map((s) => `${s.path}:${s.truncated ? 'truncated:' : ''}${sha256(s.content)}`),
     inputs.branch,
     sha256(inputs.commits.join('\n')),
     sha256(inputs.files.map((f) => `${f.path}:+${f.additions}/-${f.deletions}`).join('\n')),
+    sha256(inputs.hunks.map((h) => `${h.path}\n${h.headers.join('\n')}`).join('\n')),
+    inputs.unavailable.map((u) => `${u.type}:${u.ref}:${u.reason}`).join('\n'),
   );
 }
 
@@ -364,8 +426,9 @@ export function buildClassifierInput(inputs: IntentInputs): {
   inputs.specs.forEach((spec, i) => {
     add(
       '\n\n',
-      `## Linked spec: ${spec.path} (documented intent — it wins over the description)\n` +
-        wrapUntrusted(`spec-${i}`, spec.content),
+      `## Linked spec: ${spec.path} (documented intent — it wins over the description)` +
+        (spec.truncated ? ` — TRUNCATED: only the first ${spec.content.length} characters are shown` : '') +
+        `\n${wrapUntrusted(`spec-${i}`, spec.content)}`,
       `spec-${i}`,
       'repo-spec',
       'untrusted',
@@ -391,6 +454,32 @@ export function buildClassifierInput(inputs: IntentInputs): {
   if (inputs.files.length > 0) {
     const lines = inputs.files.map((f) => `${f.path} (+${f.additions}/-${f.deletions})`);
     add('\n', `### Changed files\n${wrapUntrusted('files', lines.join('\n'))}`, 'files', 'pr-files', 'untrusted', lines);
+  }
+  if (inputs.hunks.length > 0) {
+    // Headers only (`@@ … @@ <enclosing function>`) — never the changed lines.
+    const lines = inputs.hunks.flatMap((h) => [h.path, ...h.headers.map((x) => `  ${x}`)]);
+    add(
+      '\n',
+      `### Hunk headers (where in each file the change lands)\n${wrapUntrusted('hunks', lines.join('\n'))}`,
+      'hunks',
+      'pr-hunk-headers',
+      'untrusted',
+      inputs.hunks.flatMap((h) => h.headers),
+    );
+  }
+  if (inputs.unavailable.length > 0) {
+    const lines = inputs.unavailable.map((u) => `- ${u.type} ${u.ref} — ${u.reason}`);
+    add(
+      '\n\n',
+      '## Referenced but unavailable\n' +
+        'The author referenced these, but their content could NOT be read. Do not guess what they say. ' +
+        'Treat the scope they would define as unknown, and set `ambiguous` when they look central to the change.\n' +
+        wrapUntrusted('unavailable', lines.join('\n')),
+      'unavailable',
+      'server',
+      'untrusted',
+      lines,
+    );
   }
   return { text, sections };
 }
@@ -442,6 +531,11 @@ export function describeSources(sources: IntentSource[]): string {
  * puts the scope rule above it). Empty intent → empty string, so the section
  * is omitted and the prompt stays byte-identical to the pre-intent build.
  */
+/** Whether the description source was actually used (vs empty / template only). */
+export function hasUsableDescription(sources: IntentSource[]): boolean {
+  return sources.some((s) => s.type === 'description' && s.status === 'used');
+}
+
 export function formatIntentForPrompt(record: PrIntentRecord): string {
   if (record.intent.trim().length === 0) return '';
   const lines: string[] = [];
@@ -450,7 +544,17 @@ export function formatIntentForPrompt(record: PrIntentRecord): string {
   lines.push(`Confidence: ${record.confidence}`);
   if (record.confidence === 'low') {
     lines.push(
-      'Note: the PR has no usable description — this intent is a GUESS inferred from the title, branch, commits and files, not a statement by the author.',
+      hasUsableDescription(record.sources)
+        ? 'Note: the sources are thin or contradict each other — this intent is a GUESS, not a firm statement by the author.'
+        : 'Note: the PR has no usable description — this intent is a GUESS inferred from the title, branch, commits, files and hunk headers, not a statement by the author.',
+    );
+  }
+  const missing = missingContext(record.sources);
+  if (missing.length > 0) {
+    lines.push(
+      `Missing context — referenced by the author but NOT available to this intent; do not assume what they say: ${missing
+        .map((m) => `${m.type} ${m.ref} (${m.reason})`)
+        .join(', ')}`,
     );
   }
   const bullets = (label: string, items: string[]) => {

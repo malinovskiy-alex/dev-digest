@@ -41,6 +41,7 @@ export const KNOWN_REASONS = [
   "limit_exceeded",
   "fetch_failed",
   "github_unavailable",
+  "truncated",
 ] as const;
 export type KnownReason = (typeof KNOWN_REASONS)[number];
 

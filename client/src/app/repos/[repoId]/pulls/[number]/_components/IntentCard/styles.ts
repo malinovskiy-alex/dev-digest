@@ -21,6 +21,8 @@ export const cx = {
   chip: "inline-flex max-w-full items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-secondary)]",
   chipText: "truncate",
   conflicts: "m-0 flex flex-col gap-1 text-xs text-[var(--warn)]",
+  missing:
+    "flex flex-col gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--warn)]",
   footer: "flex flex-col gap-1.5 text-xs text-[var(--text-muted)]",
   sources: "flex flex-wrap items-center gap-x-3 gap-y-1",
   source: "inline-flex items-center gap-1 text-[var(--text-secondary)]",
