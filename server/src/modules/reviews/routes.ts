@@ -151,7 +151,7 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     { schema: { params: IdParams, response: { 200: PrIntentRecord } } },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
-      const { record } = await intents.get(workspaceId, req.params.id, { logger: req.log });
+      const { record } = await intents.get(workspaceId, req.params.id, { logger: req.log, correlationId: String(req.id) });
       return record;
     },
   );
@@ -169,6 +169,7 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
       const { record } = await intents.get(workspaceId, req.params.id, {
         force: true,
         logger: req.log,
+        correlationId: String(req.id),
       });
       return record;
     },

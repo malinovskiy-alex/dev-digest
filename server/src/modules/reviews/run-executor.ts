@@ -8,6 +8,7 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { logPromptAssembly } from '../../platform/prompt-log.js';
 import { IntentService } from './intent/service.js';
 import { describeSources, formatIntentForPrompt } from './intent/sources.js';
 
@@ -112,7 +113,13 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
-    const intent = await this.deriveIntent(workspaceId, pull.id, runLog, logger);
+    const intent = await this.deriveIntent(
+      workspaceId,
+      pull.id,
+      runLog,
+      logger,
+      jobs.map((j) => j.runId).join(','),
+    );
 
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
@@ -121,7 +128,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent, logger);
         logger?.info(
           {
             runId,
@@ -154,6 +161,7 @@ export class ReviewRunExecutor {
     runId: string,
     parentLog: RunLogger,
     intent?: string,
+    logger?: Logger,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -252,6 +260,24 @@ export class ReviewRunExecutor {
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
+        // Structured log of what went into each prompt — sizes and sources, never
+        // text (see platform/prompt-log.ts). correlation_id = the run id.
+        onPrompt: (p) =>
+          logPromptAssembly(
+            logger,
+            {
+              correlationId: runId,
+              kind: 'review',
+              provider: agent.provider,
+              model: p.model,
+              prId: pull.id,
+              runId,
+              agent: agent.name,
+              chunk: { index: p.index, total: p.total, label: p.chunk },
+            },
+            p.sections,
+            this.container.config.promptLogVerbose,
+          ),
         checkCancelled: () => {
           if (this.container.runBus.isCancelled(runId)) throw new RunCancelledError();
         },
@@ -373,11 +399,12 @@ export class ReviewRunExecutor {
     prId: string,
     runLog: RunLogger,
     logger?: Logger,
+    correlationId?: string,
   ): Promise<string | undefined> {
     try {
       const result = await runLog.step(
         'Deriving PR intent',
-        () => this.intents.get(workspaceId, prId, logger ? { logger } : {}),
+        () => this.intents.get(workspaceId, prId, { ...(logger ? { logger } : {}), ...(correlationId ? { correlationId } : {}) }),
         { kind: 'tool' },
       );
       const r = result.record;

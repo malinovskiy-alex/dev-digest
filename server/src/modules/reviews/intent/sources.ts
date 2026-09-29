@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { IntentConfidence, IntentSource, PrIntentRecord } from '@devdigest/shared';
-import { wrapUntrusted } from '@devdigest/reviewer-core';
+import { sectionMeta, wrapUntrusted, type PromptSectionMeta } from '@devdigest/reviewer-core';
 import { hashKey } from '../../../platform/model-router.js';
 import {
   INTENT_PROMPT_VERSION,
@@ -315,48 +315,88 @@ export function intentInputHash(
 /**
  * The classifier's user message: each source in its own untrusted block, so
  * an author's "ignore the auth change" is data and never an instruction.
+ * Returns the text AND one PromptSectionMeta per block, built together so the
+ * logged section sizes are exactly what the model receives.
  */
-export function renderClassifierInput(inputs: IntentInputs): string {
-  const parts: string[] = [
-    'Derive the intent of this pull request from the sources below.',
-    '',
-    '## PR title',
-    wrapUntrusted('pr-title', inputs.title),
-    '',
-    '## PR description',
-    inputs.meaningfulDescription
-      ? wrapUntrusted('pr-description', inputs.description)
-      : `${NO_DESCRIPTION_MARKER}.` +
-        (inputs.description ? `\n${wrapUntrusted('pr-description', inputs.description)}` : ''),
-  ];
+export function buildClassifierInput(inputs: IntentInputs): {
+  text: string;
+  sections: PromptSectionMeta[];
+} {
+  let text = '';
+  const sections: PromptSectionMeta[] = [];
+  // `sep` is what joins this block to the previous one: a blank line between
+  // top-level sections, a single newline inside "Supporting signals".
+  const add = (
+    sep: string,
+    block: string,
+    name: string,
+    source: string,
+    trust: PromptSectionMeta['trust'],
+    items?: string[],
+  ) => {
+    text += (text ? sep : '') + block;
+    sections.push(sectionMeta(name, source, trust, block, items));
+  };
+
+  add('', 'Derive the intent of this pull request from the sources below.', 'task', 'server', 'trusted');
+  add('\n\n', `## PR title\n${wrapUntrusted('pr-title', inputs.title)}`, 'pr_title', 'pr-author', 'untrusted');
+  add(
+    '\n\n',
+    '## PR description\n' +
+      (inputs.meaningfulDescription
+        ? wrapUntrusted('pr-description', inputs.description)
+        : `${NO_DESCRIPTION_MARKER}.` +
+          (inputs.description ? `\n${wrapUntrusted('pr-description', inputs.description)}` : '')),
+    'pr_description',
+    'pr-author',
+    'untrusted',
+  );
   if (inputs.ticket) {
-    parts.push(
-      '',
-      `## Linked ticket #${inputs.ticket.number}`,
-      wrapUntrusted('ticket', `${inputs.ticket.title}\n\n${inputs.ticket.body}`),
+    add(
+      '\n\n',
+      `## Linked ticket #${inputs.ticket.number}\n` +
+        wrapUntrusted('ticket', `${inputs.ticket.title}\n\n${inputs.ticket.body}`),
+      'ticket',
+      'github-issue',
+      'untrusted',
     );
   }
   inputs.specs.forEach((spec, i) => {
-    parts.push(
-      '',
-      `## Linked spec: ${spec.path} (documented intent — it wins over the description)`,
-      wrapUntrusted(`spec-${i}`, spec.content),
+    add(
+      '\n\n',
+      `## Linked spec: ${spec.path} (documented intent — it wins over the description)\n` +
+        wrapUntrusted(`spec-${i}`, spec.content),
+      `spec-${i}`,
+      'repo-spec',
+      'untrusted',
     );
   });
-  parts.push('', '## Supporting signals (indirect)', '### Branch', wrapUntrusted('branch', inputs.branch));
+  add(
+    '\n\n',
+    `## Supporting signals (indirect)\n### Branch\n${wrapUntrusted('branch', inputs.branch)}`,
+    'branch',
+    'pr-metadata',
+    'untrusted',
+  );
   if (inputs.commits.length > 0) {
-    parts.push('### Commit messages', wrapUntrusted('commits', inputs.commits.map((c) => `- ${c}`).join('\n')));
-  }
-  if (inputs.files.length > 0) {
-    parts.push(
-      '### Changed files',
-      wrapUntrusted(
-        'files',
-        inputs.files.map((f) => `${f.path} (+${f.additions}/-${f.deletions})`).join('\n'),
-      ),
+    add(
+      '\n',
+      `### Commit messages\n${wrapUntrusted('commits', inputs.commits.map((c) => `- ${c}`).join('\n'))}`,
+      'commits',
+      'pr-commits',
+      'untrusted',
+      inputs.commits,
     );
   }
-  return parts.join('\n');
+  if (inputs.files.length > 0) {
+    const lines = inputs.files.map((f) => `${f.path} (+${f.additions}/-${f.deletions})`);
+    add('\n', `### Changed files\n${wrapUntrusted('files', lines.join('\n'))}`, 'files', 'pr-files', 'untrusted', lines);
+  }
+  return { text, sections };
+}
+
+export function renderClassifierInput(inputs: IntentInputs): string {
+  return buildClassifierInput(inputs).text;
 }
 
 // --------------------------------------------------------------- output clamp

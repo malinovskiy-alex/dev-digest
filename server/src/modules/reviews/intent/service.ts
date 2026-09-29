@@ -2,6 +2,8 @@ import type { FeatureModelChoice, IntentSource, PrIntentRecord, RepoRef } from '
 import type { Container } from '../../../platform/container.js';
 import { AppError, ConfigError, NotFoundError } from '../../../platform/errors.js';
 import { renderPrompt } from '../../../platform/prompts.js';
+import { logPromptAssembly } from '../../../platform/prompt-log.js';
+import { sectionMeta } from '@devdigest/reviewer-core';
 import type { PullRow } from '../../../db/rows.js';
 import { ReviewRepository } from '../repository.js';
 import {
@@ -26,7 +28,7 @@ import {
   parseClosingIssues,
   parseExternalTickets,
   parseSpecLinks,
-  renderClassifierInput,
+  buildClassifierInput,
   type IntentInputs,
   type IntentSpec,
   type IntentTicket,
@@ -36,6 +38,13 @@ import {
 export interface IntentLogger {
   info: (obj: unknown, msg?: string) => void;
   warn: (obj: unknown, msg?: string) => void;
+}
+
+export interface IntentGetOptions {
+  force?: boolean;
+  logger?: IntentLogger;
+  /** Ties the log lines to the caller: the request id, or the review run id(s). */
+  correlationId?: string;
 }
 
 export interface IntentResult {
@@ -77,7 +86,7 @@ export class IntentService {
   async get(
     workspaceId: string,
     prId: string,
-    opts: { force?: boolean; logger?: IntentLogger } = {},
+    opts: IntentGetOptions = {},
   ): Promise<IntentResult> {
     const existing = inFlight.get(prId);
     if (existing && !opts.force) return existing;
@@ -98,7 +107,7 @@ export class IntentService {
   private async derive(
     workspaceId: string,
     prId: string,
-    opts: { force?: boolean; logger?: IntentLogger },
+    opts: IntentGetOptions,
   ): Promise<IntentResult> {
     const start = Date.now();
     const pull = await this.repo.getPull(workspaceId, prId);
@@ -115,15 +124,15 @@ export class IntentService {
       const stored = await this.repo.getIntent(prId);
       if (stored && stored.inputHash === inputHash) {
         const durationMs = Date.now() - start;
-        this.log(opts.logger, prId, inputHash, true, stored.record, durationMs);
+        this.log(opts, prId, inputHash, true, stored.record, durationMs);
         return { record: { ...stored.record, cache_hit: true }, cacheHit: true, inputHash, durationMs };
       }
     }
 
-    const record = await this.classify(prId, pull.headSha, inputs, sources, choice);
+    const record = await this.classify(prId, pull.headSha, inputs, sources, choice, opts);
     await this.repo.upsertIntent(prId, record, inputHash);
     const durationMs = Date.now() - start;
-    this.log(opts.logger, prId, inputHash, false, record, durationMs);
+    this.log(opts, prId, inputHash, false, record, durationMs);
     return { record: { ...record, cache_hit: false }, cacheHit: false, inputHash, durationMs };
   }
 
@@ -243,6 +252,7 @@ export class IntentService {
     inputs: IntentInputs,
     sources: IntentSource[],
     choice: FeatureModelChoice,
+    opts: IntentGetOptions,
   ): Promise<PrIntentRecord> {
     let llm;
     try {
@@ -259,6 +269,19 @@ export class IntentService {
     }
 
     const system = await renderPrompt(INTENT_PROMPT_FILE, {});
+    const user = buildClassifierInput(inputs);
+    logPromptAssembly(
+      opts.logger,
+      {
+        correlationId: opts.correlationId ?? `intent:${prId}`,
+        kind: 'intent',
+        provider: choice.provider,
+        model: choice.model,
+        prId,
+      },
+      [sectionMeta('system', INTENT_PROMPT_FILE, 'trusted', system), ...user.sections],
+      this.container.config.promptLogVerbose,
+    );
     const result = await llm.completeStructured({
       model: choice.model,
       schema: IntentLLMOutput,
@@ -269,7 +292,7 @@ export class IntentService {
       maxRetries: INTENT_MAX_RETRIES,
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: renderClassifierInput(inputs) },
+        { role: 'user', content: user.text },
       ],
     });
     const out = clampOutput(result.data);
@@ -305,15 +328,16 @@ export class IntentService {
 
   /** Structured log line — refs and statuses only, never description/ticket/spec content. */
   private log(
-    logger: IntentLogger | undefined,
+    opts: IntentGetOptions,
     prId: string,
     inputHash: string,
     cacheHit: boolean,
     record: PrIntentRecord,
     durationMs: number,
   ): void {
-    logger?.info(
+    opts.logger?.info(
       {
+        ...(opts.correlationId ? { correlation_id: opts.correlationId } : {}),
         prId,
         inputHash,
         cacheHit,
