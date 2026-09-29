@@ -10,7 +10,16 @@ import type { PrStatus, SeverityCounts } from '@devdigest/shared';
  * commit a review last ran against (`lastReviewedSha`) vs the PR head, plus age.
  */
 
-/** Open PRs whose current head was reviewed but untouched this long read "stale". */
+/**
+ * Open PRs whose current head was reviewed but untouched this long read
+ * "stale".
+ *
+ * Seven days is a judgement, not a measurement: it is long enough that a PR
+ * waiting on a weekend and a code freeze does not turn yellow, and short enough
+ * that a branch everyone has forgotten does. It is deliberately NOT derived
+ * from the review's age — a PR reviewed today against a head from three weeks
+ * ago is current, not stale.
+ */
 export const STALE_DAYS = 7;
 
 /** A PR with no review at all — the list still sends an object, never null. */

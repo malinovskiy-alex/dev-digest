@@ -7,7 +7,15 @@ export function sizeOf(pr: PrMeta): SizeInfo {
   return { size, lines };
 }
 
-/** Compact relative time for the list's UPDATED column (e.g. "3h", "2d"). */
+/**
+ * Compact relative time for the list's UPDATED column (e.g. "3h", "2d").
+ *
+ * Deliberately unit-less past a day: the column is scanned, not read, and
+ * "2d" tells a reader everything "2 days ago" would at a third of the width.
+ * A near-twin lives on the Conventions screen as `scanAge`, which renders the
+ * same intervals as a sentence fragment ("2d ago") — merging them would make
+ * one of the two screens read wrong.
+ */
 export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const then = Date.parse(iso);

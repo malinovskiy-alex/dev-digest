@@ -13,6 +13,12 @@ import { NotFoundError } from '../../platform/errors.js';
  *
  *   POST /repos/:id/poll  → sync PR list from GitHub, bump last_polled_at
  */
+/**
+ * Poll cadence is a workspace setting, not a constant, but it is clamped to the
+ * bounds in `modules/settings/constants.ts`: below the floor we burn GitHub's
+ * REST quota on a repo nobody is watching, above the ceiling the "synced Nm ago"
+ * line in the sidebar stops being true in any useful sense.
+ */
 export default async function pollingRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
