@@ -85,8 +85,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     nodeEnv: parsed.NODE_ENV,
     logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
-    promptLogVerbose: parsed.PROMPT_LOG_VERBOSE === 'true' && parsed.NODE_ENV === 'development',
-    promptLogVerboseRefused: parsed.PROMPT_LOG_VERBOSE === 'true' && parsed.NODE_ENV !== 'development',
+    // Verbose needs NODE_ENV=development set EXPLICITLY: the parsed value
+    // defaults to 'development' when NODE_ENV is absent, which is exactly the
+    // unconfigured host this flag must not reach.
+    promptLogVerbose: parsed.PROMPT_LOG_VERBOSE === 'true' && env.NODE_ENV === 'development',
+    promptLogVerboseRefused: parsed.PROMPT_LOG_VERBOSE === 'true' && env.NODE_ENV !== 'development',
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
   };

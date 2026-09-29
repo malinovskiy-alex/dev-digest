@@ -12,7 +12,7 @@ import React from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Badge, Button, Icon, Skeleton } from "@devdigest/ui";
 import type { IntentSource, PrIntentRecord } from "@devdigest/shared";
-import { usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
+import { usePrActiveRuns, usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
 import { AGE_TICK_MS, CONFIDENCE_TONE, SOURCE_STATUS_TONE } from "./constants";
 import {
   derivedAt,
@@ -39,6 +39,27 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
 
   const data = intent.data;
   const deriving = refresh.isPending;
+
+  // A review run derives the intent too. When the PR's last active run
+  // finishes, re-read it — otherwise the card keeps its cached "not derived"
+  // (or older) answer and invites a second, paid derive.
+  const activeRuns = usePrActiveRuns(prId).data?.length ?? 0;
+  const prevActiveRuns = React.useRef(activeRuns);
+  const refetchIntent = intent.refetch;
+  React.useEffect(() => {
+    if (prevActiveRuns.current > 0 && activeRuns === 0) void refetchIntent();
+    prevActiveRuns.current = activeRuns;
+  }, [activeRuns, refetchIntent]);
+
+  // A newer intent (from a review run or a retry) makes an old derive error stale.
+  const generatedAt = data?.generated_at;
+  const resetRefresh = refresh.reset;
+  const hasRefreshError = refresh.error != null;
+  React.useEffect(() => {
+    if (hasRefreshError) resetRefresh();
+    // Only when a new intent arrives — not when the error itself appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generatedAt]);
   const loadError = data ? null : intent.error;
   const tone = data ? CONFIDENCE_TONE[data.confidence] : null;
 
@@ -94,8 +115,9 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
 function DeriveError({ error, onRetry }: { error: Error; onRetry?: () => void }): React.JSX.Element {
   const t = useTranslations("brief");
   if (isIntentUnavailable(error)) {
+    // A steady state (no key for the intent model), not a failure: status, not alert.
     return (
-      <div role="alert">
+      <div role="status">
         <p className={cx.stateText}>{t("intent.unavailable")}</p>
         <p className={cx.stateHint}>{t("intent.unavailableHint")}</p>
       </div>

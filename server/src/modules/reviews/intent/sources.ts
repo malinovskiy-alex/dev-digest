@@ -88,6 +88,9 @@ export function parseClosingIssues(text: string): number[] {
  * are recorded as `unresolved` and never fetched — fetching an arbitrary
  * author-supplied URL would be an SSRF vector.
  */
+/** Key-shaped names that are standards and encodings, never tickets. */
+const NOT_TICKET_PREFIXES = new Set(['UTF', 'SHA', 'MD', 'ISO', 'RFC', 'AES', 'RSA', 'HTTP', 'TLS', 'SSL', 'UTC', 'GMT', 'X', 'ES', 'IEEE']);
+
 export function parseExternalTickets(text: string): string[] {
   const out = new Set<string>();
   const urlRe =
@@ -95,13 +98,15 @@ export function parseExternalTickets(text: string): string[] {
   for (const m of text.matchAll(urlRe)) out.add(m[0]);
   // A Jira-style key only after a ticket keyword: a bare `UTF-8` / `SHA-256`
   // has the same shape and is not a ticket. The keyword is case-insensitive
-  // ("JIRA", "Ticket:") and may be followed by up to two filler words ("Ticket:
-  // see JIRA DEV-4521"); the key itself must still be upper-case.
+  // ("JIRA", "Ticket:"), and only a few linking words may sit between it and
+  // the key ("Ticket: see JIRA DEV-4521") — not arbitrary prose, or "Fixes
+  // crash in SHA-256" would become a ticket. The key must be upper-case and
+  // must not be a well-known standard or encoding name.
   const keyRe =
-    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|ticket|jira|refs?)\b[\s:]+(?:[a-z]+\s+){0,2}([a-z][a-z0-9]{1,9}-\d{1,7})\b/gi;
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|ticket|jira|refs?)\b[\s:]+(?:(?:see|in|the|issue|ticket|jira)\s+){0,2}([a-z][a-z0-9]{1,9}-\d{1,7})\b/gi;
   for (const m of text.matchAll(keyRe)) {
     const key = m[1];
-    if (key && /^[A-Z][A-Z0-9]{1,9}-\d{1,7}$/.test(key)) out.add(key);
+    if (key && /^[A-Z][A-Z0-9]{1,9}-\d{1,7}$/.test(key) && !NOT_TICKET_PREFIXES.has(key.split('-')[0]!)) out.add(key);
   }
   return [...out];
 }
@@ -526,16 +531,16 @@ export function describeSources(sources: IntentSource[]): string {
     .join(', ');
 }
 
-/**
- * The text the review prompt receives (reviewer-core wraps it as untrusted and
- * puts the scope rule above it). Empty intent → empty string, so the section
- * is omitted and the prompt stays byte-identical to the pre-intent build.
- */
 /** Whether the description source was actually used (vs empty / template only). */
 export function hasUsableDescription(sources: IntentSource[]): boolean {
   return sources.some((s) => s.type === 'description' && s.status === 'used');
 }
 
+/**
+ * The text the review prompt receives (reviewer-core wraps it as untrusted and
+ * puts the scope rule above it). Empty intent → empty string, so the section
+ * is omitted and the prompt stays byte-identical to the pre-intent build.
+ */
 export function formatIntentForPrompt(record: PrIntentRecord): string {
   if (record.intent.trim().length === 0) return '';
   const lines: string[] = [];

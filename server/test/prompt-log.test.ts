@@ -122,6 +122,13 @@ describe('PROMPT_LOG_VERBOSE is local-only', () => {
     }
   });
 
+  it('is refused when NODE_ENV is not set at all (it defaults to development)', () => {
+    const c = loadConfig({ ...base });
+    expect(c.nodeEnv).toBe('development');
+    expect(c.promptLogVerbose).toBe(false);
+    expect(c.promptLogVerboseRefused).toBe(true);
+  });
+
   it('is off by default', () => {
     const c = loadConfig({ DATABASE_URL: 'postgres://x', NODE_ENV: 'development' });
     expect(c.promptLogVerbose).toBe(false);

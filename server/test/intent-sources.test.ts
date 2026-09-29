@@ -54,6 +54,12 @@ describe('parseExternalTickets', () => {
     expect(parseExternalTickets('Encode as UTF-8 and hash with SHA-256')).toEqual([]);
   });
 
+  it('does not turn prose after a fix keyword into a ticket', () => {
+    expect(parseExternalTickets('Fixes crash in SHA-256 hashing')).toEqual([]);
+    expect(parseExternalTickets('fix bug with UTF-8 decoding')).toEqual([]);
+    expect(parseExternalTickets('Fixes UTF-8 handling')).toEqual([]);
+  });
+
   it('records Jira / Linear / Notion URLs as they are', () => {
     expect(parseExternalTickets('see https://acme.atlassian.net/browse/DEV-9')).toEqual([
       'https://acme.atlassian.net/browse/DEV-9',

@@ -238,6 +238,7 @@ export class IntentService {
     // have run yet (a brand-new PR, or intent derived before the page loaded
     // its detail). Read them from GitHub for this derive instead of
     // classifying on "0 files, 0 commits". Read-only: the sync owns the tables.
+    let githubFallbackFailed = false;
     if (prFiles.length === 0 || commitMessages.length === 0) {
       try {
         const detail = await (await this.container.github()).getPullRequest(repoRef, pull.number);
@@ -251,8 +252,9 @@ export class IntentService {
         }
         if (commitMessages.length === 0) commitMessages = detail.commits.map((c) => c.message);
       } catch {
-        // No GitHub (no token, offline): classify on what we have; the
-        // sources row already says commits/files are empty.
+        // No GitHub (no token, offline, rate-limited): classify on what we
+        // have, and say WHY commits/files are missing instead of "empty".
+        githubFallbackFailed = true;
       }
     }
     const commits = capCommits(commitMessages);
@@ -263,12 +265,12 @@ export class IntentService {
     sources.push(
       commits.length > 0
         ? { type: 'commits', ref: `${commits.length} commit(s)`, status: 'used' }
-        : { type: 'commits', ref: '0 commits', status: 'failed', reason: 'empty' },
+        : { type: 'commits', ref: '0 commits', status: 'failed', reason: githubFallbackFailed ? 'github_unavailable' : 'empty' },
     );
     sources.push(
       files.length > 0
         ? { type: 'files', ref: `${files.length} file(s)`, status: 'used' }
-        : { type: 'files', ref: '0 files', status: 'failed', reason: 'empty' },
+        : { type: 'files', ref: '0 files', status: 'failed', reason: githubFallbackFailed ? 'github_unavailable' : 'empty' },
     );
     // No usable description → the classifier also gets WHERE each change
     // lands: the `@@ … @@` hunk headers, never the changed lines.
