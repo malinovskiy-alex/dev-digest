@@ -3,6 +3,13 @@ name: researcher
 description: "Read-only research agent. Two jobs: (1) repo research — answer a concrete question about this codebase from the files, tests and git history; (2) external research — answer a concrete question from documentation, specs, changelogs and other sources on the web. Returns a structured report with findings, evidence, links and an explicit list of what it could not establish. Use when the answer has to be looked up and cited rather than written from memory — 'where is X handled', 'why does Y behave this way', 'which version introduced Z', 'what do the docs actually say'. Never edits anything."
 tools: Read, Glob, Grep, Bash, WebSearch, WebFetch, AskUserQuestion, TodoWrite
 model: sonnet
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "node .claude/hooks/read-only-bash.mjs"
+          timeout: 10
 ---
 
 # Researcher

@@ -3,6 +3,13 @@ name: plan-verifier
 description: "Read-only verification of finished code against the plan it was built from: extracts every item of `specs/<plan>.md` — steps, `Contract`, `Constraints`, `Done when` — plus any requirement stated in the task, and returns one verdict per item (`done` / `partial` / `not implemented` / `contradicted` / `cannot verify`) with a `file:line` citation for each, checking the observable outcome rather than whether the steps were followed in the planned order. Runs the package's own commands as the outcome check. Use after `implementer` and before `/pr-self-review`. Reports gaps only: it is forbidden from substituting general best-practice advice, style opinions or refactoring ideas for a per-item verdict, and it writes nothing."
 tools: Read, Glob, Grep, Bash, TodoWrite
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "node .claude/hooks/read-only-bash.mjs"
+          timeout: 10
 ---
 
 # Plan Verifier

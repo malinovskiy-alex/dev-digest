@@ -84,13 +84,26 @@ What is *absent* is as deliberate as what is present.
 
 | Agent | `tools` | Notably absent | Why |
 |---|---|---|---|
-| `researcher` | `Read, Glob, Grep, Bash, WebSearch, WebFetch, AskUserQuestion, TodoWrite` | `Write`, `Edit` | read-only by construction; `Bash` is for reading only |
+| `researcher` | `Read, Glob, Grep, Bash, WebSearch, WebFetch, AskUserQuestion, TodoWrite` | `Write`, `Edit` | read-only by construction; `Bash` is limited to read commands by the `read-only-bash` hook |
 | `planner` | `Read, Glob, Grep, Bash, Write, Edit, AskUserQuestion, TodoWrite` | `WebSearch`, `WebFetch` | an external fact must be looked up by `researcher` and cited, never guessed. `Write`/`Edit` are confined to `specs/*.md` |
 | `implementer` | `Read, Write, Edit, Glob, Grep, Bash, Skill, TodoWrite` | `AskUserQuestion` | the plan is the contract; an unanswerable question becomes a line in `## Deviations`, not a pause |
 | `test-writer` | `Read, Write, Edit, Glob, Grep, Bash, Skill, TodoWrite` | `Agent`, `AskUserQuestion`, `WebSearch`/`WebFetch` | writes tests, runs them, reports the output. `Write`/`Edit` are confined to test files by prose |
-| `plan-verifier` | `Read, Glob, Grep, Bash, TodoWrite` | `Write`, `Edit`, `Skill`, `skills:`, `Agent`, `AskUserQuestion` | read-only by construction; **no skill list on purpose** — a loaded best-practices skill is how a per-item verdict degenerates into generic advice |
-| `architecture-reviewer` | `Read, Glob, Grep, Bash, Skill, TodoWrite` | `Write`, `Edit`, `Agent`, `AskUserQuestion` | read-only; `Bash` runs `pnpm arch` and reads git. Never `arch:baseline` |
+| `plan-verifier` | `Read, Glob, Grep, Bash, TodoWrite` | `Write`, `Edit`, `Skill`, `skills:`, `Agent`, `AskUserQuestion` | read-only by construction (`Bash` limited by the `read-only-bash` hook); **no skill list on purpose** — a loaded best-practices skill is how a per-item verdict degenerates into generic advice |
+| `architecture-reviewer` | `Read, Glob, Grep, Bash, Skill, TodoWrite` | `Write`, `Edit`, `Agent`, `AskUserQuestion` | read-only; `Bash` runs `pnpm arch` and reads git, enforced by the `read-only-bash` hook. Never `arch:baseline` |
 | `doc-writer` | `Read, Glob, Grep, Bash, Write, Edit, Skill, TodoWrite` | `Agent`, `AskUserQuestion`, `WebSearch`/`WebFetch` | `Write`/`Edit` confined to `docs/**` by prose |
+
+**Read-only is enforced, not just stated.** `researcher`, `plan-verifier` and
+`architecture-reviewer` keep `Bash` because their job is to run checks, and
+`tools:` cannot narrow Bash to a command list. Each of them therefore wires
+[`.claude/hooks/read-only-bash.mjs`](../hooks/read-only-bash.mjs) as its own
+frontmatter `hooks: PreToolUse` entry, which fires only while that agent runs.
+It is an allowlist: git read commands, `pnpm`/`npm` `arch|typecheck|test|lint`,
+`ls`/`cat`/`grep`-style readers and a `node -e` that neither writes nor spawns.
+Every `>`/`>>` redirect, `tee`, `sed -i`, `find -delete`, git writes, installs and
+`pnpm` inside the npm packages (`reviewer-core/`, `e2e/`) are denied, with the
+reason. Cases: `node .claude/hooks/read-only-bash.test.mjs`. What it cannot stop is
+a side effect of an allowed tool itself, such as pnpm 12 dropping a placeholder
+`pnpm-workspace.yaml`.
 
 Five of the seven declare a `skills:` list in frontmatter — `planner`,
 `implementer`, `test-writer`, `architecture-reviewer` and `doc-writer` — so the

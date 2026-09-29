@@ -3,6 +3,13 @@ name: architecture-reviewer
 description: "Read-only architecture review of the open change: runs `pnpm arch` first, then judges the boundaries dependency-cruiser cannot see — which ring a file belongs in, an import that points outward, a module reaching into a sibling's folder, a service that could only be unit-tested with Postgres, and the `client/` module-boundary rules. Returns findings in this repo's own vocabulary (CRITICAL / WARNING / SUGGESTION) with a `file:line` citation and the rule name behind each one, plus an explicit list of what it did not flag and why. Use after an implementation and before the PR. Writes nothing, fixes nothing, and does not review security, performance or correctness."
 tools: Read, Glob, Grep, Bash, Skill, TodoWrite
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "node .claude/hooks/read-only-bash.mjs"
+          timeout: 10
 skills:
   - onion-architecture
   - frontend-ui-architecture
