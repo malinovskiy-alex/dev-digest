@@ -143,21 +143,21 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   });
 
   // ---- PR intent (L03) ----------------------------------------------------
-  // GET derives lazily: served from the cache while its inputs are unchanged,
-  // re-derived by the cheap `review_intent` model otherwise. 409
-  // `intent_unavailable` when that model's provider has no key.
+  // Intent is derived on demand only: the card's button (POST below) or a
+  // review run. GET never calls the model — it serves the stored intent, or
+  // 404 `intent_not_derived` so the card can offer the button.
   app.get(
     '/pulls/:id/intent',
     { schema: { params: IdParams, response: { 200: PrIntentRecord } } },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
-      const { record } = await intents.get(workspaceId, req.params.id, { logger: req.log, correlationId: String(req.id) });
-      return record;
+      return intents.getStored(workspaceId, req.params.id);
     },
   );
 
-  // Forced re-derive (the ↻ on the card). Every call is a model call, so it is
-  // rate-limited like the review trigger.
+  // Derive now (the card's "Derive intent" / ↻). Every call is a model call,
+  // so it is rate-limited like the review trigger. 409 `intent_unavailable`
+  // when the `review_intent` model's provider has no key.
   app.post(
     '/pulls/:id/intent/refresh',
     {

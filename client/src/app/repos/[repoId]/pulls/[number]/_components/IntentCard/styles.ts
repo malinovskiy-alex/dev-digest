@@ -31,4 +31,9 @@ export const cx = {
   stateText: "m-0 text-sm text-[var(--text-secondary)]",
   stateHint: "m-0 text-[13px] text-[var(--text-muted)]",
   skeletons: "flex flex-col gap-2",
+  body: "flex flex-col gap-4",
+  /** The previous intent stays readable while a re-derive runs, but visibly not current. */
+  dimmed: "flex flex-col gap-4 opacity-50 transition-opacity",
+  empty: "flex flex-col gap-2",
+  errorBox: "flex flex-col gap-1 text-sm text-[var(--crit)]",
 } as const;

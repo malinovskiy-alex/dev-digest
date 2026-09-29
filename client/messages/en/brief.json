@@ -11,7 +11,6 @@
   "unavailable": "Brief not available yet.",
   "unavailableHint": "Run a review or open the PR to compute it.",
   "intent": {
-    "refresh": "Re-derive intent",
     "loading": "Deriving intent…",
     "error": "Could not derive the intent.",
     "retry": "Try again",
@@ -71,7 +70,13 @@
     },
     "ambiguousHint": "The sources are thin or contradict each other — treat this intent as a guess.",
     "missingContext": "Missing context",
-    "missingContextHint": "Referenced by the author but not available to the intent. Their content was not guessed."
+    "missingContextHint": "Referenced by the author but not available to the intent. Their content was not guessed.",
+    "derive": "Derive intent",
+    "rederive": "Re-derive",
+    "deriving": "Deriving…",
+    "notDerived": "Intent not derived yet.",
+    "notDerivedHint": "The cheap intent model derives it on demand, or automatically when a review runs.",
+    "unavailable": "Intent is not available."
   },
   "why": {
     "title": "git-why",

@@ -61,11 +61,13 @@ export function usePrIntent(prId: string | null | undefined) {
     queryFn: () => api.get<PrIntentRecord>(`/pulls/${prId}/intent`),
     enabled: !!prId,
     staleTime: 60_000,
-    retry: (count, err) => !(err instanceof ApiError && err.status === 409) && count < 1,
+    // 404 = not derived yet, 409 = no key for the intent model: both are
+    // states the card explains, not failures to retry.
+    retry: (count, err) => !(err instanceof ApiError && [404, 409].includes(err.status)) && count < 1,
   });
 }
 
-/** Force a re-derive (the ↻ on the intent card). */
+/** Derive (or re-derive) now — the intent card's button. The only UI path that calls the model. */
 export function useRefreshIntent(prId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({

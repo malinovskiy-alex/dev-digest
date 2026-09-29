@@ -10,13 +10,14 @@
 
 import React from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import { Badge, Button, Icon, IconBtn, Skeleton } from "@devdigest/ui";
+import { Badge, Button, Icon, Skeleton } from "@devdigest/ui";
 import type { IntentSource, PrIntentRecord } from "@devdigest/shared";
 import { usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
 import { AGE_TICK_MS, CONFIDENCE_TONE, SOURCE_STATUS_TONE } from "./constants";
 import {
   derivedAt,
   hasUsableDescription,
+  isIntentNotDerived,
   isIntentUnavailable,
   knownReason,
   missingContext,
@@ -30,32 +31,38 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
   const intent = usePrIntent(prId);
   const refresh = useRefreshIntent(prId);
 
-  const onRefresh = () => {
+  // Intent is derived on demand only — this button, or a review run. Opening
+  // the page reads what is stored (GET never calls the model).
+  const derive = () => {
     if (!refresh.isPending) refresh.mutate();
   };
 
-  // A failed refresh keeps showing the last good intent; only its error is new.
-  const error = refresh.error ?? (intent.data ? null : intent.error);
-  const tone = intent.data ? CONFIDENCE_TONE[intent.data.confidence] : null;
+  const data = intent.data;
+  const deriving = refresh.isPending;
+  const loadError = data ? null : intent.error;
+  const tone = data ? CONFIDENCE_TONE[data.confidence] : null;
 
   return (
-    <section
-      aria-label={t("block.intent")}
-      aria-busy={intent.isLoading || refresh.isPending}
-      className={cx.card}
-    >
+    <section aria-label={t("block.intent")} aria-busy={intent.isLoading || deriving} className={cx.card}>
       <div className={cx.header}>
         <Icon.Target size={14} className={cx.headerIcon} aria-hidden />
         <span className={cx.headerLabel}>{t("block.intent")}</span>
         <div className={cx.headerRight}>
-          {intent.data && tone && !error && (
+          {data && tone && (
             <Badge color={tone.color} bg={tone.bg} icon={tone.icon}>
-              {t(`intent.confidence.${intent.data.confidence}`)}
+              {t(`intent.confidence.${data.confidence}`)}
             </Badge>
           )}
-          <IconBtn icon="RefreshCw" label={t("intent.refresh")} onClick={onRefresh} />
+          {data && (
+            <Button size="sm" icon="RefreshCw" loading={deriving} disabled={deriving} onClick={derive}>
+              {deriving ? t("intent.deriving") : t("intent.rederive")}
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* A failed derive never hides the last good intent: its error sits on top. */}
+      {refresh.error && <DeriveError error={refresh.error} />}
 
       {intent.isLoading ? (
         <div className={cx.skeletons} role="status" aria-label={t("intent.loading")}>
@@ -63,23 +70,49 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
           <Skeleton width="45%" />
           <Skeleton width="55%" />
         </div>
-      ) : error && isIntentUnavailable(error) ? (
-        <>
-          <p className={cx.stateText}>{t("unavailable")}</p>
-          <p className={cx.stateHint}>{t("intent.unavailableHint")}</p>
-        </>
-      ) : error ? (
-        <div role="alert">
-          <p className={cx.stateText}>{t("intent.error")}</p>
-          <p className={cx.stateHint}>{error.message}</p>
-          <Button onClick={() => (intent.data ? onRefresh() : void intent.refetch())}>
+      ) : data ? (
+        <div className={deriving ? cx.dimmed : cx.body}>
+          <IntentBody record={data} />
+        </div>
+      ) : isIntentNotDerived(loadError) ? (
+        <div className={cx.empty}>
+          <p className={cx.stateText}>{t("intent.notDerived")}</p>
+          <p className={cx.stateHint}>{t("intent.notDerivedHint")}</p>
+          <div>
+            <Button kind="primary" icon="Target" loading={deriving} disabled={deriving} onClick={derive}>
+              {deriving ? t("intent.deriving") : t("intent.derive")}
+            </Button>
+          </div>
+        </div>
+      ) : loadError ? (
+        <DeriveError error={loadError} onRetry={() => void intent.refetch()} />
+      ) : null}
+    </section>
+  );
+}
+
+function DeriveError({ error, onRetry }: { error: Error; onRetry?: () => void }): React.JSX.Element {
+  const t = useTranslations("brief");
+  if (isIntentUnavailable(error)) {
+    return (
+      <div role="alert">
+        <p className={cx.stateText}>{t("intent.unavailable")}</p>
+        <p className={cx.stateHint}>{t("intent.unavailableHint")}</p>
+      </div>
+    );
+  }
+  return (
+    <div role="alert" className={cx.errorBox}>
+      <p className="m-0">{t("intent.error")}</p>
+      <p className={cx.stateHint}>{error.message}</p>
+      {onRetry && (
+        <div>
+          <Button size="sm" onClick={onRetry}>
             {t("intent.retry")}
           </Button>
         </div>
-      ) : intent.data ? (
-        <IntentBody record={intent.data} />
-      ) : null}
-    </section>
+      )}
+    </div>
   );
 }
 

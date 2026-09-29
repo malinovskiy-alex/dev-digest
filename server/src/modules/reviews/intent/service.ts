@@ -84,6 +84,22 @@ export class IntentService {
     this.repo = repo ?? new ReviewRepository(container.db);
   }
 
+  /**
+   * The intent already derived for this PR — NO model call, no GitHub call.
+   * What opening the PR page reads: intent is derived only when the user asks
+   * (POST /intent/refresh) or a review run needs it (`get`), never on a page
+   * view. 404 `intent_not_derived` when there is none yet.
+   */
+  async getStored(workspaceId: string, prId: string): Promise<PrIntentRecord> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError(`PR ${prId} not found`);
+    const stored = await this.repo.getIntent(prId);
+    if (!stored) {
+      throw new AppError('intent_not_derived', 'No intent has been derived for this PR yet.', 404);
+    }
+    return { ...stored.record, cache_hit: true };
+  }
+
   /** Cached intent if its inputs are unchanged, else a fresh derive. `force` skips the cache. */
   async get(
     workspaceId: string,
@@ -216,10 +232,29 @@ export class IntentService {
     }
 
     // ---- indirect: branch, commits, files ----------------------------------
-    const [commitMessages, prFiles] = await Promise.all([
-      this.repo.getPrCommitMessages(pull.id),
-      this.repo.getPrFiles(pull.id),
-    ]);
+    let [commitMessages, prFiles]: [string[], { path: string; additions: number; deletions: number; patch: string | null }[]] =
+      await Promise.all([this.repo.getPrCommitMessages(pull.id), this.repo.getPrFiles(pull.id)]);
+    // pr_files / pr_commits are filled by the PR-detail sync, which may not
+    // have run yet (a brand-new PR, or intent derived before the page loaded
+    // its detail). Read them from GitHub for this derive instead of
+    // classifying on "0 files, 0 commits". Read-only: the sync owns the tables.
+    if (prFiles.length === 0 || commitMessages.length === 0) {
+      try {
+        const detail = await (await this.container.github()).getPullRequest(repoRef, pull.number);
+        if (prFiles.length === 0) {
+          prFiles = detail.files.map((f) => ({
+            path: f.path,
+            additions: f.additions,
+            deletions: f.deletions,
+            patch: f.patch ?? null,
+          }));
+        }
+        if (commitMessages.length === 0) commitMessages = detail.commits.map((c) => c.message);
+      } catch {
+        // No GitHub (no token, offline): classify on what we have; the
+        // sources row already says commits/files are empty.
+      }
+    }
     const commits = capCommits(commitMessages);
     const files = capFiles(
       prFiles.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })),

@@ -9,6 +9,11 @@ export function isIntentUnavailable(err: unknown): boolean {
   return err instanceof ApiError && err.status === 409;
 }
 
+/** 404 `intent_not_derived` = nobody asked yet: the card offers the "Derive intent" button. */
+export function isIntentNotDerived(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 404 && err.code === "intent_not_derived";
+}
+
 export function shortSha(sha: string | null | undefined): string | null {
   return sha ? sha.slice(0, SHORT_SHA_LENGTH) : null;
 }
