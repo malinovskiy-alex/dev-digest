@@ -11,8 +11,7 @@
   "unavailable": "Brief not available yet.",
   "unavailableHint": "Run a review or open the PR to compute it.",
   "intent": {
-    "refresh": "Re-derive intent",
-    "loading": "Deriving intent…",
+    "loading": "Loading intent…",
     "error": "Could not derive the intent.",
     "retry": "Try again",
     "unavailableHint": "Add an API key for the intent model in Settings, or pick another model for “PR Review · Intent”.",
@@ -26,12 +25,6 @@
     "derived": "derived {ago}",
     "derivedFor": "derived {ago} for {sha}",
     "model": "model {model}",
-    "confidence": {
-      "high": "High confidence",
-      "medium": "Medium confidence",
-      "low": "Inferred · low confidence"
-    },
-    "lowHint": "PR has no description — intent inferred from title, branch, commits and files.",
     "kind": {
       "feature": "Feature",
       "bugfix": "Bug fix",
@@ -49,7 +42,8 @@
       "spec": "Spec",
       "branch": "Branch",
       "commits": "Commits",
-      "files": "Files"
+      "files": "Files",
+      "hunks": "Hunk headers"
     },
     "status": {
       "used": "used",
@@ -65,8 +59,17 @@
       "external": "external link",
       "limit_exceeded": "over the limit",
       "fetch_failed": "could not be fetched",
-      "github_unavailable": "GitHub not connected"
-    }
+      "github_unavailable": "GitHub not connected",
+      "truncated": "truncated"
+    },
+    "missingContext": "Missing context",
+    "missingContextHint": "Referenced by the author but not available to the intent. Their content was not guessed.",
+    "derive": "Derive intent",
+    "rederive": "Re-derive",
+    "deriving": "Deriving…",
+    "notDerived": "Intent not derived yet.",
+    "notDerivedHint": "The cheap intent model derives it on demand, or automatically when a review runs.",
+    "unavailable": "Intent is not available."
   },
   "why": {
     "title": "git-why",

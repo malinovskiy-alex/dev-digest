@@ -2,6 +2,8 @@ import type { FeatureModelChoice, IntentSource, PrIntentRecord, RepoRef } from '
 import type { Container } from '../../../platform/container.js';
 import { AppError, ConfigError, NotFoundError } from '../../../platform/errors.js';
 import { renderPrompt } from '../../../platform/prompts.js';
+import { logPromptAssembly } from '../../../platform/prompt-log.js';
+import { sectionMeta } from '@devdigest/reviewer-core';
 import type { PullRow } from '../../../db/rows.js';
 import { ReviewRepository } from '../repository.js';
 import {
@@ -17,16 +19,18 @@ import { IntentLLMOutput } from './schema.js';
 import {
   capCommits,
   capFiles,
+  capHunks,
   capTicket,
   clampOutput,
   computeConfidence,
   intentInputHash,
+  missingContext,
   isMeaningfulDescription,
   normalizeDescription,
   parseClosingIssues,
   parseExternalTickets,
   parseSpecLinks,
-  renderClassifierInput,
+  buildClassifierInput,
   type IntentInputs,
   type IntentSpec,
   type IntentTicket,
@@ -36,6 +40,13 @@ import {
 export interface IntentLogger {
   info: (obj: unknown, msg?: string) => void;
   warn: (obj: unknown, msg?: string) => void;
+}
+
+export interface IntentGetOptions {
+  force?: boolean;
+  logger?: IntentLogger;
+  /** Ties the log lines to the caller: the request id, or the review run id(s). */
+  correlationId?: string;
 }
 
 export interface IntentResult {
@@ -73,11 +84,27 @@ export class IntentService {
     this.repo = repo ?? new ReviewRepository(container.db);
   }
 
+  /**
+   * The intent already derived for this PR — NO model call, no GitHub call.
+   * What opening the PR page reads: intent is derived only when the user asks
+   * (POST /intent/refresh) or a review run needs it (`get`), never on a page
+   * view. 404 `intent_not_derived` when there is none yet.
+   */
+  async getStored(workspaceId: string, prId: string): Promise<PrIntentRecord> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError(`PR ${prId} not found`);
+    const stored = await this.repo.getIntent(prId);
+    if (!stored) {
+      throw new AppError('intent_not_derived', 'No intent has been derived for this PR yet.', 404);
+    }
+    return { ...stored.record, cache_hit: true };
+  }
+
   /** Cached intent if its inputs are unchanged, else a fresh derive. `force` skips the cache. */
   async get(
     workspaceId: string,
     prId: string,
-    opts: { force?: boolean; logger?: IntentLogger } = {},
+    opts: IntentGetOptions = {},
   ): Promise<IntentResult> {
     const existing = inFlight.get(prId);
     if (existing && !opts.force) return existing;
@@ -98,7 +125,7 @@ export class IntentService {
   private async derive(
     workspaceId: string,
     prId: string,
-    opts: { force?: boolean; logger?: IntentLogger },
+    opts: IntentGetOptions,
   ): Promise<IntentResult> {
     const start = Date.now();
     const pull = await this.repo.getPull(workspaceId, prId);
@@ -115,15 +142,15 @@ export class IntentService {
       const stored = await this.repo.getIntent(prId);
       if (stored && stored.inputHash === inputHash) {
         const durationMs = Date.now() - start;
-        this.log(opts.logger, prId, inputHash, true, stored.record, durationMs);
+        this.log(opts, prId, inputHash, true, stored.record, durationMs);
         return { record: { ...stored.record, cache_hit: true }, cacheHit: true, inputHash, durationMs };
       }
     }
 
-    const record = await this.classify(prId, pull.headSha, inputs, sources, choice);
+    const record = await this.classify(prId, pull.headSha, inputs, sources, choice, opts);
     await this.repo.upsertIntent(prId, record, inputHash);
     const durationMs = Date.now() - start;
-    this.log(opts.logger, prId, inputHash, false, record, durationMs);
+    this.log(opts, prId, inputHash, false, record, durationMs);
     return { record: { ...record, cache_hit: false }, cacheHit: false, inputHash, durationMs };
   }
 
@@ -190,8 +217,11 @@ export class IntentService {
       }
       try {
         const content = await this.container.git.readFileAt(repoRef, pull.headSha, link.path);
+        // A long plan is still the plan: read its start rather than skip it,
+        // and say so — the classifier and the UI both see `truncated`.
         if (content.length > MAX_SPEC_CHARS) {
-          sources.push({ type: 'spec', ref: link.path, status: 'failed', reason: 'too_large' });
+          specs.push({ path: link.path, content: content.slice(0, MAX_SPEC_CHARS), truncated: true });
+          sources.push({ type: 'spec', ref: link.path, status: 'used', reason: 'truncated' });
           continue;
         }
         specs.push({ path: link.path, content });
@@ -202,10 +232,31 @@ export class IntentService {
     }
 
     // ---- indirect: branch, commits, files ----------------------------------
-    const [commitMessages, prFiles] = await Promise.all([
-      this.repo.getPrCommitMessages(pull.id),
-      this.repo.getPrFiles(pull.id),
-    ]);
+    let [commitMessages, prFiles]: [string[], { path: string; additions: number; deletions: number; patch: string | null }[]] =
+      await Promise.all([this.repo.getPrCommitMessages(pull.id), this.repo.getPrFiles(pull.id)]);
+    // pr_files / pr_commits are filled by the PR-detail sync, which may not
+    // have run yet (a brand-new PR, or intent derived before the page loaded
+    // its detail). Read them from GitHub for this derive instead of
+    // classifying on "0 files, 0 commits". Read-only: the sync owns the tables.
+    let githubFallbackFailed = false;
+    if (prFiles.length === 0 || commitMessages.length === 0) {
+      try {
+        const detail = await (await this.container.github()).getPullRequest(repoRef, pull.number);
+        if (prFiles.length === 0) {
+          prFiles = detail.files.map((f) => ({
+            path: f.path,
+            additions: f.additions,
+            deletions: f.deletions,
+            patch: f.patch ?? null,
+          }));
+        }
+        if (commitMessages.length === 0) commitMessages = detail.commits.map((c) => c.message);
+      } catch {
+        // No GitHub (no token, offline, rate-limited): classify on what we
+        // have, and say WHY commits/files are missing instead of "empty".
+        githubFallbackFailed = true;
+      }
+    }
     const commits = capCommits(commitMessages);
     const files = capFiles(
       prFiles.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })),
@@ -214,13 +265,31 @@ export class IntentService {
     sources.push(
       commits.length > 0
         ? { type: 'commits', ref: `${commits.length} commit(s)`, status: 'used' }
-        : { type: 'commits', ref: '0 commits', status: 'failed', reason: 'empty' },
+        : { type: 'commits', ref: '0 commits', status: 'failed', reason: githubFallbackFailed ? 'github_unavailable' : 'empty' },
     );
     sources.push(
       files.length > 0
         ? { type: 'files', ref: `${files.length} file(s)`, status: 'used' }
-        : { type: 'files', ref: '0 files', status: 'failed', reason: 'empty' },
+        : { type: 'files', ref: '0 files', status: 'failed', reason: githubFallbackFailed ? 'github_unavailable' : 'empty' },
     );
+    // No usable description → the classifier also gets WHERE each change
+    // lands: the `@@ … @@` hunk headers, never the changed lines.
+    const hunks = meaningfulDescription
+      ? []
+      : capHunks(prFiles.map((f) => ({ path: f.path, patch: f.patch })));
+    if (!meaningfulDescription) {
+      const count = hunks.reduce((n, h) => n + h.headers.length, 0);
+      sources.push(
+        count > 0
+          ? { type: 'hunks', ref: `${count} hunk header(s)`, status: 'used' }
+          : { type: 'hunks', ref: '0 hunk headers', status: 'failed', reason: 'empty' },
+      );
+    }
+    const unavailable = missingContext(sources).map((m) => ({
+      type: m.type as 'ticket' | 'spec',
+      ref: m.ref,
+      reason: m.reason,
+    }));
 
     return {
       inputs: {
@@ -230,8 +299,10 @@ export class IntentService {
         branch: pull.branch,
         commits,
         files,
+        hunks,
         ticket,
         specs,
+        unavailable,
       },
       sources,
     };
@@ -243,6 +314,7 @@ export class IntentService {
     inputs: IntentInputs,
     sources: IntentSource[],
     choice: FeatureModelChoice,
+    opts: IntentGetOptions,
   ): Promise<PrIntentRecord> {
     let llm;
     try {
@@ -259,6 +331,19 @@ export class IntentService {
     }
 
     const system = await renderPrompt(INTENT_PROMPT_FILE, {});
+    const user = buildClassifierInput(inputs);
+    logPromptAssembly(
+      opts.logger,
+      {
+        correlationId: opts.correlationId ?? `intent:${prId}`,
+        kind: 'intent',
+        provider: choice.provider,
+        model: choice.model,
+        prId,
+      },
+      [sectionMeta('system', INTENT_PROMPT_FILE, 'trusted', system), ...user.sections],
+      this.container.config.promptLogVerbose,
+    );
     const result = await llm.completeStructured({
       model: choice.model,
       schema: IntentLLMOutput,
@@ -269,7 +354,7 @@ export class IntentService {
       maxRetries: INTENT_MAX_RETRIES,
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: renderClassifierInput(inputs) },
+        { role: 'user', content: user.text },
       ],
     });
     const out = clampOutput(result.data);
@@ -305,15 +390,16 @@ export class IntentService {
 
   /** Structured log line — refs and statuses only, never description/ticket/spec content. */
   private log(
-    logger: IntentLogger | undefined,
+    opts: IntentGetOptions,
     prId: string,
     inputHash: string,
     cacheHit: boolean,
     record: PrIntentRecord,
     durationMs: number,
   ): void {
-    logger?.info(
+    opts.logger?.info(
       {
+        ...(opts.correlationId ? { correlation_id: opts.correlationId } : {}),
         prId,
         inputHash,
         cacheHit,

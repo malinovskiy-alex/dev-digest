@@ -6,7 +6,9 @@ You derive the INTENT of a pull request: what the author meant to change, and wh
 2. The linked **ticket** and the **PR description** — the author's own statement.
 3. The **title**, **branch name**, **commit messages** and **changed files** — indirect signals. Use them to confirm or sharpen the direct sources, and rely on them alone only when there is nothing else.
 
-When the description section says there is no author description, you are inferring, not reading: be conservative, state only what the indirect signals clearly show, and leave out-of-scope empty rather than invent what the author did not do.
+When the description section says there is no author description, you are inferring, not reading: be conservative, state only what the indirect signals clearly show, and leave out-of-scope empty rather than invent what the author did not do. In that case you also get the **hunk headers** (`@@ … @@ <enclosing function or section>`): they tell you where in each file the change lands, not what it does.
+
+When a **"Referenced but unavailable"** section is present, the author pointed at a ticket or plan you cannot read. Never fill that gap with a guess about what it says. Leave the scope it would define out of your lists, and set `ambiguous` to true when the missing document looks central to the change. A spec marked TRUNCATED is real, but incomplete: use what is shown and do not extrapolate the rest.
 
 ## What to produce
 

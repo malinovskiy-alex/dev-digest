@@ -52,6 +52,22 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         ? false
         : {
             level: config.logLevel,
+            // Defence in depth: secrets never belong in a log object, but if one
+            // slips in under a conventional key, pino masks it. Prompt logging
+            // does not rely on this — it only ever sees metadata (prompt-log.ts).
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                '*.apiKey',
+                '*.api_key',
+                '*.token',
+                '*.password',
+                '*.secret',
+                '*.authorization',
+              ],
+              censor: '[redacted]',
+            },
             transport:
               config.nodeEnv === 'development'
                 ? { target: 'pino-pretty', options: { colorize: true } }
@@ -66,6 +82,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   const container = new Container(config, db, opts.overrides);
   app.decorate('container', container);
+
+  if (config.promptLogVerboseRefused) {
+    app.log.warn(
+      { nodeEnv: config.nodeEnv },
+      'PROMPT_LOG_VERBOSE ignored: verbose prompt logging is local-only (NODE_ENV=development)',
+    );
+  } else if (config.promptLogVerbose) {
+    app.log.info('prompt log: verbose detail on (PROMPT_LOG_VERBOSE, development only)');
+  }
 
   // Reap runs left 'running' by a previous (now-dead) process — otherwise they
   // show as perpetually "running" in the UI and can't be cancelled (no runner).
