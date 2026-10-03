@@ -1,7 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
-import type { Intent } from '@devdigest/shared';
+import { IntentConfidence, IntentKind, IntentSource } from '@devdigest/shared';
+import type { PrIntentRecord } from '@devdigest/shared';
 import type { PullRow } from '../../../db/rows.js';
 
 // ---- PR lookup (workspace-scoped) -----------------------------------------
@@ -46,23 +47,77 @@ export async function markReviewed(db: Db, prId: string, sha: string): Promise<v
 
 // ---- intent ---------------------------------------------------------------
 
-export async function upsertIntent(db: Db, prId: string, intent: Intent): Promise<void> {
-  await db
-    .insert(t.prIntent)
-    .values({
-      prId,
-      intent: intent.intent,
-      inScope: intent.in_scope,
-      outOfScope: intent.out_of_scope,
-    })
-    .onConflictDoUpdate({
-      target: t.prIntent.prId,
-      set: { intent: intent.intent, inScope: intent.in_scope, outOfScope: intent.out_of_scope },
-    });
+/** The cached intent row plus the hash that keys it (null = pre-L03 row → always stale). */
+export interface StoredIntent {
+  record: PrIntentRecord;
+  inputHash: string | null;
 }
 
-export async function getIntent(db: Db, prId: string): Promise<Intent | undefined> {
+export async function upsertIntent(
+  db: Db,
+  prId: string,
+  record: PrIntentRecord,
+  inputHash: string,
+): Promise<void> {
+  const values = {
+    intent: record.intent,
+    inScope: record.in_scope,
+    outOfScope: record.out_of_scope,
+    kind: record.kind ?? null,
+    riskAreas: record.risk_areas,
+    conflicts: record.conflicts,
+    confidence: record.confidence,
+    sources: record.sources.map((s) => ({ ...s, reason: s.reason ?? null })),
+    inputHash,
+    headSha: record.head_sha ?? null,
+    provider: record.provider ?? null,
+    model: record.model ?? null,
+    tokensIn: record.tokens_in ?? null,
+    tokensOut: record.tokens_out ?? null,
+    costUsd: record.cost_usd ?? null,
+    generatedAt: record.generated_at ? new Date(record.generated_at) : new Date(),
+  };
+  await db
+    .insert(t.prIntent)
+    .values({ prId, ...values })
+    .onConflictDoUpdate({ target: t.prIntent.prId, set: values });
+}
+
+export async function getIntent(db: Db, prId: string): Promise<StoredIntent | undefined> {
   const [row] = await db.select().from(t.prIntent).where(eq(t.prIntent.prId, prId));
   if (!row) return undefined;
-  return { intent: row.intent, in_scope: row.inScope, out_of_scope: row.outOfScope };
+  const confidence = IntentConfidence.safeParse(row.confidence);
+  const kind = IntentKind.safeParse(row.kind);
+  const sources = IntentSource.array().safeParse(row.sources);
+  return {
+    inputHash: row.inputHash,
+    record: {
+      pr_id: row.prId,
+      intent: row.intent,
+      in_scope: row.inScope,
+      out_of_scope: row.outOfScope,
+      kind: kind.success ? kind.data : null,
+      risk_areas: row.riskAreas,
+      conflicts: row.conflicts,
+      confidence: confidence.success ? confidence.data : 'low',
+      sources: sources.success ? sources.data : [],
+      generated_at: row.generatedAt.toISOString(),
+      head_sha: row.headSha,
+      provider: row.provider,
+      model: row.model,
+      tokens_in: row.tokensIn,
+      tokens_out: row.tokensOut,
+      cost_usd: row.costUsd,
+    },
+  };
+}
+
+/** The PR's commit messages, oldest first (an intent source). */
+export async function getPrCommitMessages(db: Db, prId: string): Promise<string[]> {
+  const rows = await db
+    .select({ message: t.prCommits.message })
+    .from(t.prCommits)
+    .where(eq(t.prCommits.prId, prId))
+    .orderBy(asc(t.prCommits.committedAt));
+  return rows.map((r) => r.message);
 }

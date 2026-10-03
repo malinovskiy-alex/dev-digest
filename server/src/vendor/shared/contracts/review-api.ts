@@ -56,8 +56,23 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
-/** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
-export const PrIntentRecord = Intent.extend({ pr_id: z.string() });
+/**
+ * Intent persisted for a PR (the Intent plus the pr_id it scopes), with the
+ * provenance of the derive: which head it was computed for, by which model, at
+ * what cost (kept apart from any agent run's cost), and whether it was served
+ * from the cache.
+ */
+export const PrIntentRecord = Intent.extend({
+  pr_id: z.string(),
+  head_sha: z.string().nullish(),
+  provider: z.string().nullish(),
+  model: z.string().nullish(),
+  tokens_in: z.number().int().nullish(),
+  tokens_out: z.number().int().nullish(),
+  cost_usd: z.number().nullish(),
+  /** True when this response came from the cache (no LLM call). */
+  cache_hit: z.boolean().optional(),
+});
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 
 /** Smart-diff response for a PR (the SmartDiff). */

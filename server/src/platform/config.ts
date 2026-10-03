@@ -30,6 +30,9 @@ const EnvSchema = z.object({
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Local-only extra detail in the prompt-assembly log (see platform/prompt-log.ts).
+  // Honoured ONLY when NODE_ENV=development; ignored (with a boot warning) elsewhere.
+  PROMPT_LOG_VERBOSE: z.string().optional(),
   // `.env` (and .env.example) ship `LOG_LEVEL=` empty; an empty string is not a
   // valid enum member, so coerce '' → undefined to fall through to the default.
   LOG_LEVEL: z.preprocess(
@@ -48,6 +51,13 @@ export type AppConfig = {
   secretsPath: string;
   nodeEnv: 'development' | 'test' | 'production';
   logLevel: string;
+  /**
+   * Adds the per-section detail line to the prompt-assembly log. true only when
+   * PROMPT_LOG_VERBOSE=true AND NODE_ENV=development — never content in any mode.
+   */
+  promptLogVerbose: boolean;
+  /** PROMPT_LOG_VERBOSE was set but refused because NODE_ENV is not development. */
+  promptLogVerboseRefused: boolean;
   /** Allowed CORS origin for the Next.js dev server. */
   webOrigin: string;
   /** Whether memory/RAG embeddings (OpenAI) are enabled. Default false. */
@@ -75,6 +85,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     nodeEnv: parsed.NODE_ENV,
     logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
+    // Verbose needs NODE_ENV=development set EXPLICITLY: the parsed value
+    // defaults to 'development' when NODE_ENV is absent, which is exactly the
+    // unconfigured host this flag must not reach.
+    promptLogVerbose: parsed.PROMPT_LOG_VERBOSE === 'true' && env.NODE_ENV === 'development',
+    promptLogVerboseRefused: parsed.PROMPT_LOG_VERBOSE === 'true' && env.NODE_ENV !== 'development',
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
   };
