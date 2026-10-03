@@ -73,6 +73,38 @@ export async function reviewsForPull(
   }));
 }
 
+/**
+ * The PR's latest review — the newest `kind = 'review'` row, workspace-scoped —
+ * as its id plus its finding anchors (`file`, `start_line`). Dismissed and
+ * accepted findings are included. `review_id` is null (and `anchors` empty)
+ * when the PR has no such review. Two indexed lookups:
+ * `reviews_ws_pr_created_idx`, then `findings_review_idx`.
+ */
+export async function latestReviewFindingAnchors(
+  db: Db,
+  workspaceId: string,
+  prId: string,
+): Promise<{ review_id: string | null; anchors: { file: string; start_line: number }[] }> {
+  const [latest] = await db
+    .select({ id: t.reviews.id })
+    .from(t.reviews)
+    .where(
+      and(
+        eq(t.reviews.workspaceId, workspaceId),
+        eq(t.reviews.prId, prId),
+        eq(t.reviews.kind, 'review'),
+      ),
+    )
+    .orderBy(desc(t.reviews.createdAt))
+    .limit(1);
+  if (!latest) return { review_id: null, anchors: [] };
+  const anchors = await db
+    .select({ file: t.findings.file, start_line: t.findings.startLine })
+    .from(t.findings)
+    .where(eq(t.findings.reviewId, latest.id));
+  return { review_id: latest.id, anchors };
+}
+
 export async function getReview(db: Db, reviewId: string): Promise<ReviewRow | undefined> {
   const [row] = await db.select().from(t.reviews).where(eq(t.reviews.id, reviewId));
   return row;

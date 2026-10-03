@@ -19,6 +19,22 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-10-03 — Showing the flat diff as a "loading" fallback, then re-rendering it as groups
+**Symptom:** a 100-file PR (about 7k changed lines) on *Files changed* leaves
+the tab frozen for minutes. Chrome DevTools/CDP calls time out with
+"renderer may be frozen", although `/pulls/:id/smart-diff` answers in about 0.25 s.
+**Cause:** `DiffViewer` has no virtualisation, and `FileCard` auto-expands every
+file of up to `AUTO_EXPAND_MAX_LINES` (200) lines, so one render of a big PR
+mounts thousands of `CodeLine`s. When the tab rendered Original order while
+the smart diff loaded and then swapped to `SmartDiffGroup`s, the whole tree was
+mounted twice, unmounted once, and laid out again.
+**Rule:** never put a full `DiffViewer` behind a "data still loading" branch
+that will be replaced. Show a cheap placeholder until the grouping settles,
+and fall back to the flat order only when the query has *failed*. Keep
+per-line hooks (`useTranslations` and similar) out of `CodeLine`, and put them
+in a child that renders only on the lines that need it (`FindingLineLabel`).
+**Where:** `client/src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/DiffTab.tsx:120` (`smartDiffLoading`)
+
 ### 2026-09-20 — `pnpm build` kills a running `pnpm dev`, and the wreckage looks like a flaky build
 **Symptom:** two failures that look unrelated. First `pnpm build` exits with
 `Failed to collect page data for /agents/[id]` and the very next run, with no
@@ -228,3 +244,6 @@ the shorthand/longhand mix React warns about — the existing comment claiming
   timeline tile the same preview from findings `FindingsTab` already holds. A
   click now pins the panel open on both surfaces, which is also the touch
   fallback `client/specs/findings-popover-touch-fallback.md` planned.
+- 2026-10-03 — Smart Diff (L04): *Files changed* is grouped by role from
+  `GET /pulls/:id/smart-diff`, findings render inline through `DiffViewer`'s
+  `findings` / `renderFinding` slot, and the route-private `FindingCard` is reused.

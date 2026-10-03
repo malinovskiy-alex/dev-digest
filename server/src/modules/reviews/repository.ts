@@ -66,6 +66,22 @@ export class ReviewRepository {
     return reviewRepo.reviewsForPull(this.db, prId);
   }
 
+  /**
+   * The PR's "latest review" — the newest `kind = 'review'` row for the PR in
+   * this workspace — as its id (null when there is none) plus its finding
+   * anchors, dismissed and accepted findings included. This is the same rule
+   * the PR list uses for its score and severity columns (`pulls/routes.ts`,
+   * the latest-review rollup) — change one and you must change the other.
+   * Feeds Smart Diff's `review_id` and `finding_lines`; the client picks its
+   * inline findings by that `review_id`, so it never re-derives this rule.
+   */
+  latestReviewFindingAnchors(
+    workspaceId: string,
+    prId: string,
+  ): Promise<{ review_id: string | null; anchors: { file: string; start_line: number }[] }> {
+    return reviewRepo.latestReviewFindingAnchors(this.db, workspaceId, prId);
+  }
+
   getReview(reviewId: string): Promise<ReviewRow | undefined> {
     return reviewRepo.getReview(this.db, reviewId);
   }

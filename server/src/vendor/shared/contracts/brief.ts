@@ -122,7 +122,8 @@ export const PrHistory = z.object({
 export type PrHistory = z.infer<typeof PrHistory>;
 
 // ---- Smart Diff ----
-export const SmartDiffRole = z.enum(['core', 'wiring', 'boilerplate']);
+// Display order = enum order: core → tests → wiring → docs → boilerplate.
+export const SmartDiffRole = z.enum(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
 export type SmartDiffRole = z.infer<typeof SmartDiffRole>;
 
 export const SmartDiffFile = z.object({
@@ -147,6 +148,10 @@ export const ProposedSplit = z.object({
 export type ProposedSplit = z.infer<typeof ProposedSplit>;
 
 export const SmartDiff = z.object({
+  // The review `finding_lines` were taken from — the PR's latest `kind='review'`
+  // review, chosen by the server. null when the PR has no such review. The
+  // client renders inline findings from exactly this review, never its own pick.
+  review_id: z.string().nullable(),
   groups: z.array(SmartDiffGroup),
   split_suggestion: z.object({
     too_big: z.boolean(),

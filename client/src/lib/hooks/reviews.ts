@@ -14,6 +14,7 @@ import type {
   ReviewRunResponse,
   RunEvent,
   RunSummary,
+  SmartDiffResponse,
 } from "@devdigest/shared";
 
 // ---- Active (in-flight) runs — server-side source of truth ----
@@ -83,6 +84,26 @@ export function usePrReviews(prId: string | null | undefined) {
   return useQuery({
     queryKey: ["reviews", prId],
     queryFn: () => api.get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
+    enabled: !!prId,
+  });
+}
+
+// ---- Smart Diff (files grouped by role + latest review's finding lines) ----
+/** The Smart Diff query key — the one spelling of it. Nested under
+   ["reviews", prId] ON PURPOSE: TanStack invalidation matches by prefix, so
+   every existing ["reviews", prId] invalidation (run, delete, accept/dismiss)
+   refreshes the grouping's finding counts for free. Use this for any exact-key
+   invalidation of the Smart Diff alone. */
+export function smartDiffKey(prId: string | null | undefined) {
+  return ["reviews", prId, "smart-diff"] as const;
+}
+
+/** The PR's files grouped core → tests → wiring → docs → boilerplate, plus the
+   id of the review the server picked as "latest" (`review_id`). */
+export function useSmartDiff(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: smartDiffKey(prId),
+    queryFn: () => api.get<SmartDiffResponse>(`/pulls/${prId}/smart-diff`),
     enabled: !!prId,
   });
 }

@@ -19,10 +19,19 @@ export const s = {
     cursor: "pointer",
   } satisfies CSSProperties,
   fileIcon: { color: "var(--text-muted)" } satisfies CSSProperties,
+  /** Holds the path; takes the free space so the header's right-hand
+   *  items (findings, +/- stat, comments) line up at the far right. */
+  pathWrap: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+  } satisfies CSSProperties,
   filePath: {
     fontSize: 13,
     fontWeight: 500,
-    flex: 1,
+    flex: "0 1 auto",
     minWidth: 0,
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -88,5 +97,45 @@ export function lineSignFor(kind: Line["kind"]): CSSProperties {
     textAlign: "center",
     color: kind === "add" ? "var(--code-add-text)" : kind === "del" ? "var(--code-del-text)" : "var(--text-muted)",
     flexShrink: 0,
+  };
+}
+
+/** The header dot of a file that has review findings, in its top severity's colour. */
+export function findingDotFor(color: string): CSSProperties {
+  return { width: 8, height: 8, borderRadius: 99, background: color, flexShrink: 0 };
+}
+
+/** Left severity bar on a line that carries findings. Drawn with an inset
+ *  box-shadow, not a border, so no border shorthand/longhand mix is possible. */
+export function findingBarFor(color: string): CSSProperties {
+  return { boxShadow: `inset 3px 0 0 ${color}` };
+}
+
+/** Right-aligned "blocker / warning / suggestion" label on a finding line. */
+export function findingLabelFor(color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 0,
+    paddingRight: 12,
+    fontSize: 11.5,
+    fontWeight: 600,
+    color,
+    userSelect: "none",
+  };
+}
+
+/** The file header's findings summary (dot, severity icon, count), in the
+ *  most severe finding's colour; it sits just before the +/- stat. */
+export function findingsBadgeFor(color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: 600,
+    color,
   };
 }

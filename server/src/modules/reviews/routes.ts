@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { PrIntentRecord, RunRequest } from '@devdigest/shared';
+import { PrIntentRecord, RunRequest, SmartDiffResponse } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
@@ -14,6 +14,7 @@ import { IntentService } from './intent/service.js';
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
+ *   GET    /pulls/:id/smart-diff                       → the PR's files grouped by role (Smart Diff)
  *   GET    /pulls/:id/intent                           → derived PR intent (cached by input hash)
  *   POST   /pulls/:id/intent/refresh                   → force a re-derive
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
@@ -141,6 +142,18 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(container, req);
     return service.reviewsForPull(workspaceId, req.params.id);
   });
+
+  // Smart Diff: files grouped core → tests → wiring → docs → boilerplate, with
+  // the latest review's finding lines per file. A PR outside the caller's
+  // workspace is a 404 (thrown by the service), never a 403.
+  app.get(
+    '/pulls/:id/smart-diff',
+    { schema: { params: IdParams, response: { 200: SmartDiffResponse } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.smartDiffForPull(workspaceId, req.params.id);
+    },
+  );
 
   // ---- PR intent (L03) ----------------------------------------------------
   // Intent is derived on demand only: the card's button (POST below) or a
