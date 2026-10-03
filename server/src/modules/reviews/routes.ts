@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { RunRequest, SmartDiffResponse } from '@devdigest/shared';
+import { PrIntentRecord, RunRequest, SmartDiffResponse } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { ReviewService } from './service.js';
+import { IntentService } from './intent/service.js';
 
 /**
  * reviews module.
@@ -14,6 +15,8 @@ import { ReviewService } from './service.js';
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
  *   GET    /pulls/:id/smart-diff                       → the PR's files grouped by role (Smart Diff)
+ *   GET    /pulls/:id/intent                           → derived PR intent (cached by input hash)
+ *   POST   /pulls/:id/intent/refresh                   → force a re-derive
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
  */
 const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
@@ -21,6 +24,7 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
   const service = new ReviewService(container);
+  const intents = new IntentService(container);
 
   // ---- Run a review (manual trigger) -------------------------------
   // Tight per-route limit: each call can fan out to expensive LLM runs.
@@ -148,6 +152,39 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return service.smartDiffForPull(workspaceId, req.params.id);
+    },
+  );
+
+  // ---- PR intent (L03) ----------------------------------------------------
+  // Intent is derived on demand only: the card's button (POST below) or a
+  // review run. GET never calls the model — it serves the stored intent, or
+  // 404 `intent_not_derived` so the card can offer the button.
+  app.get(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams, response: { 200: PrIntentRecord } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return intents.getStored(workspaceId, req.params.id);
+    },
+  );
+
+  // Derive now (the card's "Derive intent" / ↻). Every call is a model call,
+  // so it is rate-limited like the review trigger. 409 `intent_unavailable`
+  // when the `review_intent` model's provider has no key.
+  app.post(
+    '/pulls/:id/intent/refresh',
+    {
+      schema: { params: IdParams, response: { 200: PrIntentRecord } },
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      const { record } = await intents.get(workspaceId, req.params.id, {
+        force: true,
+        logger: req.log,
+        correlationId: String(req.id),
+      });
+      return record;
     },
   );
 

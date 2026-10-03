@@ -224,6 +224,13 @@ export interface GitClient {
   blame(repo: RepoRef, path: string): Promise<BlameLine[]>;
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
   readFile(repo: RepoRef, path: string): Promise<string>;
+  /**
+   * A file's content at a given commit (`git show <sha>:<path>`), NOT from the
+   * working tree — a plan added in the PR itself exists only at the PR head.
+   * Call `fetchPullHead` first so the sha is present. `path` must be a
+   * normalized repo-relative path; rejects when the file does not exist there.
+   */
+  readFileAt(repo: RepoRef, sha: string, path: string): Promise<string>;
   clonePathFor(repo: RepoRef): string;
 }
 

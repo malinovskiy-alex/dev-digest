@@ -129,6 +129,24 @@ export class SimpleGitClient implements GitClient {
   async readFile(repo: RepoRef, path: string): Promise<string> {
     return readFile(join(this.clonePathFor(repo), path), 'utf8');
   }
+
+  async readFileAt(repo: RepoRef, sha: string, path: string): Promise<string> {
+    // Both values end up in ONE argv entry (`<sha>:<path>`) — no shell is
+    // involved — but refuse anything that could be read as an option or climb
+    // out of the tree. Callers normalize first; this is the last line.
+    if (!/^[0-9a-f]{7,64}$/i.test(sha)) throw new Error(`readFileAt: invalid sha "${sha}"`);
+    if (
+      path.length === 0 ||
+      path.startsWith('-') ||
+      path.startsWith('/') ||
+      path.includes('\\') ||
+      path.includes(':') ||
+      path.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')
+    ) {
+      throw new Error(`readFileAt: invalid path "${path}"`);
+    }
+    return this.git(repo).raw(['show', `${sha}:${path}`]);
+  }
 }
 
 function parseBlamePorcelain(raw: string): BlameLine[] {

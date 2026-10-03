@@ -39,6 +39,7 @@ delimiter-wrapped (`prompt.ts:104-122`):
 
 ```
 <task line, e.g. "Review PR #7 '…'">
+## PR intent             (trusted scope rule + untrusted derived intent; never a filter)
 ## PR description        (untrusted, author-controlled, truncated to 4000 chars)
 ## Skills / rules        (linked skill bodies)
 ## Relevant memory       (curated memory items)

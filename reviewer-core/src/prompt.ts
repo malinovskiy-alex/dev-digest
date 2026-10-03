@@ -36,6 +36,19 @@ export function wrapUntrusted(label: string, content: string): string {
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
 
+/**
+ * Trusted rule rendered above the (untrusted) derived intent. Intent is FOCUS,
+ * never a filter: it must not lower a severity or remove a finding. Uses the
+ * `Severity` enum's own vocabulary (CRITICAL / WARNING / SUGGESTION).
+ */
+export const INTENT_SCOPE_RULE =
+  'Scope tells you where the author meant to change code. It never excuses a defect. ' +
+  'A real defect outside the stated scope (or inside an out-of-scope area) MUST still be ' +
+  'reported at its true severity — a CRITICAL stays CRITICAL; say in its rationale that it ' +
+  'is outside the stated scope. A change that only strays outside the stated scope, with ' +
+  'no defect of its own, is at most a WARNING. A low-confidence intent is a guess, not the ' +
+  "author's statement.";
+
 export interface PromptParts {
   /** Agent's system prompt (trusted). */
   system: string;
@@ -66,15 +79,74 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Derived PR intent (L03): intent, scope, risk areas, confidence, sources —
+   * already formatted by the caller. Untrusted (derived from author text), so
+   * delimiter-wrapped, under a trusted scope rule. Rendered right after the
+   * task line, before `## PR description`. Empty / undefined → section
+   * omitted and the prompt is byte-identical to the pre-intent build.
+   */
+  intent?: string;
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
   task?: string;
 }
 
+/**
+ * What a prompt section is made of — sizes and provenance, NEVER its text.
+ * There is deliberately no content field: a logger that only accepts this type
+ * cannot leak a diff, a spec or an author's description, whatever it prints.
+ */
+export interface PromptSectionMeta {
+  /** Section id, e.g. `system`, `intent`, `diff`, `spec-0`. */
+  name: string;
+  /** Where the text came from, e.g. `pr-author`, `repo-intel`, `agent-skills`. */
+  source: string;
+  trust: 'trusted' | 'untrusted';
+  chars: number;
+  /** `ceil(chars / 4)` — an estimate, not a tokenizer. */
+  approx_tokens: number;
+  /** Char length of each item in a multi-item section (skills, specs, memory). */
+  items?: number[];
+  /** FNV-1a of the section text: two runs can be compared without logging either. */
+  fingerprint: string;
+}
+
+/** FNV-1a 32-bit — dependency-free, so reviewer-core stays free of I/O and crypto. */
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/** Describe one section of an assembled prompt. The text is measured, never kept. */
+export function sectionMeta(
+  name: string,
+  source: string,
+  trust: PromptSectionMeta['trust'],
+  text: string,
+  items?: string[],
+): PromptSectionMeta {
+  return {
+    name,
+    source,
+    trust,
+    chars: text.length,
+    approx_tokens: Math.ceil(text.length / 4),
+    ...(items ? { items: items.map((i) => i.length) } : {}),
+    fingerprint: fnv1a(text),
+  };
+}
+
 export interface AssembledPrompt {
   messages: ChatMessage[];
   assembly: PromptAssembly;
+  /** One entry per rendered section, in prompt order — for logging, not for the model. */
+  sections: PromptSectionMeta[];
 }
 
 /**
@@ -101,23 +173,40 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       ? parts.prDescription.slice(0, MAX_PR_DESCRIPTION_CHARS)
       : undefined;
 
+  const intentSection =
+    parts.intent && parts.intent.trim().length > 0
+      ? `## PR intent\n${INTENT_SCOPE_RULE}\n${wrapUntrusted('intent', parts.intent)}`
+      : undefined;
+
   const userSections: string[] = [];
-  if (parts.task) userSections.push(parts.task);
+  const sections: PromptSectionMeta[] = [sectionMeta('system', 'agent-system-prompt', 'trusted', system)];
+  // Every rendered section is pushed together with its metadata, so the two
+  // lists cannot drift apart.
+  const add = (
+    text: string,
+    name: string,
+    source: string,
+    trust: PromptSectionMeta['trust'],
+    items?: string[],
+  ) => {
+    userSections.push(text);
+    sections.push(sectionMeta(name, source, trust, text, items));
+  };
+  if (parts.task) add(parts.task, 'task', 'server', 'trusted');
+  if (intentSection) add(intentSection, 'intent', 'intent-service', 'untrusted');
   if (prDescription) {
-    userSections.push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`);
+    add(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`, 'pr_description', 'pr-author', 'untrusted');
   }
-  if (skillsBlock) userSections.push(`## Skills / rules\n${skillsBlock}`);
-  if (memoryBlock) userSections.push(`## Relevant memory\n${memoryBlock}`);
+  if (skillsBlock) add(`## Skills / rules\n${skillsBlock}`, 'skills', 'agent-skills', 'trusted', parts.skills);
+  if (memoryBlock) add(`## Relevant memory\n${memoryBlock}`, 'memory', 'memory', 'trusted', parts.memory);
   if (parts.repoMap && parts.repoMap.trim().length > 0) {
-    userSections.push(`## Repo skeleton\n${wrapUntrusted('repo-map', parts.repoMap)}`);
+    add(`## Repo skeleton\n${wrapUntrusted('repo-map', parts.repoMap)}`, 'repo_map', 'repo-intel', 'untrusted');
   }
-  if (specsBlock) userSections.push(`## Project context\n${specsBlock}`);
+  if (specsBlock) add(`## Project context\n${specsBlock}`, 'specs', 'project-context', 'untrusted', parts.specs);
   if (parts.callers && parts.callers.trim().length > 0) {
-    userSections.push(
-      `## Callers of changed symbols\n${wrapUntrusted('callers', parts.callers)}`,
-    );
+    add(`## Callers of changed symbols\n${wrapUntrusted('callers', parts.callers)}`, 'callers', 'repo-intel', 'untrusted');
   }
-  userSections.push(`## Diff to review\n${wrapUntrusted('diff', parts.diff)}`);
+  add(`## Diff to review\n${wrapUntrusted('diff', parts.diff)}`, 'diff', 'pr-diff', 'untrusted');
 
   const user = userSections.join('\n\n');
 
@@ -134,8 +223,9 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intentSection ?? null,
     user,
   };
 
-  return { messages, assembly };
+  return { messages, assembly, sections };
 }

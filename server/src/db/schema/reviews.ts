@@ -77,6 +77,30 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  // L03 intent layer. The row is a CACHE keyed by `input_hash` — a hash of
+  // every source the classifier saw plus provider/model/prompt version — so a
+  // derive is skipped whenever nothing it depends on has changed.
+  // `kind` / `confidence` mirror `IntentKind` / `IntentConfidence` in
+  // @devdigest/shared; the two must stay in step.
+  kind: text('kind'),
+  riskAreas: jsonb('risk_areas').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  conflicts: jsonb('conflicts').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  confidence: text('confidence').notNull().default('low'),
+  /** What was actually read: `{ type, ref, status, reason? }[]` — paths and statuses only. */
+  sources: jsonb('sources')
+    .$type<{ type: string; ref: string; status: string; reason?: string | null }[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  /** Null only on a row written before L03 — always treated as a cache miss. */
+  inputHash: text('input_hash'),
+  headSha: text('head_sha'),
+  provider: text('provider'),
+  model: text('model'),
+  tokensIn: integer('tokens_in'),
+  tokensOut: integer('tokens_out'),
+  /** Classifier cost in USD, kept apart from any agent run's cost. Null = unknown price. */
+  costUsd: doublePrecision('cost_usd'),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const prBrief = pgTable('pr_brief', {
