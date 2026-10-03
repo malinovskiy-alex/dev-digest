@@ -6,7 +6,7 @@
  * file is what makes them real; see `.claude/skills/onion-architecture/`
  * for the reasoning behind every rule.
  *
- *   Ring 1 domain          reviewer-core/src, helpers.ts, contracts, platform/errors.ts
+ *   Ring 1 domain          reviewer-core/src, helpers.ts (any depth inside a module), contracts, platform/errors.ts
  *   Ring 2 application     service.ts, run-executor.ts, pipeline/, job handlers
  *   Ring 3 infrastructure  adapters/, db/, repository.ts, container.ts, config.ts, jobs.ts, sse.ts
  *   Ring 4 transport       routes.ts, app.ts, server.ts
@@ -46,8 +46,13 @@ const IO = [
   '^@anthropic-ai/',
 ].join('|');
 
-/** Ring-1 sources: the pure engine and the per-module pure helpers. */
-const DOMAIN = '^(\\.\\./)?reviewer-core/src/|^src/modules/[^/]+/helpers\\.ts$';
+/**
+ * Ring-1 sources: the pure engine and the per-module pure helpers, at any depth
+ * inside a module (`reviews/smart-diff/helpers.ts` included). Written with one
+ * `.+` on purpose: dependency-cruiser rejects a nested quantifier such as
+ * `([^/]+/)*` as an unsafe regular expression and bails out of the whole run.
+ */
+const DOMAIN = '^(\\.\\./)?reviewer-core/src/|^src/modules/.+/helpers\\.ts$';
 
 /** Ring-2 sources: application services and the pipelines they orchestrate. */
 const APPLICATION =
