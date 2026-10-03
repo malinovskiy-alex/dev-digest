@@ -7,6 +7,7 @@ import {
   Risks,
   PrHistory,
   SmartDiff,
+  SmartDiffRole,
   Conformance,
   Onboarding,
   EvalRun,
@@ -107,6 +108,7 @@ describe('AI contracts parse fixtures', () => {
 
   it('SmartDiff (data.jsx DIFF)', () => {
     const d = SmartDiff.parse({
+      review_id: 'rev-1',
       groups: [
         {
           role: 'core',
@@ -116,6 +118,38 @@ describe('AI contracts parse fixtures', () => {
       split_suggestion: { too_big: false, total_lines: 285, proposed_splits: [] },
     });
     expect(d.groups[0]!.role).toBe('core');
+    expect(d.review_id).toBe('rev-1');
+  });
+
+  it('SmartDiff accepts the tests and docs roles, and a null review_id', () => {
+    const d = SmartDiff.parse({
+      review_id: null,
+      groups: [
+        {
+          role: 'tests',
+          files: [{ path: 'a.test.ts', additions: 10, deletions: 0, finding_lines: [] }],
+        },
+        {
+          role: 'docs',
+          files: [{ path: 'README.md', additions: 2, deletions: 1, finding_lines: [] }],
+        },
+      ],
+      split_suggestion: { too_big: false, total_lines: 13, proposed_splits: [] },
+    });
+    expect(d.groups.map((g) => g.role)).toEqual(['tests', 'docs']);
+    expect(d.review_id).toBeNull();
+  });
+
+  it('SmartDiff requires review_id (null, not absent, when there is no review)', () => {
+    const r = SmartDiff.safeParse({
+      groups: [],
+      split_suggestion: { too_big: false, total_lines: 0, proposed_splits: [] },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('SmartDiffRole lists the five roles in display order', () => {
+    expect(SmartDiffRole.options).toEqual(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
   });
 
   it('Conformance / Onboarding / EvalRun / MemoryItem', () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
@@ -325,6 +326,87 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     // The replay buffer should contain our log lines as SSE `data:` frames.
     expect(sse.payload).toContain('Starting review');
     expect(sse.payload).toContain('Citation grounding');
+    await app.close();
+  });
+
+  it('smart diff: groups by role, finding_lines from the latest review-kind review only', async () => {
+    const db = pg.handle.db;
+    const { pr } = await setupRepoAndPr(db, workspaceId);
+    // src/config.ts (1 + 0) is already there; add one file per remaining role.
+    await db.insert(t.prFiles).values([
+      { prId: pr.id, path: 'pnpm-lock.yaml', additions: 120, deletions: 40, patch: null },
+      { prId: pr.id, path: 'src/config.test.ts', additions: 25, deletions: 0, patch: null },
+      { prId: pr.id, path: 'README.md', additions: 3, deletions: 1, patch: null },
+      { prId: pr.id, path: 'vitest.config.ts', additions: 2, deletions: 2, patch: null },
+    ]);
+
+    const finding = (reviewId: string, startLine: number, dismissed = false) => ({
+      reviewId,
+      file: 'src/config.ts',
+      startLine,
+      endLine: startLine,
+      severity: 'CRITICAL',
+      category: 'security',
+      title: `finding on ${startLine}`,
+      rationale: 'r',
+      confidence: 0.9,
+      dismissedAt: dismissed ? new Date() : null,
+    });
+    const review = async (kind: 'review' | 'summary', createdAt: string) => {
+      const [row] = await db
+        .insert(t.reviews)
+        .values({ workspaceId, prId: pr.id, kind, createdAt: new Date(createdAt) })
+        .returning();
+      return row!;
+    };
+
+    const older = await review('review', '2026-01-01T10:00:00Z');
+    const newer = await review('review', '2026-01-01T11:00:00Z');
+    const newestSummary = await review('summary', '2026-01-01T12:00:00Z');
+    await db.insert(t.findings).values([
+      finding(older.id, 5),
+      // dismissed findings still count, and two on one line collapse to one
+      finding(newer.id, 11, true),
+      finding(newer.id, 11, true),
+      finding(newestSummary.id, 99),
+    ]);
+
+    const app = await appWith(REVIEW_FIXTURE);
+    const res = await app.inject({ method: 'GET', url: `/pulls/${pr.id}/smart-diff` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      review_id: string | null;
+      groups: { role: string; files: { path: string; finding_lines: number[] }[] }[];
+      split_suggestion: { too_big: boolean; total_lines: number; proposed_splits: unknown[] };
+    };
+
+    // the server names the review it chose: the newer review-kind one, not the summary
+    expect(body.review_id).toBe(newer.id);
+    expect(body.groups.map((g) => g.role)).toEqual(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
+    const byRole = Object.fromEntries(body.groups.map((g) => [g.role, g.files]));
+    expect(byRole.boilerplate!.map((f) => f.path)).toEqual(['pnpm-lock.yaml']);
+    expect(byRole.core!).toHaveLength(1);
+    expect(byRole.core![0]!.path).toBe('src/config.ts');
+    expect(byRole.core![0]!.finding_lines).toEqual([11]);
+    expect(body.split_suggestion).toEqual({
+      too_big: false,
+      total_lines: 1 + 0 + 120 + 40 + 25 + 0 + 3 + 1 + 2 + 2,
+      proposed_splits: [],
+    });
+
+    // a PR with no review-kind review: review_id is null, no finding lines
+    const { pr: unreviewed } = await setupRepoAndPr(db, workspaceId);
+    const bare = await app.inject({ method: 'GET', url: `/pulls/${unreviewed.id}/smart-diff` });
+    expect(bare.statusCode).toBe(200);
+    const bareBody = bare.json() as typeof body;
+    expect(bareBody.review_id).toBeNull();
+    expect(bareBody.groups.flatMap((g) => g.files.flatMap((f) => f.finding_lines))).toEqual([]);
+
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/pulls/${randomUUID()}/smart-diff`,
+    });
+    expect(missing.statusCode).toBe(404);
     await app.close();
   });
 
