@@ -44,6 +44,9 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha }: Diff
   const action = useFindingAction();
   // Comments start hidden so the diff is clean by default — toggle to reveal.
   const [showComments, setShowComments] = React.useState(false);
+  // Findings start shown — reading them next to the code is the point of the
+  // tab; hiding them keeps the line bars, labels and header badges.
+  const [showFindings, setShowFindings] = React.useState(true);
   const [order, setOrder] = React.useState<DiffOrder>(DEFAULT_DIFF_ORDER);
 
   // Derived, never stored. While the smart diff loads, a placeholder stands in
@@ -79,6 +82,7 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha }: Diff
   // Same wiring as FindingsPanel, so a card behaves identically on both tabs.
   const findingApi: DiffFindingApi = {
     findings,
+    showFindings,
     renderFinding: (f) => (
       <FindingCard
         f={f}
@@ -98,6 +102,18 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha }: Diff
         right={
           <div className={styles.headerActions}>
             <DiffOrderToggle value={effectiveOrder} onChange={setOrder} disabled={!groups} />
+            {findings.length > 0 && (
+              <Button
+                kind="ghost"
+                size="sm"
+                icon={showFindings ? "EyeOff" : "Eye"}
+                onClick={() => setShowFindings((v) => !v)}
+              >
+                {showFindings
+                  ? t("smartDiff.hideFindings", { count: findings.length })
+                  : t("smartDiff.showFindings", { count: findings.length })}
+              </Button>
+            )}
             {commentCount > 0 && (
               <Button
                 kind="ghost"

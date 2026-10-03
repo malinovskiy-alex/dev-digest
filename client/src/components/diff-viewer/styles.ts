@@ -19,8 +19,8 @@ export const s = {
     cursor: "pointer",
   } satisfies CSSProperties,
   fileIcon: { color: "var(--text-muted)" } satisfies CSSProperties,
-  /** Holds the path and its findings dot, so the dot sits right after the
-   *  path text instead of being pushed to the far right by `flex: 1`. */
+  /** Holds the path; takes the free space so the header's right-hand
+   *  items (findings, +/- stat, comments) line up at the far right. */
   pathWrap: {
     flex: 1,
     minWidth: 0,
@@ -123,5 +123,19 @@ export function findingLabelFor(color: string): CSSProperties {
     fontWeight: 600,
     color,
     userSelect: "none",
+  };
+}
+
+/** The file header's findings summary (dot, severity icon, count), in the
+ *  most severe finding's colour; it sits just before the +/- stat. */
+export function findingsBadgeFor(color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: 600,
+    color,
   };
 }

@@ -7,6 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, SEV } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
+import type { Severity } from "@/lib/types";
 import type { PrFile } from "@/lib/types";
 import { AUTO_EXPAND_MAX_LINES } from "../constants";
 import { parsePatch, type Line } from "../helpers";
@@ -19,7 +20,7 @@ import {
   type DiffCommentApi,
 } from "../comments";
 import { partitionFindings, topSeverity, type DiffFindingApi } from "../findings";
-import { s, chevronFor, findingDotFor } from "../styles";
+import { s, chevronFor, findingDotFor, findingsBadgeFor } from "../styles";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
 
@@ -32,6 +33,22 @@ function itemsForLine<T>(ln: Line, matched: Map<string, T[]>): T[] {
     if (list) out.push(...list);
   }
   return out;
+}
+
+/** Header summary of a file's findings: a dot and the icon of the most severe
+ *  one, plus how many findings the file has (all severities). */
+function FileFindingsBadge({ severity, count }: { severity: Severity; count: number }) {
+  const t = useTranslations("shell");
+  const sev = SEV[severity];
+  const SevIcon = Icon[sev.icon];
+  const label = t("diffViewer.findingsCount", { count });
+  return (
+    <span role="img" aria-label={label} title={label} style={findingsBadgeFor(sev.c)}>
+      <span style={findingDotFor(sev.c)} />
+      <SevIcon size={12} />
+      {count}
+    </span>
+  );
 }
 
 export function FileCard({
@@ -85,15 +102,8 @@ export function FileCard({
           <span className="mono" style={s.filePath}>
             {file.path}
           </span>
-          {fileTop && (
-            <span
-              role="img"
-              aria-label={t("diffViewer.hasFindings")}
-              title={t("diffViewer.hasFindings")}
-              style={findingDotFor(SEV[fileTop].c)}
-            />
-          )}
         </span>
+        {fileTop && <FileFindingsBadge severity={fileTop} count={fileFindings.length} />}
         <span className="mono tnum" style={s.fileStat}>
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>
@@ -120,12 +130,12 @@ export function FileCard({
                 threads={itemsForLine(ln, matched)}
                 commenting={commenting}
                 findings={itemsForLine(ln, matchedFindings)}
-                renderFinding={findings?.renderFinding}
+                renderFinding={findings?.showFindings === false ? undefined : findings?.renderFinding}
               />
             ))
           )}
           {commenting && commenting.showComments && <OutdatedComments threads={outdated} />}
-          {findings && unanchored.length > 0 && (
+          {findings && findings.showFindings !== false && unanchored.length > 0 && (
             <div style={cs.outdatedWrap}>
               <span style={cs.outdatedTitle}>{t("diffViewer.unanchoredFindings")}</span>
               {unanchored.map((f) => (

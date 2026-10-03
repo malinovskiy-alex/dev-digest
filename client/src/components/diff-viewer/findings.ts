@@ -14,6 +14,9 @@ export interface DiffFindingApi {
   findings: FindingRecord[];
   /** Renders one finding card; supplied by the route. */
   renderFinding: (f: FindingRecord) => ReactNode;
+  /** `false` hides the cards; line bars, labels and the header badge stay.
+   *  Defaults to shown. */
+  showFindings?: boolean;
 }
 
 /** The line key a finding anchors to: its start line on the new (RIGHT) side. */

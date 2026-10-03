@@ -75,7 +75,9 @@
     "originalOrder": "Original order",
     "filesWithFindings": "{count, plural, one {# file has findings} other {# files have findings}}",
     "showComments": "Show comments ({count})",
-    "hideComments": "Hide comments ({count})"
+    "hideComments": "Hide comments ({count})",
+    "showFindings": "Show findings ({count})",
+    "hideFindings": "Hide findings ({count})"
   },
   "list": {
     "breadcrumb": "Pull Requests",

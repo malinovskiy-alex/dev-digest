@@ -41,7 +41,7 @@
     "viewOnGitHub": "View on GitHub",
     "postedToGitHub": "Posts to GitHub immediately",
     "outdatedTitle": "{count} comment(s) on older revisions",
-    "hasFindings": "Has review findings",
+    "findingsCount": "{count, plural, one {# review finding} other {# review findings}}",
     "unanchoredFindings": "Findings outside the shown lines",
     "findingLabel": {
       "CRITICAL": "blocker",

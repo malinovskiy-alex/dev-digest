@@ -135,13 +135,23 @@ describe("DiffTab — Smart order", () => {
 
     // (c) the Core header counts one file with findings
     expect(screen.getByRole("img", { name: "1 file has findings" })).toHaveTextContent("1");
-    expect(screen.getByRole("img", { name: "Has review findings" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "1 review finding" })).toBeInTheDocument();
 
     // (d) the finding renders under its line, labelled, and its actions work
     expect(screen.getByText("Hardcoded Stripe secret key")).toBeInTheDocument();
     expect(screen.getByText("blocker")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Accept" })[0]!);
     expect(mutate).toHaveBeenCalledWith({ findingId: "f-11", action: "accept", prId: "pr-1" });
+  });
+
+  it("hides and shows the finding cards, keeping the line label", () => {
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: "Hide findings (1)" }));
+    expect(screen.queryByText("Hardcoded Stripe secret key")).not.toBeInTheDocument();
+    expect(screen.getByText("blocker")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "1 review finding" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show findings (1)" }));
+    expect(screen.getByText("Hardcoded Stripe secret key")).toBeInTheDocument();
   });
 
   it("switches to the flat GitHub order and back, keeping the inline finding", () => {

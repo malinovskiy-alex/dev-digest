@@ -54,7 +54,7 @@ describe("FileCard — review findings", () => {
   it("dots the header, labels the cited line and renders the finding under it", () => {
     renderCard(api([finding({ id: "f1" })]));
 
-    expect(screen.getByRole("img", { name: "Has review findings" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "1 review finding" })).toBeInTheDocument();
     expect(screen.getByText("blocker")).toBeInTheDocument();
 
     const code = screen.getByText('stripeKey: "sk_live_xxx",');
@@ -70,7 +70,7 @@ describe("FileCard — review findings", () => {
   it("shows no dot and no label when the file has no findings", () => {
     renderCard(api([finding({ id: "other", file: "src/other.ts" })]));
     expect(screen.getByText("src/config.ts")).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "Has review findings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "1 review finding" })).not.toBeInTheDocument();
     expect(screen.queryByText("blocker")).not.toBeInTheDocument();
     expect(screen.queryByText("Hardcoded Stripe secret key")).not.toBeInTheDocument();
   });
@@ -81,7 +81,25 @@ describe("FileCard — review findings", () => {
     const card = screen.getByText("Far away");
     expect(caption.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // the file still carries the dot, but no line carries a label
-    expect(screen.getByRole("img", { name: "Has review findings" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "1 review finding" })).toBeInTheDocument();
     expect(screen.queryByText("warning")).not.toBeInTheDocument();
+  });
+
+  it("summarises the file's findings in the header: top severity's icon colour and the total", () => {
+    renderCard(
+      api([
+        finding({ id: "w", severity: "WARNING", title: "A warning" }),
+        finding({ id: "c", severity: "CRITICAL", title: "A blocker" }),
+      ]),
+    );
+    const badge = screen.getByRole("img", { name: "2 review findings" });
+    expect(badge).toHaveTextContent("2");
+  });
+
+  it("hides the cards but keeps the badge and the line label when showFindings is false", () => {
+    renderCard({ ...api([finding({ id: "f1" })]), showFindings: false });
+    expect(screen.getByRole("img", { name: "1 review finding" })).toBeInTheDocument();
+    expect(screen.getByText("blocker")).toBeInTheDocument();
+    expect(screen.queryByText("Hardcoded Stripe secret key")).not.toBeInTheDocument();
   });
 });
