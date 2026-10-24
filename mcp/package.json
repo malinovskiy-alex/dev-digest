@@ -1,0 +1,28 @@
+{
+  "name": "@devdigest/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "devdigest-mcp — local stdio MCP server; a thin wrapper over the DevDigest API on :3001. No business logic, no DB access.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "inspect": "npx @modelcontextprotocol/inspector@^2.12.0 node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
