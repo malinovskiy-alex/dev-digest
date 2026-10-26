@@ -36,11 +36,37 @@ First match wins, top to bottom.
 | `server/src/adapters/**` | backend | `onion-architecture`, `security`, `perf-prompt` |
 | `reviewer-core/src/**` | backend | `onion-architecture`, `typescript-expert` |
 | any other `server/src/**/*.ts` | backend | `onion-architecture` |
+| `mcp/**/*.ts` | backend | `typescript-expert`, `zod`, `security`, `onion-architecture` (rings inside `mcp/`, below) |
 | `*/vendor/shared/contracts/*.ts` | crosscutting | `zod` (+ G1, G10) |
 | `e2e/**` | crosscutting | — (checklist in `e2e/AGENTS.md`) |
 | `docs/agent-prompts/**` | crosscutting | — (checklist in its `README.md`) |
 | `.claude/skills/**` | crosscutting | — (never lens the reviewer itself) |
 | `*.md`, `*.yml`, `*.json` | crosscutting | — (gates only) |
+
+### `mcp/` — the rings the `onion-architecture` lens checks there
+
+`mcp/` is not `server/`, so `pnpm arch` does not cover it; the rings are the
+ones in `specs/L04-devdigest-mcp.md`, decision D16, and `mcp/test/hygiene.test.ts`
+is what enforces them. Flag a change that breaks any of these:
+
+- **Ring 1** — `src/format.ts`, `src/match.ts`, `src/errors.ts`: pure, no `async`;
+  import nothing from `api/`, the MCP SDK, `node:*` or `process`.
+- **Ring 2** — `src/tools/*`, `src/resolve.ts`, `src/wait.ts`, `src/api/port.ts`,
+  `src/api/types.ts`: depend on the `DevDigestApi` port only — never on
+  `api/http-client.ts` or the SDK. Handlers throw `ToolError`; they never build
+  an `isError` result.
+- **Ring 3** — `src/api/http-client.ts` is the only file with URL paths and
+  `fetch`; `src/config.ts` is the only `process.env` reader; `src/log.ts` writes
+  to stderr only.
+- **Ring 4** — `src/server.ts` registers the tools and is the only place that
+  maps `ToolError` → `isError`; `src/index.ts` is the composition root and the
+  only importer of `http-client.ts`.
+- **Everywhere** — nothing writes to stdout (it carries JSON-RPC);
+  `@devdigest/shared` is `import type` only; tool titles, descriptions and
+  `.describe()` strings are verbatim from the spec.
+
+Non-`.ts` files under `mcp/` (`*.md`, `package.json`) fall through to the
+gates-only row at the bottom.
 
 ### Content triggers
 

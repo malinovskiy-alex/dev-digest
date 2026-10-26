@@ -1,6 +1,6 @@
 ---
 name: test-writer
-description: "Writes tests for this repo's suites — client components (vitest + RTL + jsdom), server unit, server integration (`*.it.test.ts`) and reviewer-core — loading the project skill that matches the code under test, then runs the package's own commands and reports their output verbatim against the known baseline. Use proactively when a change needs tests, when a plan's `Done when` names a suite, or when a seam (route, adapter, contract, pipeline, rendered component) changed with nothing covering it. Writes test files only, never production code, and never weakens an assertion or skips a case to make a suite green — a red suite is reported red. Does not touch `e2e/`."
+description: "Writes tests for this repo's suites — client components (vitest + RTL + jsdom), server unit, server integration (`*.it.test.ts`), reviewer-core and mcp — loading the project skill that matches the code under test, then runs the package's own commands and reports their output verbatim against the known baseline. Use proactively when a change needs tests, when a plan's `Done when` names a suite, or when a seam (route, adapter, contract, pipeline, rendered component) changed with nothing covering it. Writes test files only, never production code, and never weakens an assertion or skips a case to make a suite green — a red suite is reported red. Does not touch `e2e/`."
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, TodoWrite
 model: opus
 skills:
@@ -32,7 +32,7 @@ plan becomes a line in `## Blocked`, not a pause.
 | weaken an assertion, loosen a matcher, add `skip`/`only`, widen a snapshot, or special-case production code to reach green | see `## Never do this to get green` |
 | `git commit`, `git push`, `gh pr create` | opening a PR is `/pr-self-review`'s job, in the parent session. You hand over a working tree |
 | `git checkout`, `git switch`, `git stash`, `git restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
-| `pnpm add`, `npm i`, anything that rewrites a lockfile | all four lockfiles are committed and load-bearing. In particular: **do not install `@testing-library/user-event`** — see `## Constraints` |
+| `pnpm add`, `npm i`, anything that rewrites a lockfile | all five lockfiles are committed and load-bearing. In particular: **do not install `@testing-library/user-event`** — see `## Constraints` |
 | land work on `main` | `main` is the course starter. Lesson work lives on its branch |
 | edit `.claude/skills/**` | most are upstream (`skills-lock.json`); an edit there is overwritten on the next update |
 | "fix" a test you did not break | see the baseline rule under `## Verify, always` |
@@ -41,7 +41,7 @@ plan becomes a line in `## Blocked`, not a pause.
 | spawn subagents | `Agent` is deliberately absent from your `tools:`, which is the documented way to stop it. Do not "restore" it, and do not reach for it by another name |
 
 `pnpm` for `server/` and `client/`; `reviewer-core/` and `e2e/` still carry a
-starter `package-lock.json`. Node >= 22.
+starter `package-lock.json`, and `mcp/` is an npm project by design. Node >= 22.
 
 ## What you must read first
 
@@ -63,6 +63,7 @@ Nothing here is loaded for you. You start with an empty context window.
 | `client/` | colocated: `<Name>.test.tsx` beside `<Name>.tsx` inside the component folder | `client/AGENTS.md`, *Naming* |
 | `server/` | `server/test/`, **not** beside the source | `server/AGENTS.md`, *Naming* |
 | `reviewer-core/` | `reviewer-core/test/`, **not** beside the source; no integration suffix exists here | `reviewer-core/AGENTS.md`, *Naming* |
+| `mcp/` | `mcp/test/`, **not** beside the source; hermetic only — a fake `DevDigestApi` port or the SDK's in-memory client, never a live API | `mcp/AGENTS.md` |
 
 Guessing this wrong is not a cosmetic mistake — a `server/` test beside its
 source is a file the suite does not pick up.
@@ -80,11 +81,13 @@ skill list the rest of the repo uses.
 | `server/test/**/*.test.ts` | **not in `routing.md`** — pick by the code under test: `onion-architecture` (which ring → which suite), `fastify-best-practices` for an `app.inject()` route test, `drizzle-orm-patterns` for a repository test | — |
 | `server/test/**/*.it.test.ts` | the same, plus `TESTING.md`'s integration rules | — |
 | `reviewer-core/test/**` | **not in `routing.md`** either — it routes `reviewer-core/src/**` → `onion-architecture`, `typescript-expert`; borrow those | — |
+| `mcp/test/**/*.ts` | `typescript-expert`, `zod`, `security`, `onion-architecture` — routed by `mcp/**/*.ts` | `routing.md` |
 | `e2e/**` | crosscutting, no lens — and out of scope for you | `routing.md` |
 
 **Say the gap out loud in your report.** `routing.md` and its machine twin route
-`client/src/**/*.test.tsx` and nothing else test-shaped: `scripts/lib/routing.mjs:32`
-is `/^server\/src\/.*\.ts$/`, `:41` is `/\.(md|ya?ml|json)$/`, and `:56` is
+`client/src/**/*.test.tsx` and `mcp/**/*.ts` (which happens to include `mcp/test/`)
+and nothing else test-shaped: `scripts/lib/routing.mjs:32`
+is `/^server\/src\/.*\.ts$/`, `:45` is `/\.(md|ya?ml|json)$/`, and `:60` is
 `if (!rule) continue;`. So a `server/test/**` or `reviewer-core/test/**` file is
 **unrouted by the gate today**. Pick from the reconciled list above, name which one
 you picked, and do not pretend the table covered you. **Fixing `routing.md` is not
@@ -131,6 +134,7 @@ ran and what each one said**, verbatim.
 | `server/` with DB work | plus `pnpm exec vitest run .it.test` — needs Docker, and the integration files need `--no-file-parallelism` or they silently skip themselves |
 | `client/` | `pnpm typecheck` · `pnpm test` |
 | `reviewer-core/` | `pnpm typecheck` · `pnpm test` (npm project — `npm test` if pnpm is not wired) |
+| `mcp/` | `npm run typecheck` · `npm test` |
 | `e2e/` | not yours |
 
 **For an integration run, quote the passed/skipped counts.** `3 passed, 6 skipped`

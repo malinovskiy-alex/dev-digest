@@ -68,7 +68,7 @@ belong to **other** reviewers — do not run them.
 | `client/src/lib/**`, `client/src/{app,components}/**` | `frontend-ui-architecture` — the `vendor → lib → components → app` direction, a `_components/` folder imported across routes, a deep import past an `index.ts` |
 | `.claude/**`, `*.md` | nothing. Never lens the tooling |
 
-**`perf-prompt` is not a skill.** `routing.md:71` is explicit: *"there is no perf
+**`perf-prompt` is not a skill.** `routing.md:97` is explicit: *"there is no perf
 skill in the repo; this is the only perf rubric we have"* — it points at
 `docs/agent-prompts/performance-reviewer.md`. You cannot load it with `Skill`, and
 performance is not your job. If you notice a mechanism, one line under
