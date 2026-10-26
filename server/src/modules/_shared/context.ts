@@ -20,6 +20,9 @@ export async function getContext(
     container.auth.currentUser(req),
     container.auth.currentWorkspace(req),
   ]);
+  // An AuthProvider that cannot place the request in a workspace must not
+  // fall through to an unscoped query — fail as 'not found', like a bad id.
+  if (!workspace?.id) throw new NotFoundError('No workspace for this request');
   return { workspaceId: workspace.id, userId: user.id };
 }
 
