@@ -12,6 +12,7 @@ import type {
   ActiveRun,
   Agent,
   ApiReview,
+  BlastRadius,
   ConventionsView,
   PrMeta,
   Repo,
@@ -28,4 +29,6 @@ export interface DevDigestApi {
   listRuns(prId: string, signal?: AbortSignal): Promise<RunSummary[]>;
   listReviews(prId: string, signal?: AbortSignal): Promise<ApiReview[]>;
   getConventions(repoId: string, signal?: AbortSignal): Promise<ConventionsView>;
+  /** `GET /pulls/:id/blast` — the PR's blast radius from the repo-intel index. */
+  getBlastRadius(prId: string, signal?: AbortSignal): Promise<BlastRadius>;
 }

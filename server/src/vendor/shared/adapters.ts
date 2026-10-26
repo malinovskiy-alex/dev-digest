@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type {
   PrMeta,
   PrDetail,
+  PrFile,
   IssueMeta,
   PrReviewComment,
 } from './contracts/platform.js';
@@ -143,6 +144,8 @@ export interface CommitFilesPayload {
 export interface GitHubClient {
   listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
   getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
+  /** Files of one PR (pulls.listFiles, one page of 100). For the Prior-PRs cache. */
+  listPullFiles(repo: RepoRef, n: number): Promise<PrFile[]>;
   postReview(repo: RepoRef, n: number, review: GitHubReviewPayload): Promise<{ id: string }>;
   /** List inline review comments on a PR (for the "Files changed" tab). */
   listReviewComments(repo: RepoRef, n: number): Promise<PrReviewComment[]>;

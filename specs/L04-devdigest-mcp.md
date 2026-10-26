@@ -27,7 +27,7 @@ delegated to `implementer` → `test-writer` → `plan-verifier` →
 `architecture-reviewer`/`/pr-self-review`.
 
 **Not in scope:**
-- Blast Radius logic. `get_blast_radius` is a stub; the logic is homework.
+- Blast Radius logic in this package. get_blast_radius forwards GET /pulls/:id/blast (homework, specs/L04-blast-radius.md).
 - Any change under `server/`, `client/`, `reviewer-core/` or `e2e/`.
 - Edits to `@devdigest/shared`.
 - HTTP transport and auth.
@@ -72,7 +72,7 @@ Server `instructions` (exactly this length):
 | `run_agent_on_pr` | `repo` "owner/name", `pr` int≥1, `agent` id-or-name | readOnly:false, destructive:false, idempotent:false, openWorld:true | `/repos` → `/repos/:id/pulls` → `/agents` → `/pulls/:id/runs/active` → `POST /pulls/:id/review {agentId}` (skipped per D11) → poll `/pulls/:id/runs` → `/pulls/:id/reviews` | `ReviewResult` |
 | `get_findings` | `repo`, `pr`, `run_id?`, `agent?`, `min_severity?` (CRITICAL/WARNING/SUGGESTION), `limit?` 1–100 (default 20) | readOnly, idempotent | `/repos` → `/repos/:id/pulls` → `/pulls/:id/reviews` (+ `/pulls/:id/runs` when no review matches) | `ReviewResult`. Picks `kind==='review'` only: by `run_id`, else the newest review for `agent`, else the newest review. |
 | `get_conventions` | `repo`, `limit?` 1–100 (default 30) | readOnly, idempotent | `/repos` → `/repos/:id/conventions` | `{repo, scanned_at, sample_count, total, shown, conventions:[{id,category,rule,evidence:"path:start-end"}], next?}`. Accepted conventions only. `scan:null` → empty list plus `next`; **not** an error. |
-| `get_blast_radius` | `repo`, `pr` | readOnly, idempotent | none | Stub: always `isError` with "not implemented yet (L04 homework) — use get_findings or Smart Diff in the UI". No `outputSchema` yet. |
+| `get_blast_radius` | `repo`, `pr` | readOnly, idempotent | `/repos` → `/repos/:id/pulls` → `GET /pulls/:id/blast` | `BlastResult`: `{repo, pr, summary, counts, degraded, reason, index_status, changed_symbols[], downstream[{symbol, callers[{name,file,line}], endpoints_affected[], crons_affected[]}], next?}` — the same map as the Overview card; strings cleaned, nothing capped; prior PRs not included. |
 
 ### Final descriptions — copy VERBATIM into the code
 
@@ -85,7 +85,7 @@ needs a spec change first.
 | `run_agent_on_pr` | Run reviewer on PR | Run one reviewer agent on a pull request and wait for its findings. Starts a review, or joins one already running for that agent, then returns the verdict, score, severity counts and top findings; if it is still running after a few minutes, returns a run_id to pass to get_findings. Costs LLM tokens, so check get_findings for an existing review first. |
 | `get_findings` | Get review findings | Get the result of a review that already ran on a pull request, without starting a new one. Defaults to the latest review; narrow it with run_id, agent or min_severity. Returns the verdict, score, severity counts and up to limit findings, most severe first. |
 | `get_conventions` | Get repo conventions | Get the accepted coding conventions DevDigest extracted for a repository. Use it before writing or reviewing code in that repo, to follow its rules. Returns each convention's category, rule and evidence location. |
-| `get_blast_radius` | Get PR blast radius (not implemented) | Not implemented yet: always returns an error. It will map which parts of the codebase a pull request can affect. Until then, use get_findings or the Smart Diff view in DevDigest. |
+| `get_blast_radius` | Get PR blast radius | Show what else in the repository a pull request can affect, read from DevDigest's prebuilt code index without calling a model. Use it before reviewing or changing a PR's shared code. Returns the changed symbols, each one's callers as file:line, the HTTP endpoints and crons that depend on them, and whether the index is incomplete. |
 
 Argument `.describe()` strings, also verbatim. Each argument means the same
 thing in every tool that has it.

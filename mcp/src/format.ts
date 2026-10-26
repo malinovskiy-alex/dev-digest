@@ -29,6 +29,10 @@ export const MODEL_MAX = 80;
 export const REPO_MAX = 200;
 /** Cap for a run id quoted into a `next` hint or an error message. */
 export const RUN_ID_MAX = 80;
+/** A symbol or caller name in the blast map. */
+export const SYMBOL_MAX = 120;
+/** An endpoint ("METHOD /path") or cron entry in the blast map. */
+export const ENDPOINT_MAX = 200;
 
 export const FINDINGS_LIMIT_DEFAULT = 20;
 export const CONVENTIONS_LIMIT_DEFAULT = 30;
@@ -109,6 +113,32 @@ export const ConventionsResultSchema = z.object({
   next: z.string().optional(),
 });
 export type ConventionsResult = z.infer<typeof ConventionsResultSchema>;
+
+export const BlastResultSchema = z.object({
+  repo: z.string(),
+  pr: z.number().int(),
+  summary: z.string(),
+  counts: z.object({
+    symbols: z.number().int(),
+    callers: z.number().int(),
+    endpoints: z.number().int(),
+    crons: z.number().int(),
+  }),
+  degraded: z.boolean(),
+  reason: z.string().nullable(),
+  index_status: z.string().nullable(),
+  changed_symbols: z.array(z.object({ name: z.string(), file: z.string(), kind: z.string() })),
+  downstream: z.array(
+    z.object({
+      symbol: z.string(),
+      callers: z.array(z.object({ name: z.string(), file: z.string(), line: z.number().int() })),
+      endpoints_affected: z.array(z.string()),
+      crons_affected: z.array(z.string()),
+    }),
+  ),
+  next: z.string().optional(),
+});
+export type BlastResult = z.infer<typeof BlastResultSchema>;
 
 /** What every handler returns: the structured result plus its one text block. */
 export interface ToolOutput<T> {
@@ -379,6 +409,88 @@ export function renderConventionsText(r: ConventionsResult): string {
       (c) =>
         `[${clean(c.category, CATEGORY_MAX)}] ${clean(c.rule, CONVENTION_RULE_MAX)} (${clean(c.evidence, EVIDENCE_MAX)})`,
     ),];
+  if (r.next) lines.push(r.next);
+  return lines.join('\n');
+}
+
+// ---- blast radius ---------------------------------------------------------
+
+/** The `GET /pulls/:id/blast` body, structurally (Ring 1 imports nothing from `api/`). */
+export interface BlastLike {
+  summary: string;
+  counts: { symbols: number; callers: number; endpoints: number; crons: number };
+  degraded: boolean;
+  reason: string | null;
+  index_status: string | null;
+  changed_symbols: readonly { name: string; file: string; kind: string }[];
+  downstream: readonly {
+    symbol: string;
+    callers: readonly { name: string; file: string; line: number }[];
+    endpoints_affected: readonly string[];
+    crons_affected: readonly string[];
+  }[];
+}
+
+/**
+ * The blast map → `BlastResult`. Every entry and count is kept — "the same map
+ * as the page" (the server already bounds it); only the strings are cleaned.
+ */
+export function compactBlast(b: BlastLike, opts: { repo: string; pr: number }): BlastResult {
+  const result: BlastResult = {
+    repo: opts.repo,
+    pr: opts.pr,
+    summary: clean(b.summary, SUMMARY_MAX),
+    counts: {
+      symbols: b.counts.symbols,
+      callers: b.counts.callers,
+      endpoints: b.counts.endpoints,
+      crons: b.counts.crons,
+    },
+    degraded: b.degraded,
+    reason: cleanOrNull(b.reason, CATEGORY_MAX),
+    index_status: cleanOrNull(b.index_status, CATEGORY_MAX),
+    changed_symbols: b.changed_symbols.map((s) => ({
+      name: clean(s.name, SYMBOL_MAX),
+      file: clean(s.file, FILE_MAX),
+      kind: clean(s.kind, CATEGORY_MAX),
+    })),
+    downstream: b.downstream.map((g) => ({
+      symbol: clean(g.symbol, SYMBOL_MAX),
+      callers: g.callers.map((c) => ({
+        name: clean(c.name, SYMBOL_MAX),
+        file: clean(c.file, FILE_MAX),
+        line: c.line,
+      })),
+      endpoints_affected: g.endpoints_affected.map((e) => clean(e, ENDPOINT_MAX)),
+      crons_affected: g.crons_affected.map((e) => clean(e, ENDPOINT_MAX)),
+    })),
+  };
+  const incomplete = b.degraded || (b.index_status !== null && b.index_status !== 'full');
+  if (!incomplete) return result;
+  const why = result.reason ?? result.index_status ?? 'unknown';
+  return {
+    ...result,
+    next: `Index incomplete (${why}) — press Resync on the PR's Overview tab in DevDigest, then call get_blast_radius again.`,
+  };
+}
+
+/** The text block: a header, each symbol with its callers and targets, then `next`. */
+export function renderBlastText(r: BlastResult): string {
+  const lines = [`${clean(r.repo, REPO_MAX)}#${r.pr} · ${clean(r.summary, SUMMARY_MAX)}`];
+  if (r.downstream.length === 0) lines.push('No downstream callers found.');
+  for (const g of r.downstream) {
+    const n = g.callers.length;
+    lines.push(`${clean(g.symbol, SYMBOL_MAX)} — ${n} ${n === 1 ? 'caller' : 'callers'}`);
+    for (const c of g.callers) {
+      lines.push(`  ${clean(c.file, FILE_MAX)}:${c.line} (${clean(c.name, SYMBOL_MAX)})`);
+    }
+    if (g.endpoints_affected.length > 0) {
+      lines.push(`  endpoints: ${g.endpoints_affected.map((e) => clean(e, ENDPOINT_MAX)).join(', ')}`);
+    }
+    if (g.crons_affected.length > 0) {
+      lines.push(`  crons: ${g.crons_affected.map((e) => clean(e, ENDPOINT_MAX)).join(', ')}`);
+    }
+  }
   if (r.next) lines.push(r.next);
   return lines.join('\n');
 }

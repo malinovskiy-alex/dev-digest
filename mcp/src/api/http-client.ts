@@ -13,6 +13,7 @@ import type {
   Agent,
   ApiErrorBody,
   ApiReview,
+  BlastRadius,
   ConventionsView,
   PrMeta,
   Repo,
@@ -81,6 +82,10 @@ export class HttpDevDigestApi implements DevDigestApi {
 
   getConventions(repoId: string, signal?: AbortSignal): Promise<ConventionsView> {
     return this.request<ConventionsView>('GET', `/repos/${seg(repoId)}/conventions`, { signal });
+  }
+
+  getBlastRadius(prId: string, signal?: AbortSignal): Promise<BlastRadius> {
+    return this.request<BlastRadius>('GET', `/pulls/${seg(prId)}/blast`, { signal });
   }
 
   // ---- transport ----------------------------------------------------------

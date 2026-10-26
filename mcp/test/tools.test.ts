@@ -8,7 +8,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DevDigestApi } from '../src/api/port.js';
 import { HttpDevDigestApi } from '../src/api/http-client.js';
-import { ConventionsResultSchema, ReviewResultSchema } from '../src/format.js';
+import { BlastResultSchema, ConventionsResultSchema, ReviewResultSchema } from '../src/format.js';
 import { createStderrLogger } from '../src/log.js';
 import { createServer } from '../src/server.js';
 import { AGENT_ID, fakeApi, makeFinding, makeReview, makeRun, RUN_ID, virtualClock } from './fixtures.js';
@@ -62,7 +62,8 @@ describe('MCP tool surface', () => {
     for (const n of ['get_findings', 'get_conventions', 'get_blast_radius']) {
       expect(byName[n]!.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
     }
-    // the stub has no outputSchema yet; the other four do
+    // get_blast_radius omits its outputSchema to stay inside the tools/list budget
+    // (server.ts); its structuredContent is checked against BlastResultSchema below.
     expect(byName.get_blast_radius!.outputSchema).toBeUndefined();
     for (const n of ['list_agents', 'run_agent_on_pr', 'get_findings', 'get_conventions']) {
       expect(byName[n]!.outputSchema).toBeDefined();
@@ -159,12 +160,17 @@ describe('MCP tool surface', () => {
     expect(text(again)).toContain('DEVDIGEST_API_URL');
   });
 
-  it('the get_blast_radius stub → isError "not implemented"', async () => {
+  it('get_blast_radius → structuredContent that passes BlastResultSchema', async () => {
     const { client } = await connect(fakeApi());
     const res = await call(client, 'get_blast_radius', { repo: 'acme/api', pr: 42 });
-    expect(res.isError).toBe(true);
-    expect(text(res)).toContain('not implemented');
-    expect(text(res)).toContain('get_findings');
+    expect(res.isError).not.toBe(true);
+    const data = BlastResultSchema.parse(res.structuredContent);
+    expect(data.counts).toEqual({ symbols: 2, callers: 2, endpoints: 1, crons: 1 });
+    expect(data.downstream[0]!.callers.map((c) => `${c.file}:${c.line}`)).toEqual([
+      'src/a/routes.ts:12',
+      'src/b/jobs.ts:4',
+    ]);
+    expect(text(res)).toContain('getContext — 2 callers');
   });
 
   it('get_conventions with scan:null is a result with next, not an error', async () => {

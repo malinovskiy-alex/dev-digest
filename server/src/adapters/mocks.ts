@@ -11,6 +11,7 @@ import type {
   RepoRef,
   PrMeta,
   PrDetail,
+  PrFile,
   GitHubReviewPayload,
   CreateReviewCommentInput,
   PrReviewComment,
@@ -125,6 +126,8 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /** Files returned by listPullFiles, keyed by PR number (missing → []). */
+  pullFiles?: Record<number, PrFile[]>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -132,8 +135,15 @@ export class MockGitHubClient implements GitHubClient {
   public openedPrs: OpenPrPayload[] = [];
   public committed: CommitFilesPayload[] = [];
   public createdComments: CreateReviewCommentInput[] = [];
+  /** PR numbers passed to listPullFiles, in call order. */
+  public listPullFilesCalls: number[] = [];
 
   constructor(private opts: MockGitHubOptions = {}) {}
+
+  async listPullFiles(_repo: RepoRef, n: number): Promise<PrFile[]> {
+    this.listPullFilesCalls.push(n);
+    return this.opts.pullFiles?.[n] ?? [];
+  }
 
   async listPullRequests(_repo: RepoRef): Promise<PrMeta[]> {
     return (

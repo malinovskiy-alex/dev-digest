@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, PrIntentRecord, RunSummary, RunTrace } from '@devdigest/shared';
+import type { Finding, PrFile, PrIntentRecord, RunSummary, RunTrace } from '@devdigest/shared';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -15,8 +15,8 @@ import type { Finding, PrIntentRecord, RunSummary, RunTrace } from '@devdigest/s
 
 import type { FindingRow, PullRow } from '../../db/rows.js';
 export type { FindingRow, PullRow };
-import type { StoredIntent } from './repository/pull.repo.js';
-export type { StoredIntent };
+import type { StoredIntent, MergedPullRow } from './repository/pull.repo.js';
+export type { StoredIntent, MergedPullRow };
 
 export type ReviewRow = typeof t.reviews.$inferSelect;
 
@@ -39,6 +39,28 @@ export class ReviewRepository {
 
   getPrFiles(prId: string): Promise<(typeof t.prFiles.$inferSelect)[]> {
     return pullRepo.getPrFiles(this.db, prId);
+  }
+
+  // ---- prior PRs (merged PRs + cached files) ------------------------------
+
+  /** Merged PRs of a repo in this workspace, newest update first, minus `excludePrId`. */
+  listMergedPulls(
+    workspaceId: string,
+    repoId: string,
+    excludePrId: string,
+    limit: number,
+  ): Promise<MergedPullRow[]> {
+    return pullRepo.listMergedPulls(this.db, workspaceId, repoId, excludePrId, limit);
+  }
+
+  /** File paths per PR, one `IN` query; PRs without rows are absent from the map. */
+  getPrFilePaths(prIds: string[]): Promise<Map<string, string[]>> {
+    return pullRepo.getPrFilePaths(this.db, prIds);
+  }
+
+  /** Replace a PR's `pr_files` rows in one transaction. */
+  replacePrFiles(prId: string, files: PrFile[]): Promise<void> {
+    return pullRepo.replacePrFiles(this.db, prId, files);
   }
 
   // ---- reviews + findings -------------------------------------------------

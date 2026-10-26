@@ -11,6 +11,7 @@ import type {
   Agent,
   ApiReview,
   ApiReviewFinding,
+  BlastRadius,
   ConventionsView,
   PrMeta,
   Repo,
@@ -136,6 +137,33 @@ export function makeReview(over: Partial<ApiReview> = {}): ApiReview {
   };
 }
 
+export function makeBlast(over: Partial<BlastRadius> = {}): BlastRadius {
+  return {
+    changed_symbols: [
+      { name: 'getContext', file: 'src/ctx.ts', kind: 'function' },
+      { name: 'unused', file: 'src/ctx.ts', kind: 'function' },
+    ],
+    downstream: [
+      {
+        symbol: 'getContext',
+        callers: [
+          { name: 'aRoutes', file: 'src/a/routes.ts', line: 12, endpoints: ['GET /a'], crons: [] },
+          { name: 'bJobs', file: 'src/b/jobs.ts', line: 4, endpoints: [], crons: ['nightly'] },
+        ],
+        endpoints_affected: ['GET /a'],
+        crons_affected: ['nightly'],
+      },
+    ],
+    summary: '2 symbols changed · 2 callers · 1 endpoint · 1 cron',
+    counts: { symbols: 2, callers: 2, endpoints: 1, crons: 1 },
+    degraded: false,
+    reason: null,
+    index_status: 'full',
+    indexed_sha: 'idx-sha',
+    ...over,
+  };
+}
+
 export interface FakeState {
   agents: Agent[];
   repos: Repo[];
@@ -146,6 +174,7 @@ export interface FakeState {
   reviews: ApiReview[];
   conventions: ConventionsView;
   start: StartRunResponse;
+  blast: BlastRadius;
 }
 
 export function defaultState(): FakeState {
@@ -162,6 +191,7 @@ export function defaultState(): FakeState {
       runs: [{ run_id: RUN_ID, agent_id: AGENT_ID, agent_name: 'security' }],
       reviews: [],
     },
+    blast: makeBlast(),
   };
 }
 
@@ -182,6 +212,7 @@ export function fakeApi(over: Partial<FakeState> = {}) {
     }),
     listReviews: vi.fn(async (_prId: string, _signal?: AbortSignal) => st.reviews),
     getConventions: vi.fn(async (_repoId: string, _signal?: AbortSignal) => st.conventions),
+    getBlastRadius: vi.fn(async (_prId: string, _signal?: AbortSignal) => st.blast),
   } satisfies DevDigestApi;
   return api;
 }
