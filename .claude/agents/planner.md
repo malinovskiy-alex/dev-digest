@@ -104,7 +104,7 @@ knowing:
 
 - it routes a lens called `perf-prompt`, which is **not a skill and is not meant
   to be one**. It points at the rubric in
-  `docs/agent-prompts/performance-reviewer.md` — `routing.md:71` says so outright:
+  `docs/agent-prompts/performance-reviewer.md` — `routing.md:97` says so outright:
   *"there is no perf skill in the repo; this is the only perf rubric we have"*.
   Never write `perf-prompt` into a plan step as if it were loadable. When a step
   has a real performance dimension, name that rubric file instead.

@@ -32,6 +32,10 @@ export const RULES = [
   { re: /^server\/src\/.*\.ts$/,
     group: 'backend', lenses: ['onion-architecture'] },
 
+  // --- mcp (stdio MCP server; rings per specs/L04-devdigest-mcp.md D16) ----
+  { re: /^mcp\/.*\.ts$/,
+    group: 'backend', lenses: ['typescript-expert', 'zod', 'security', 'onion-architecture'] },
+
   // --- cross-cutting ------------------------------------------------------
   { re: /\/vendor\/shared\/contracts\/[^/]+\.ts$/,
     group: 'crosscutting', lenses: ['zod'] },
@@ -62,7 +66,7 @@ export function route(files, added) {
     if (/^\.claude\/skills\//.test(file)) continue;
     for (const t of CONTENT_TRIGGERS) {
       if (!t.re.test(text)) continue;
-      const g = /^client\//.test(file) ? 'frontend' : /^(server|reviewer-core)\//.test(file) ? 'backend' : 'crosscutting';
+      const g = /^client\//.test(file) ? 'frontend' : /^(server|reviewer-core|mcp)\//.test(file) ? 'backend' : 'crosscutting';
       groups[g].add(file);
       lenses[g].add(t.lens);
     }
@@ -80,7 +84,7 @@ export function route(files, added) {
 export function touchedPackages(files) {
   const pkgs = new Set();
   for (const f of files) {
-    const m = /^(server|client|reviewer-core|e2e)\//.exec(f.path);
+    const m = /^(server|client|reviewer-core|e2e|mcp)\//.exec(f.path);
     if (m) pkgs.add(m[1]);
   }
   const cmds = {
@@ -88,6 +92,7 @@ export function touchedPackages(files) {
     client: ['pnpm typecheck', 'pnpm test'],
     'reviewer-core': ['npm run typecheck', 'npm test'],
     e2e: ['npm run typecheck'],
+    mcp: ['npm run typecheck', 'npm test', 'npm run build'],
   };
   return [...pkgs].sort().map((p) => ({ package: p, commands: cmds[p] }));
 }

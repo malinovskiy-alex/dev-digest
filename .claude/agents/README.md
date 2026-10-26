@@ -27,7 +27,7 @@ That single constraint explains most of the design below.
 |---|---|---|---|
 | [`researcher`](researcher.md) | `sonnet` | nothing | a fact has to be looked up and cited — in this repo's files and history, or in external docs and specs |
 | [`planner`](planner.md) | `opus` | `specs/*.md` only | something does not exist yet and needs a plan another agent can execute cold |
-| [`implementer`](implementer.md) | `opus` | product code | a plan exists, or the task is a concrete change in `server/` / `client/` / `reviewer-core/` / `e2e/` |
+| [`implementer`](implementer.md) | `opus` | product code | a plan exists, or the task is a concrete change in `server/` / `client/` / `reviewer-core/` / `e2e/` / `mcp/` |
 | [`test-writer`](test-writer.md) | `opus` | test files only | a change needs tests, or a plan's `Done when` names a suite |
 | [`plan-verifier`](plan-verifier.md) | `opus` | nothing | code is finished and the question is whether the plan is actually done |
 | [`architecture-reviewer`](architecture-reviewer.md) | `opus` | nothing | the change leans on a boundary — a ring, an import direction, a module reaching sideways |
@@ -181,11 +181,11 @@ as anything upstream.
 | `pnpm typecheck` does not cover `test/` → run the suite too | [`server/AGENTS.md`](../../server/AGENTS.md) |
 | no `@testing-library/user-event` here — use `fireEvent` | [`client/INSIGHTS.md:175`](../../client/INSIGHTS.md) |
 | 6 of 11 tests in `indexer-pipeline.test.ts` fail on a clean tree → failures are compared, not counted | [`pr-self-review`](../skills/pr-self-review/SKILL.md) §2 |
-| the path → lens table, and that `perf-prompt` is a rubric (`docs/agent-prompts/performance-reviewer.md`), not a loadable skill | [`routing.md:71`](../skills/pr-self-review/references/routing.md) |
+| the path → lens table, and that `perf-prompt` is a rubric (`docs/agent-prompts/performance-reviewer.md`), not a loadable skill | [`routing.md:97`](../skills/pr-self-review/references/routing.md) |
 | the severity vocabulary and the per-lens mapping are cited, never invented | `contracts/findings.ts:11`, `severity-map.md`, `general-reviewer.md:53-73` |
 | a new `pnpm arch` failure is CRITICAL and machine-verified; a grandfathered entry is not a finding | `severity-map.md`, `do-not-flag.md` |
 | the known-violations file must be **counted** — it holds 21 entries while three reference files say 25 | `server/.dependency-cruiser-known-violations.json` |
-| `routing.md` routes no `server/test/**` or `reviewer-core/test/**` path → `test-writer` picks from the reconciled skill list and says which | `routing.md`, `scripts/lib/routing.mjs:32,41,56` |
+| `routing.md` routes no `server/test/**` or `reviewer-core/test/**` path → `test-writer` picks from the reconciled skill list and says which | `routing.md`, `scripts/lib/routing.mjs:32,45,60` |
 | a generator is not a lens → `mermaid-diagram` is never routed | `routing.md`, *Adding a skill to the routing* |
 | the integration suite silently skips itself; counts, not exit codes | `server/INSIGHTS.md:72`, `:265` |
 | `pnpm typecheck` does not cover `server/test/` | `server/INSIGHTS.md:128` |
@@ -193,7 +193,7 @@ as anything upstream.
 | a test's own rubric: what would have to change in production for it to fail | `docs/agent-prompts/test-quality-reviewer.md` |
 | where a doc page goes, and what each `docs/` directory refuses | `docs/README.md`, `<pkg>/docs/README.md`, root `AGENTS.md` *Where to write what* |
 | a spec stays the record of intent once it ships | [`specs/README.md`](../../specs/README.md) |
-| server tests live in `server/test/`, reviewer-core's in `test/`, client tests are colocated — not uniform | `server/AGENTS.md`, `reviewer-core/AGENTS.md`, `client/AGENTS.md` |
+| server tests live in `server/test/`, reviewer-core's and mcp's in `test/`, client tests are colocated — not uniform | `server/AGENTS.md`, `reviewer-core/AGENTS.md`, `mcp/AGENTS.md`, `client/AGENTS.md` |
 
 One design decision is **not** from a source: `planner` derives its `Skill map`
 from the same `routing.md` that `implementer` consults. Nothing upstream suggests

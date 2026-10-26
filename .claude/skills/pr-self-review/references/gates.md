@@ -79,6 +79,7 @@ From `gates.json` → `packages[]`. Always **from inside the package directory**
 | `client/` | `pnpm typecheck` · `pnpm test` |
 | `reviewer-core/` | `npm run typecheck` · `npm test` |
 | `e2e/` | `npm run typecheck` |
+| `mcp/` | `npm run typecheck` · `npm test` · `npm run build` |
 
 There is no `lint` script anywhere in the repo — do not invent one.
 

@@ -1,6 +1,6 @@
 # DevDigest — agent instructions
 
-Local-first AI pull-request review. **Four standalone packages, not a monorepo:**
+Local-first AI pull-request review. **Five standalone packages, not a monorepo:**
 each owns its `package.json` *and* its own lockfile, and cross-package code is
 shared only through tsconfig `paths` aliases (`@devdigest/shared`,
 `@devdigest/reviewer-core`, `@devdigest/ui`). Never add a workspace, `npm link`,
@@ -13,7 +13,7 @@ None of these are loaded for you. Read the file when its trigger matches.
 | Read | When |
 |---|---|
 | [README.md](README.md) | before you change anything — architecture diagram, the review flow end to end, what the starter does and does not ship |
-| [TESTING.md](TESTING.md) | you are adding a test and need to know which of the five suites it belongs to |
+| [TESTING.md](TESTING.md) | you are adding a test and need to know which of the six suites it belongs to |
 | [INSIGHTS.md](INSIGHTS.md) | something behaves unexpectedly — check here **before** you start debugging |
 | [specs/](specs/README.md) | you are about to build something that does not exist yet — write the plan there first |
 | [docs/agent-prompts/](docs/agent-prompts/README.md) | you are touching a reviewer system prompt or the model choice — the built-in prompts live only here |
@@ -22,7 +22,7 @@ None of these are loaded for you. Read the file when its trigger matches.
 Per-package rules load on their own when you touch a file in that package. Read
 one up front only if you are planning a change there.
 
-## The four packages
+## The five packages
 
 | Package | What it is | Port | Rules |
 |---|---|---|---|
@@ -30,6 +30,7 @@ one up front only if you are planning a change there.
 | `client/` | Next.js 15 studio | 3000 | [client/AGENTS.md](client/AGENTS.md) |
 | `reviewer-core/` | pure review engine: diff → prompt → LLM → findings | — | [reviewer-core/AGENTS.md](reviewer-core/AGENTS.md) |
 | `e2e/` | deterministic browser flows | — | [e2e/AGENTS.md](e2e/AGENTS.md) |
+| `mcp/` | local stdio MCP server — a thin wrapper over the API for Claude Code | — | [mcp/AGENTS.md](mcp/AGENTS.md) |
 
 `repo-intel`, the codebase indexer, lives **inside** the server: `server/src/modules/repo-intel`.
 
@@ -47,7 +48,7 @@ bring the stack up by hand: `docker compose up -d`, then follow
 
 Every other command runs **from inside the package directory**, never the root.
 Node >= 22. **`pnpm`** for `server/` and `client/`; `reviewer-core/` and `e2e/`
-still carry a starter `package-lock.json`.
+still carry a starter `package-lock.json`, and `mcp/` uses **`npm`** by design.
 
 ## Hard rules
 
@@ -60,9 +61,10 @@ still carry a starter `package-lock.json`.
   `~/.devdigest/secrets.json` (mode `0600`) behind `SecretsProvider`.
 - **Migrations are not applied on boot.** Run `pnpm db:migrate` yourself.
 - **Docker runs Postgres only.** API and web run on the host.
-- **Never regenerate a lockfile as a side effect.** All four are committed and
+- **Never regenerate a lockfile as a side effect.** All five are committed and
   load-bearing: `server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`,
-  `reviewer-core/package-lock.json`, `e2e/package-lock.json`. A lockfile changes
+  `reviewer-core/package-lock.json`, `e2e/package-lock.json`,
+  `mcp/package-lock.json`. A lockfile changes
   only in a commit whose subject is that dependency change.
 - **An empty table is intentional.** The schema already contains every table the
   finished product needs, including ones no starter code touches.

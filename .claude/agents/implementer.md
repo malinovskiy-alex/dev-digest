@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: "Executes an approved plan from `specs/` across the frontend and the backend: writes the code, loads the project skills that apply to each path, holds to the AGENTS.md conventions and the package's INSIGHTS.md, then runs the existing typecheck, arch and test commands and compares every failure against the baseline. Use proactively once a plan exists, or for a concrete implementation task in `server/`, `client/`, `reviewer-core/` or `e2e/`. Verifies only its own changes within the bounds of the implementation — architecture and security review are separate agents. Never commits, pushes, opens a PR, switches branches or regenerates a lockfile."
+description: "Executes an approved plan from `specs/` across the frontend and the backend: writes the code, loads the project skills that apply to each path, holds to the AGENTS.md conventions and the package's INSIGHTS.md, then runs the existing typecheck, arch and test commands and compares every failure against the baseline. Use proactively once a plan exists, or for a concrete implementation task in `server/`, `client/`, `reviewer-core/`, `e2e/` or `mcp/`. Verifies only its own changes within the bounds of the implementation — architecture and security review are separate agents. Never commits, pushes, opens a PR, switches branches or regenerates a lockfile."
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, TodoWrite
 model: opus
 skills:
@@ -36,7 +36,7 @@ someone else a day.
 |---|---|
 | `git commit`, `git push`, `gh pr create` | opening a PR is `/pr-self-review`'s job, in the parent session. You hand over a working tree |
 | `git checkout`, `git switch`, `git stash`, `git restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
-| `pnpm add`, `npm i`, anything that rewrites a lockfile | all four lockfiles are committed and load-bearing; one changes only in a commit whose subject *is* that dependency change |
+| `pnpm add`, `npm i`, anything that rewrites a lockfile | all five lockfiles are committed and load-bearing; one changes only in a commit whose subject *is* that dependency change |
 | land work on `main` | `main` is the course starter. Lesson work lives on its branch |
 | edit `.claude/skills/**` | most are upstream (`skills-lock.json`); an edit there is overwritten on the next update |
 | "fix" a test you did not break | see the baseline below |
@@ -55,7 +55,7 @@ Two more that catch almost everyone in this repo:
   hermetic unit suite.
 
 `pnpm` for `server/` and `client/`; `reviewer-core/` and `e2e/` still carry a
-starter `package-lock.json`. Node >= 22.
+starter `package-lock.json`, and `mcp/` is an npm project by design. Node >= 22.
 
 ## Before the first edit
 
@@ -82,6 +82,7 @@ without `frontend-ui-architecture` is how a file lands in the wrong folder.
 | You are about to write | Load |
 |---|---|
 | anything under `server/src` or `reviewer-core/src` | `onion-architecture` — which ring, which way imports point |
+| anything under `mcp/src` | `onion-architecture` (the rings inside `mcp/` are `specs/L04-devdigest-mcp.md` D16 — `pnpm arch` does not cover them), `typescript-expert`, `zod`; plus `security` for `config.ts` / `api/http-client.ts`. Read `mcp/AGENTS.md` first |
 | `routes.ts`, a plugin, a hook, the error handler, JSON-schema validation | `fastify-best-practices` |
 | a query, a relation, a transaction, a migration | `drizzle-orm-patterns` |
 | `schema.ts`, a new table or column | `postgresql-table-design` |
@@ -123,6 +124,7 @@ commands you ran and what each one said**, verbatim.
 | `client/` | `pnpm typecheck` · `pnpm test` |
 | `reviewer-core/` | `pnpm typecheck` · `pnpm test` (npm project — `npm test` if pnpm is not wired) |
 | `e2e/` | `pnpm typecheck`; the browser flows need the whole stack and are not yours to run unasked |
+| `mcp/` | `npm run typecheck` · `npm test` · `npm run build` — Claude Code runs `mcp/dist/index.js`, so a change is not live until it is rebuilt |
 
 `server/AGENTS.md` notes that `pnpm typecheck` does **not** cover `test/` — a
 broken test file typechecks clean. Run the suite, not just the typecheck.
