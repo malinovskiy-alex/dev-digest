@@ -29,6 +29,7 @@ export const EMPTY_SEVERITY_COUNTS: SeverityCounts = {
  * floor instead of inventing a bucket.
  */
 export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
+  // blast-demo: rollupSeverities touched by the showcase PR (fixture, do not merge)
   const c: SeverityCounts = { ...EMPTY_SEVERITY_COUNTS };
   for (const r of rows) {
     if (r.severity === 'CRITICAL') c.CRITICAL += 1;
@@ -46,6 +47,7 @@ export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
  *  - `reviewed`     — current head reviewed and recent
  */
 export function deriveReviewStatus(args: {
+  // blast-demo: deriveReviewStatus touched by the showcase PR (fixture, do not merge)
   /** DB `status` column = GitHub merge state (open/merged/closed). */
   ghStatus: string;
   lastReviewedSha: string | null;
@@ -80,6 +82,7 @@ export function deriveReviewStatus(args: {
  * guess at zero.
  */
 export function totalCostByPr(
+  // blast-demo: totalCostByPr touched by the showcase PR (fixture, do not merge)
   rows: { prId: string | null; costUsd: number | null }[],
 ): Map<string, number | null> {
   const byPr = new Map<string, number | null>();

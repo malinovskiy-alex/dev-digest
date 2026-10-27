@@ -23,6 +23,7 @@ export function approxTokens(text: string): number {
 }
 
 export class TiktokenTokenizer implements Tokenizer {
+  // blast-demo: TiktokenTokenizer touched by the showcase PR (fixture, do not merge)
   private enc?: Tiktoken;
   private broken = false;
 

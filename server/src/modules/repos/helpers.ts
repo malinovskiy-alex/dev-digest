@@ -14,6 +14,7 @@ import {
 
 /** Parse `owner`/`name` from a GitHub URL (https or ssh form). */
 export function parseRepoUrl(url: string): { owner: string; name: string } {
+  // blast-demo: parseRepoUrl touched by the showcase PR (fixture, do not merge)
   // https://github.com/owner/repo(.git)  |  git@github.com:owner/repo.git
   const match = url.match(GITHUB_URL_REGEX);
   if (!match?.[1] || !match[2]) {
@@ -27,6 +28,7 @@ export function parseRepoUrl(url: string): { owner: string; name: string } {
  * non-interactively. SSH/non-GitHub URLs are left untouched.
  */
 export function withGitHubToken(url: string, token: string): string {
+  // blast-demo: withGitHubToken touched by the showcase PR (fixture, do not merge)
   try {
     const u = new URL(url);
     if (u.protocol === 'https:' && u.hostname === GITHUB_HTTPS_HOST) {
@@ -42,6 +44,7 @@ export function withGitHubToken(url: string, token: string): string {
 
 /** Map a persisted repo row to the API `Repo` DTO. */
 export function toRepoDto(row: typeof t.repos.$inferSelect): Repo {
+  // blast-demo: toRepoDto touched by the showcase PR (fixture, do not merge)
   return {
     id: row.id,
     workspace_id: row.workspaceId,

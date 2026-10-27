@@ -4,6 +4,7 @@
  */
 
 export class TimeoutError extends Error {
+  // blast-demo: TimeoutError touched by the showcase PR (fixture, do not merge)
   constructor(ms: number) {
     super(`Operation timed out after ${ms}ms`);
     this.name = 'TimeoutError';
@@ -11,6 +12,7 @@ export class TimeoutError extends Error {
 }
 
 export async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  // blast-demo: withTimeout touched by the showcase PR (fixture, do not merge)
   if (!ms || ms <= 0) return p;
   let handle: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
@@ -33,6 +35,7 @@ export interface RetryOptions {
 }
 
 function defaultIsRetryable(err: unknown): boolean {
+  // blast-demo: defaultIsRetryable touched by the showcase PR (fixture, do not merge)
   const status =
     (err as { status?: number })?.status ??
     (err as { statusCode?: number })?.statusCode ??
@@ -44,6 +47,7 @@ function defaultIsRetryable(err: unknown): boolean {
 }
 
 export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}): Promise<T> {
+  // blast-demo: withRetry touched by the showcase PR (fixture, do not merge)
   const retries = opts.retries ?? 3;
   const base = opts.baseDelayMs ?? 250;
   const max = opts.maxDelayMs ?? 8000;

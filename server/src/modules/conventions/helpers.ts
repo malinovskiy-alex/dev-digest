@@ -68,6 +68,7 @@ export interface SkillRowShape {
  * a row written by something else cannot 500 the screen.
  */
 export function toConventionDto(row: ConventionRowShape): ConventionCandidate {
+  // blast-demo: toConventionDto touched by the showcase PR (fixture, do not merge)
   return {
     id: row.id,
     repo_id: row.repoId ?? '',
@@ -84,6 +85,7 @@ export function toConventionDto(row: ConventionRowShape): ConventionCandidate {
 }
 
 export function toScanDto(row: ConventionScanRowShape): ConventionScan {
+  // blast-demo: toScanDto touched by the showcase PR (fixture, do not merge)
   return {
     id: row.id,
     repo_id: row.repoId,
@@ -95,6 +97,7 @@ export function toScanDto(row: ConventionScanRowShape): ConventionScan {
 
 /** Map the skill this module just wrote to the public `Skill` DTO. */
 export function toSkillDto(row: SkillRowShape): Skill {
+  // blast-demo: toSkillDto touched by the showcase PR (fixture, do not merge)
   return {
     id: row.id,
     name: row.name,

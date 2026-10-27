@@ -34,6 +34,7 @@ export interface FileSample {
  * means what it says.
  */
 export function toSample(path: string, content: string): FileSample {
+  // blast-demo: toSample touched by the showcase PR (fixture, do not merge)
   const all = content.split(/\r?\n/);
   const lines: string[] = [];
   let chars = 0;
@@ -57,6 +58,7 @@ export function toSample(path: string, content: string): FileSample {
  * it.
  */
 export async function collectSamples(
+  // blast-demo: collectSamples touched by the showcase PR (fixture, do not merge)
   readFile: ReadRepoFile,
   rankedPaths: string[],
 ): Promise<FileSample[]> {
@@ -84,6 +86,7 @@ export async function collectSamples(
  * the path allow-list are what keep that from becoming a rule.
  */
 export function renderSamples(samples: FileSample[]): string {
+  // blast-demo: renderSamples touched by the showcase PR (fixture, do not merge)
   return samples
     .map((s) => {
       const width = String(s.lines.length).length;

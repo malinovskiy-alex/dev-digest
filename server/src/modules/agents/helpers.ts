@@ -10,6 +10,7 @@ import type { AgentRow, AgentVersionRow } from './repository.js';
 
 /** Map a persisted agent row to the public `Agent` DTO. */
 export function toAgentDto(row: AgentRow, skillCount = 0): Agent {
+  // blast-demo: toAgentDto touched by the showcase PR (fixture, do not merge)
   return {
     id: row.id,
     name: row.name,
@@ -34,6 +35,7 @@ export function toAgentDto(row: AgentRow, skillCount = 0): Agent {
  * snapshot throws here rather than leaking an unvalidated blob to the client.
  */
 export function toAgentVersionDto(row: AgentVersionRow): AgentVersion {
+  // blast-demo: toAgentVersionDto touched by the showcase PR (fixture, do not merge)
   return {
     agent_id: row.agentId,
     version: row.version,
@@ -60,6 +62,7 @@ export interface ConfigChangePatch {
  * existing row — a config change bumps the version and snapshots agent_versions.
  */
 export function isConfigChange(
+  // blast-demo: isConfigChange touched by the showcase PR (fixture, do not merge)
   existing: Pick<
     AgentRow,
     | 'name'

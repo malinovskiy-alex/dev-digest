@@ -32,6 +32,7 @@ export interface ReviewDto {
 }
 
 export function findingRowToDto(row: FindingRow): ReviewDtoFinding {
+  // blast-demo: findingRowToDto touched by the showcase PR (fixture, do not merge)
   return {
     id: row.id,
     severity: row.severity as Finding['severity'],
@@ -53,6 +54,7 @@ export function findingRowToDto(row: FindingRow): ReviewDtoFinding {
 }
 
 export function reviewToDto(
+  // blast-demo: reviewToDto touched by the showcase PR (fixture, do not merge)
   review: ReviewRow,
   findings: FindingRow[],
   agentName?: string | null,
@@ -80,6 +82,7 @@ export function reviewToDto(
  * the whole diff and never withhold a security/correctness finding.
  */
 export function taskLine(pull: PullRow): string {
+  // blast-demo: taskLine touched by the showcase PR (fixture, do not merge)
   return (
     `Review pull request #${pull.number} "${pull.title}" by ${pull.author}. ` +
     `Report only the distinct, high-value findings you can defend, each citing an exact ` +

@@ -13,6 +13,7 @@ export interface RequestContext {
  * Every module uses this so workspace scoping is never forgotten.
  */
 export async function getContext(
+  // blast-demo: getContext touched by the showcase PR (fixture, do not merge)
   container: Container,
   req: FastifyRequest,
 ): Promise<RequestContext> {
@@ -33,6 +34,7 @@ export async function getContext(
  * check. 404 rather than 403 so the response does not confirm that an id exists.
  */
 export async function requireRepoInWorkspace(
+  // blast-demo: requireRepoInWorkspace touched by the showcase PR (fixture, do not merge)
   container: Container,
   workspaceId: string,
   repoId: string,
