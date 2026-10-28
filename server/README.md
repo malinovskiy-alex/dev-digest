@@ -79,6 +79,13 @@ flowchart TB
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     conventions["conventions<br/>/repos/:id/conventions · /conventions/extract<br/>/conventions/:id · /conventions/skill-draft · /conventions/skill"]
   end
+  subgraph Brief["PR brief (L04)"]
+    blast["blast<br/>GET /pulls/:id/blast"]
+    prHistory["pr-history<br/>GET /pulls/:id/history"]
+  end
+  GH["GitHub"]
+  blast -->|"getBlastRadius · getIndexState (index read, no LLM)"| repoIntel
+  prHistory -->|"listPullFiles (≤8 per request, cached in pr_files)"| GH
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
     workspace["workspace<br/>/workspace"]

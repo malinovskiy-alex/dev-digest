@@ -66,9 +66,9 @@ export const TOOL_TEXT = {
       "Get the accepted coding conventions DevDigest extracted for a repository. Use it before writing or reviewing code in that repo, to follow its rules. Returns each convention's category, rule and evidence location.",
   },
   get_blast_radius: {
-    title: 'Get PR blast radius (not implemented)',
+    title: 'Get PR blast radius',
     description:
-      'Not implemented yet: always returns an error. It will map which parts of the codebase a pull request can affect. Until then, use get_findings or the Smart Diff view in DevDigest.',
+      "Show what else in the repository a pull request can affect, read from DevDigest's prebuilt code index without calling a model. Use it before reviewing or changing a PR's shared code. Returns the changed symbols, each one's callers as file:line, the HTTP endpoints and crons that depend on them, and whether the index is incomplete.",
   },
 } as const;
 
@@ -211,7 +211,10 @@ export function createServer(deps: ServerDeps): McpServer {
     adapt('get_conventions', getConventions),
   );
 
-  // Stub: no outputSchema yet (spec tool contract).
+  // No outputSchema: BlastResultSchema as JSON Schema is ~1.4k characters and
+  // pushes tools/list past the 8 000-character startup budget
+  // (test/hygiene.test.ts). The structuredContent still has exactly that
+  // shape — compactBlast returns a BlastResult (format.ts).
   server.registerTool(
     'get_blast_radius',
     {

@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   compactAgents,
+  compactBlast,
   compactConventions,
   compactReview,
+  renderBlastText,
   renderConventionsText,
   renderReviewText,
   type ConventionLike,
 } from '../src/format.js';
-import { makeAgent, makeFinding, makeReview } from './fixtures.js';
+import { makeAgent, makeBlast, makeFinding, makeReview } from './fixtures.js';
 
 const WHERE = { repo: 'acme/api', pr: 42 };
 
@@ -183,5 +185,28 @@ describe('compactConventions', () => {
     expect(r).toMatchObject({ repo: 'acme/api', scanned_at: null, sample_count: 0, total: 0, shown: 0, conventions: [] });
     expect(r.next).toContain('has not been scanned');
     expect(renderConventionsText(r).split('\n')[0]).toBe('acme/api · no conventions scan');
+  });
+});
+
+describe('compactBlast', () => {
+  it('keeps every entry and count — nothing is capped', () => {
+    const callers = Array.from({ length: 150 }, (_, i) => ({ name: `c${i}`, file: `f${i}.ts`, line: i + 1, endpoints: [], crons: [] }));
+    const b = makeBlast({
+      downstream: [{ symbol: 'hub', callers, endpoints_affected: ['GET /a'], crons_affected: [] }],
+      counts: { symbols: 2, callers: 150, endpoints: 1, crons: 0 },
+    });
+    const r = compactBlast(b, WHERE);
+    expect(r.downstream[0]!.callers).toHaveLength(150);
+    expect(r.counts).toEqual({ symbols: 2, callers: 150, endpoints: 1, crons: 0 });
+    expect(r.changed_symbols).toHaveLength(2);
+    expect(r.next).toBeUndefined();
+  });
+
+  it('renders the no-callers line', () => {
+    const r = compactBlast(makeBlast({ downstream: [], summary: '2 symbols changed · no downstream callers' }), WHERE);
+    expect(renderBlastText(r).split('\n')).toEqual([
+      'acme/api#42 · 2 symbols changed · no downstream callers',
+      'No downstream callers found.',
+    ]);
   });
 });

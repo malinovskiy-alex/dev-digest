@@ -4,6 +4,7 @@ import type {
   RepoRef,
   PrMeta,
   PrDetail,
+  PrFile,
   PrStatus,
   GitHubReviewPayload,
   CreateReviewCommentInput,
@@ -117,6 +118,33 @@ export class OctokitGitHubClient implements GitHubClient {
             })),
             linked_issue: linkedIssue,
           };
+        })(),
+        TIMEOUT,
+      ),
+    );
+  }
+
+  /**
+   * One PR's files — a single `pulls.listFiles` call, used by the Prior-PRs
+   * cache. ONE page of 100 only: a PR with more than 100 files is cut, so an
+   * overlap in its tail can be missed (accepted; specs/L04-blast-radius.md Q10).
+   */
+  async listPullFiles(repo: RepoRef, n: number): Promise<PrFile[]> {
+    return withRetry(() =>
+      withTimeout(
+        (async () => {
+          const { data: files } = await this.octokit.rest.pulls.listFiles({
+            owner: repo.owner,
+            repo: repo.name,
+            pull_number: n,
+            per_page: 100,
+          });
+          return files.map((f) => ({
+            path: f.filename,
+            additions: f.additions,
+            deletions: f.deletions,
+            patch: f.patch,
+          }));
         })(),
         TIMEOUT,
       ),

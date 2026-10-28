@@ -14,8 +14,7 @@ export const s = {
 } as const;
 
 /**
- * The PR brief row: Intent on the left, Blast Radius on the right (L04). Until
- * Blast Radius ships, the right column is empty, so Intent keeps its designed
- * half width instead of stretching across the page.
+ * The PR brief row: Intent on the left, Blast Radius on the right (L04). One
+ * column below `lg`; side by side from `lg` up, each card at half width.
  */
 export const briefGridClass = "mb-7 grid grid-cols-1 items-start gap-4 lg:grid-cols-2";

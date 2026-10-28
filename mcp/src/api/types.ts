@@ -9,6 +9,7 @@
 import type {
   Agent,
   ApiErrorBody,
+  BlastRadius,
   ConventionsView,
   Finding,
   PrMeta,
@@ -16,7 +17,7 @@ import type {
   RunSummary,
 } from '@devdigest/shared';
 
-export type { Agent, ApiErrorBody, ConventionsView, PrMeta, Repo, RunSummary };
+export type { Agent, ApiErrorBody, BlastRadius, ConventionsView, PrMeta, Repo, RunSummary };
 
 /**
  * One finding of `GET /pulls/:id/reviews`.

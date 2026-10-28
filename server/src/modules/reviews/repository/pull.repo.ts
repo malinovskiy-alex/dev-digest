@@ -1,8 +1,8 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import { IntentConfidence, IntentKind, IntentSource } from '@devdigest/shared';
-import type { PrIntentRecord } from '@devdigest/shared';
+import type { PrFile, PrIntentRecord } from '@devdigest/shared';
 import type { PullRow } from '../../../db/rows.js';
 
 // ---- PR lookup (workspace-scoped) -----------------------------------------
@@ -32,6 +32,87 @@ export async function getPrFiles(
   prId: string,
 ): Promise<(typeof t.prFiles.$inferSelect)[]> {
   return db.select().from(t.prFiles).where(eq(t.prFiles.prId, prId));
+}
+
+// ---- prior PRs (merged PRs + their cached files) ---------------------------
+
+/** A merged PR of the same repo, as the Prior-PRs block needs it. */
+export interface MergedPullRow {
+  id: string;
+  number: number;
+  title: string;
+  author: string;
+  updatedAt: Date | null;
+}
+
+/**
+ * Merged PRs DevDigest has synced for this repo, newest update first, excluding
+ * `excludePrId`. Scoped by workspace AND repo. ≤50 rows exist per repo (the sync
+ * window), so the existing indexes are enough.
+ */
+export async function listMergedPulls(
+  db: Db,
+  workspaceId: string,
+  repoId: string,
+  excludePrId: string,
+  limit: number,
+): Promise<MergedPullRow[]> {
+  return db
+    .select({
+      id: t.pullRequests.id,
+      number: t.pullRequests.number,
+      title: t.pullRequests.title,
+      author: t.pullRequests.author,
+      updatedAt: t.pullRequests.updatedAt,
+    })
+    .from(t.pullRequests)
+    .where(
+      and(
+        eq(t.pullRequests.workspaceId, workspaceId),
+        eq(t.pullRequests.repoId, repoId),
+        eq(t.pullRequests.status, 'merged'),
+        ne(t.pullRequests.id, excludePrId),
+      ),
+    )
+    .orderBy(sql`${t.pullRequests.updatedAt} desc nulls last`, desc(t.pullRequests.number))
+    .limit(limit);
+}
+
+/** File paths per PR for many PRs at once — ONE `IN` query. PRs with no rows are absent. */
+export async function getPrFilePaths(
+  db: Db,
+  prIds: string[],
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (prIds.length === 0) return out;
+  const rows = await db
+    .select({ prId: t.prFiles.prId, path: t.prFiles.path })
+    .from(t.prFiles)
+    .where(inArray(t.prFiles.prId, prIds));
+  for (const r of rows) {
+    const arr = out.get(r.prId);
+    if (arr) arr.push(r.path);
+    else out.set(r.prId, [r.path]);
+  }
+  return out;
+}
+
+/** Replace a PR's files (delete + insert in one transaction) — the same rows the PR-detail route writes. */
+export async function replacePrFiles(db: Db, prId: string, files: PrFile[]): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.delete(t.prFiles).where(eq(t.prFiles.prId, prId));
+    if (files.length > 0) {
+      await tx.insert(t.prFiles).values(
+        files.map((f) => ({
+          prId,
+          path: f.path,
+          additions: f.additions,
+          deletions: f.deletions,
+          patch: f.patch ?? null,
+        })),
+      );
+    }
+  });
 }
 
 /**

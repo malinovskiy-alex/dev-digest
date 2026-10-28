@@ -136,7 +136,7 @@ A PR is always addressed as `repo="owner/name"` plus `pr=<number>`.
 | `run_agent_on_pr` | `repo`, `pr`, `agent` (id or exact name) | Starts a review — or joins one already running for that agent on that PR — and waits for it. Costs LLM tokens. | a review result with `status: "done"`; or `status: "running"` plus `run_id` if the wait budget ran out |
 | `get_findings` | `repo`, `pr`, `run_id?`, `agent?`, `min_severity?` (`CRITICAL`/`WARNING`/`SUGGESTION`), `limit?` (1–100, default 20) | Reads a review that already ran; never starts one. Defaults to the latest review. | a review result |
 | `get_conventions` | `repo`, `limit?` (1–100, default 30) | Reads the repo's **accepted** conventions. | `{repo, scanned_at, sample_count, total, shown, conventions:[{id, category, rule, evidence}], next?}` |
-| `get_blast_radius` | `repo`, `pr` | Not implemented yet (L04 homework). | always an error pointing to `get_findings` or Smart Diff |
+| `get_blast_radius` | `repo`, `pr` | Reads the PR's blast radius from DevDigest's index (no model call). | the same map as the Overview card (prior PRs are UI-only): `{repo, pr, summary, counts, degraded, reason, index_status, changed_symbols[], downstream[], next?}` |
 
 A **review result** is `{repo, pr, run_id, agent, status, reused_run?, verdict,
 score, summary, counts, findings[], shown, total, dismissed, next?}`. Findings

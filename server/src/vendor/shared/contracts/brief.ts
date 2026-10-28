@@ -69,6 +69,9 @@ export const BlastCaller = z.object({
   name: z.string(),
   file: z.string(),
   line: z.number().int(),
+  /** Endpoints / crons declared in this caller's file (index facts). Graph edges. */
+  endpoints: z.array(z.string()).default([]),
+  crons: z.array(z.string()).default([]),
 });
 export type BlastCaller = z.infer<typeof BlastCaller>;
 
@@ -80,10 +83,43 @@ export const DownstreamImpact = z.object({
 });
 export type DownstreamImpact = z.infer<typeof DownstreamImpact>;
 
+/** Why repo-intel served a degraded map. Mirrors repo-intel's DegradedReason. */
+export const BlastDegradedReason = z.enum([
+  'flag_off',
+  'index_failed',
+  'index_partial',
+  'repo_too_large',
+  'no_data',
+]);
+export type BlastDegradedReason = z.infer<typeof BlastDegradedReason>;
+
+/** repo_index_state.status of the PR's repo at read time. */
+export const BlastIndexStatus = z.enum(['full', 'partial', 'degraded', 'failed']);
+export type BlastIndexStatus = z.infer<typeof BlastIndexStatus>;
+
+/** The numbers in the summary row, counted from `downstream` (+ changed_symbols). */
+export const BlastCounts = z.object({
+  symbols: z.number().int().nonnegative(),
+  callers: z.number().int().nonnegative(),
+  endpoints: z.number().int().nonnegative(),
+  crons: z.number().int().nonnegative(),
+});
+export type BlastCounts = z.infer<typeof BlastCounts>;
+
 export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  // L04 — the fields below default so the bare { changed_symbols, downstream,
+  // summary } shape still parses.
+  counts: BlastCounts.default({ symbols: 0, callers: 0, endpoints: 0, crons: 0 }),
+  /** Passed through verbatim from the facade. */
+  degraded: z.boolean().default(false),
+  reason: BlastDegradedReason.nullable().default(null),
+  /** From getIndexState; lets the UI flag a partial/failed index the facade served as non-degraded. */
+  index_status: BlastIndexStatus.nullable().default(null),
+  /** Commit the index was built from; caller line links point here. null when never indexed. */
+  indexed_sha: z.string().nullable().default(null),
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 
@@ -109,6 +145,10 @@ export type Risks = z.infer<typeof Risks>;
 export const PrHistoryItem = z.object({
   pr_number: z.number().int(),
   title: z.string(),
+  /**
+   * ISO timestamp. For PRs DevDigest synced from GitHub this is the merged PR's
+   * last-update time — no merge timestamp is stored (pull_requests has none).
+   */
   merged_at: z.string(),
   author: z.string(),
   files_overlap: z.array(z.string()),
@@ -118,6 +158,12 @@ export type PrHistoryItem = z.infer<typeof PrHistoryItem>;
 
 export const PrHistory = z.object({
   history: z.array(PrHistoryItem),
+  /** How many merged PRs DevDigest knows for this repo were compared. */
+  candidates: z.number().int().nonnegative().default(0),
+  /** Candidates whose files could not be read this time (budget or GitHub down). */
+  unchecked: z.number().int().nonnegative().default(0),
+  /** True when GitHub could not be reached for an uncached candidate. */
+  github_unavailable: z.boolean().default(false),
 });
 export type PrHistory = z.infer<typeof PrHistory>;
 

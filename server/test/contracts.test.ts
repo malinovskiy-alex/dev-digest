@@ -104,6 +104,62 @@ describe('AI contracts parse fixtures', () => {
         ],
       }),
     ).not.toThrow();
+
+    // L04 — the bare shapes get their defaults.
+    const bareBlast = BlastRadius.parse({
+      changed_symbols: [],
+      downstream: [
+        {
+          symbol: 'rateLimit',
+          callers: [{ name: 'publicRouter', file: 'b.ts', line: 23 }],
+          endpoints_affected: [],
+          crons_affected: [],
+        },
+      ],
+      summary: 's',
+    });
+    expect(bareBlast.degraded).toBe(false);
+    expect(bareBlast.reason).toBeNull();
+    expect(bareBlast.index_status).toBeNull();
+    expect(bareBlast.indexed_sha).toBeNull();
+    expect(bareBlast.counts).toEqual({ symbols: 0, callers: 0, endpoints: 0, crons: 0 });
+    expect(bareBlast.downstream[0]!.callers[0]!.endpoints).toEqual([]);
+    expect(bareBlast.downstream[0]!.callers[0]!.crons).toEqual([]);
+    const bareHistory = PrHistory.parse({ history: [] });
+    expect(bareHistory.unchecked).toBe(0);
+    expect(bareHistory.candidates).toBe(0);
+    expect(bareHistory.github_unavailable).toBe(false);
+
+    // A full BlastRadius round-trips.
+    const fullBlast = {
+      changed_symbols: [{ name: 'rateLimit', file: 'a.ts', kind: 'function' }],
+      downstream: [
+        {
+          symbol: 'rateLimit',
+          callers: [
+            { name: 'publicRouter', file: 'b.ts', line: 23, endpoints: ['GET /x'], crons: ['nightly'] },
+          ],
+          endpoints_affected: ['GET /x'],
+          crons_affected: ['nightly'],
+        },
+      ],
+      summary: '1 symbol changed · 1 caller · 1 endpoint · 1 cron',
+      counts: { symbols: 1, callers: 1, endpoints: 1, crons: 1 },
+      degraded: true,
+      reason: 'index_partial' as const,
+      index_status: 'partial' as const,
+      indexed_sha: 'abc123',
+    };
+    expect(BlastRadius.parse(fullBlast)).toEqual(fullBlast);
+
+    // A PrHistory with degradation fields round-trips.
+    const fullHistory = {
+      history: [],
+      candidates: 7,
+      unchecked: 3,
+      github_unavailable: true,
+    };
+    expect(PrHistory.parse(fullHistory)).toEqual(fullHistory);
   });
 
   it('SmartDiff (data.jsx DIFF)', () => {

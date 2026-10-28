@@ -34,6 +34,7 @@ describe('HttpDevDigestApi', () => {
     await api.listRuns('p 2');
     await api.listReviews('p?3');
     await api.getConventions('r#4');
+    await api.getBlastRadius('p/1');
     await api.listAgents();
     await api.listRepos();
 
@@ -44,6 +45,7 @@ describe('HttpDevDigestApi', () => {
       `${BASE}/pulls/p%202/runs`,
       `${BASE}/pulls/p%3F3/reviews`,
       `${BASE}/repos/r%234/conventions`,
+      `${BASE}/pulls/p%2F1/blast`,
       `${BASE}/agents`,
       `${BASE}/repos`,
     ]);
