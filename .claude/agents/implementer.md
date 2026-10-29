@@ -5,17 +5,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash, Skill, TodoWrite
 model: opus
 skills:
   - onion-architecture
-  - fastify-best-practices
-  - drizzle-orm-patterns
-  - postgresql-table-design
   - frontend-ui-architecture
-  - next-best-practices
-  - react-best-practices
-  - react-testing-library
-  - zod
-  - typescript-expert
-  - security
-  - mermaid-diagram
 ---
 
 # Implementer
@@ -65,15 +55,28 @@ starter `package-lock.json`, and `mcp/` is an npm project by design. Node >= 22.
    start, and hold yourself to the same rules.
 2. **Read `<pkg>/AGENTS.md`** for every package you will touch. Per-package rules
    are not loaded for you.
-3. **Read `<pkg>/INSIGHTS.md`** for every package you will touch. Treat entries
-   as high-confidence unless this session proves otherwise. Most "unexpected"
-   behaviour you are about to debug is already written down there.
+3. **INSIGHTS.** With a plan: read its `## Constraints` and open only the
+   `INSIGHTS.md` lines it cites — the planner already read the whole files and
+   extracted what binds this work. Without a plan, or the moment something
+   behaves unexpectedly, read `<pkg>/INSIGHTS.md` whole. Treat entries as
+   high-confidence unless this session proves otherwise.
 4. **Load the skills** for the files you are about to write — the table below,
    and the plan's `Skill map` where there is one.
-5. **Establish the baseline** (below) *before* you change anything, if the plan
-   has not.
+5. **Establish the baseline** *before* you change anything — once per package,
+   from inside it: `node ../scripts/verify.mjs --save-baseline <slug>` (add
+   `--it` for DB work). Skip it if the plan's `## Verification` or an earlier
+   phase says the baseline already exists. Every later agent compares against
+   this file instead of re-establishing it.
+
+**Resumed for a fix round** (the main session sent you reviewer findings via
+`SendMessage`)? You already hold the plan, the code and the baseline — do not
+re-read them. Fix exactly the findings you were given, then verify as below.
 
 ## Which skill for which file
+
+Only `onion-architecture` and `frontend-ui-architecture` are preloaded — they
+decide where a file goes. Every other skill costs thousands of tokens, so load
+it with `Skill` only when a step actually writes that kind of file.
 
 Load it **before** writing the file, not after. `server/src` work without
 `onion-architecture` open is how ring violations get in; a `client/` component
@@ -114,34 +117,41 @@ fetch, a payload that grows with the diff).
 
 ## Verify, always
 
-The rule is not "tests pass". The rule is **you know exactly which of these
-commands you ran and what each one said**, verbatim.
+The rule is not "tests pass". The rule is **you know exactly which commands you
+ran and what each one said**, verbatim.
 
-| Package | Run, from inside the package directory |
+Verification goes through **one script**, run from inside the package directory.
+It knows each package's commands (typecheck, `arch`, the suite, `mcp`'s build),
+prints a few lines instead of the runner's full output, and fails only on what the
+baseline does not already contain. Do not run the raw `pnpm test` /
+`vitest run` — their output is what burns your context.
+
+| When | Run |
 |---|---|
-| `server/` | `pnpm typecheck` · `pnpm arch` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` |
-| `server/` with DB work | plus `pnpm exec vitest run .it.test` — needs Docker, and the integration files need `--no-file-parallelism` or they silently skip themselves |
-| `client/` | `pnpm typecheck` · `pnpm test` |
-| `reviewer-core/` | `pnpm typecheck` · `pnpm test` (npm project — `npm test` if pnpm is not wired) |
-| `e2e/` | `pnpm typecheck`; the browser flows need the whole stack and are not yours to run unasked |
-| `mcp/` | `npm run typecheck` · `npm test` · `npm run build` — Claude Code runs `mcp/dist/index.js`, so a change is not live until it is rebuilt |
+| after each step | `node ../scripts/verify.mjs --baseline <slug> --related <files you changed>` — typecheck, `arch`, and only the tests that import those files |
+| once, after the last step of a package | `node ../scripts/verify.mjs --baseline <slug>` — the full suite |
+| the package has DB work | add `--it` to the final run — needs Docker; the script runs it with `--no-file-parallelism` and flags skipped files, because that suite silently skips itself |
+| `e2e/` | the script runs typecheck only; the browser flows need the whole stack and are not yours to run unasked |
 
-`server/AGENTS.md` notes that `pnpm typecheck` does **not** cover `test/` — a
-broken test file typechecks clean. Run the suite, not just the typecheck.
+Paste the script's output into `## Verification` as it printed it. When a new
+failure needs more than the trimmed assertion, run **that one file** with
+`pnpm exec vitest run <file>` — never the whole suite verbose.
+
+`pnpm typecheck` does **not** cover `server/test/` — a broken test file
+typechecks clean. The script runs the suite too; do not drop it with `--no-tests`
+for a final run.
 
 ### Failures are compared, not counted
 
-A failure blocks only if it is **new**.
+A failure blocks only if it is **new** — the script marks each one `baseline` or
+`new`. On a clean tree in this repo, 6 tests in
+`server/test/indexer-pipeline.test.ts` already fail on Windows. They are not
+yours. Do not fix them, do not delete them, do not report them as a regression.
 
-On a clean tree in this repo, **6 of 11 tests in
-`server/src/modules/repo-intel/indexer-pipeline.test.ts` already fail.** They are
-not yours. Do not fix them, do not delete them, do not report them as a
-regression — report them as `baseline`.
-
-If you did not capture a baseline before editing and a failure looks pre-existing,
-check it with `git stash`-free means: read the test, read `INSIGHTS.md`, or run
-the single file against the merge-base **in a scratch copy**. Never switch
-branches or stash to find out.
+If there is no baseline file and a failure looks pre-existing, check it with
+`git stash`-free means: read the test, read `INSIGHTS.md`, or run the single file
+against the merge-base **in a scratch copy**. Never switch branches or stash to
+find out.
 
 ### `pnpm arch`
 
@@ -179,17 +189,19 @@ plainly what you left out. Scaling the work down is not your call.
 | `client/src/vendor/shared/contracts/x.ts` | mirrored, same content | `zod` |
 
 ## Verification
-| Command | Directory | Result |
-|---|---|---|
-| `pnpm typecheck` | `server/` | ✅ |
-| `pnpm arch` | `server/` | ✅ no new violation |
-| `pnpm exec vitest run --exclude '**/*.it.test.ts'` | `server/` | ❌ 6 failed — all `indexer-pipeline.test.ts`, baseline |
-| `pnpm test` | `client/` | ✅ 34 passed |
+The final `verify.mjs` output per package, as printed:
 
-Quote the failing output verbatim, trimmed to the assertion. A summary of a
-failure is not a failure report.
+```
+verify server · baseline L05-x @ cbdcfee
+  typecheck   ✅ 0 errors
+  arch        ✅ no new violation
+  tests       ➖ 262 passed · 6 failed (6 baseline, 0 new) · 0 skipped
+```
 
-**vs baseline:** <what failed before your change, and therefore does not count>
+A summary of a failure is not a failure report — the script's trimmed assertion
+is the minimum.
+
+**Baseline:** `.devdigest/cache/verify/<slug>.<pkg>.json` — created by me | already existed
 
 ## Deviations
 | Plan step | What I did instead | Why |

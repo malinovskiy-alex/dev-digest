@@ -213,4 +213,4 @@ written at all.
 → `/pr-self-review`. A page written before the tests pass documents a guess.
 
 G7 of `pr-self-review` — a new feature with no `specs/` entry — is a SUGGESTION and
-not your problem: `specs/` is the planner's directory.
+not your problem: `specs/` is the implementation-planner's directory.

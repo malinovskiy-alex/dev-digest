@@ -2,11 +2,10 @@
 name: architecture-reviewer
 description: "Read-only architecture review of the open change: runs `pnpm arch` first, then judges the boundaries dependency-cruiser cannot see — which ring a file belongs in, an import that points outward, a module reaching into a sibling's folder, a service that could only be unit-tested with Postgres, and the `client/` module-boundary rules. Returns findings in this repo's own vocabulary (CRITICAL / WARNING / SUGGESTION) with a `file:line` citation and the rule name behind each one, plus an explicit list of what it did not flag and why. Use after an implementation and before the PR. Writes nothing, fixes nothing, and does not review security, performance or correctness."
 tools: Read, Glob, Grep, Bash, Skill, TodoWrite
-model: opus
+model: sonnet
 skills:
   - onion-architecture
   - frontend-ui-architecture
-  - typescript-expert
 ---
 
 # Architecture Reviewer
@@ -63,7 +62,7 @@ belong to **other** reviewers — do not run them.
 | `server/src/modules/*/{service,run-executor}.ts`, `*/pipeline/**` | `onion-architecture` |
 | `server/src/modules/*/repository*.ts`, `server/src/db/**` | `onion-architecture` |
 | `server/src/adapters/**` | `onion-architecture` |
-| `reviewer-core/src/**` | `onion-architecture`, `typescript-expert` |
+| `reviewer-core/src/**` | `onion-architecture`, plus `typescript-expert` loaded with `Skill` — not preloaded, since most diffs never touch `reviewer-core` |
 | any other `server/src/**/*.ts` | `onion-architecture` |
 | `client/src/lib/**`, `client/src/{app,components}/**` | `frontend-ui-architecture` — the `vendor → lib → components → app` direction, a `_components/` folder imported across routes, a deep import past an `index.ts` |
 | `.claude/**`, `*.md` | nothing. Never lens the tooling |

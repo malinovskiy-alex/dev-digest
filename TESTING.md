@@ -81,6 +81,24 @@ npm i -g agent-browser && agent-browser install
 cd e2e && npm install && npm test
 ```
 
+### Compact, baseline-aware: `scripts/verify.mjs`
+
+What agents run instead of the raw commands above — from inside a package
+directory, it runs that package's typecheck, `arch` (server), suite and build
+(mcp), and prints one line per check plus new failures trimmed to the assertion.
+
+```sh
+cd server
+node ../scripts/verify.mjs --save-baseline L05-x           # on the clean tree, before editing
+node ../scripts/verify.mjs --baseline L05-x --related src/modules/x/service.ts
+node ../scripts/verify.mjs --baseline L05-x --it           # full run + integration
+```
+
+Baselines are `.devdigest/cache/verify/<name>.<pkg>.json` (gitignored). With
+`--baseline`, it exits 1 only on a failure the baseline does not contain; an
+integration run with skipped files is flagged, because that suite skips itself
+silently. The per-package commands live in the script's `PACKAGES` table.
+
 ## Conventions
 
 - **Integration tests end in `*.it.test.ts`.** The unit lane excludes that glob
