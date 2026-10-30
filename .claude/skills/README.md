@@ -20,6 +20,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [engineering-insights](engineering-insights/SKILL.md) | Shared | Capture-learnings loop — appends session lessons to the right `INSIGHTS.md` |
 | [implement](implement/SKILL.md) | Shared | `/implement <plan>` — runs an approved plan through implementer → review/fix loop (architecture-reviewer + plan-verifier) → pre-PR gate. Spec and plan are written by hand before it. User-invoked only |
+| [workflow-retro](workflow-retro/SKILL.md) | Shared | `/workflow-retro` — after a multi-agent workflow: tokens per agent, launch order, tool errors, duplicated reads (script), then per-agent hard/easy/duplicated/missed and recommendations |
 | [pr-self-review](pr-self-review/SKILL.md) | Shared | Pre-PR gate — routes the open diff to the skills that apply, runs the `AGENTS.md` gates, blocks on any CRITICAL |
 
 ## Agents

@@ -64,7 +64,7 @@ better, and you ask before you plan around it.
 | a vague request and no requirements file | **stop.** Do not plan, do not write requirements yourself. Hand back with `Next: spec-creator` |
 | a concrete, bounded task with no requirements file — a bug fix, a refactor, a rename across files | plan it directly. The request, quoted verbatim, is the requirements source; label its parts `T-1`, `T-2`, … in `## Requirements check` and cite those. Do not rephrase them into EARS — that would be a spec |
 
-A requirements file with `**Статус:** Draft` and a **blocking** open question is
+A requirements file with `**Status:** Draft` and a **blocking** open question is
 not ready: ask the user whether to wait for `spec-creator` or to plan with an
 explicit assumption, and record the answer.
 
@@ -74,7 +74,7 @@ None of these are loaded for you. Read them before writing a line of plan.
 
 | Read | Why it changes the plan |
 |---|---|
-| the requirements spec, whole | every `R-NN`, `## Не в скоупі`, `## Відкриті питання`, `## Рішення` — the plan is traced to these |
+| the requirements spec, whole | every `R-NN`, `## Out of scope`, `## Open questions`, `## Decisions` — the plan is traced to these |
 | root [`AGENTS.md`](../../AGENTS.md) | the five-package rule, the hard rules, where things are written |
 | `<pkg>/AGENTS.md` for every touched package | per-package conventions and the real command list |
 | `<pkg>/INSIGHTS.md` for every touched package | **the highest-value read here.** Every entry already cost someone time. Cite the ones that constrain this work, with `file:line` |
@@ -115,10 +115,10 @@ You read them as the person who has to build them. For every `R-NN` (or `T-N`):
 | Check | What it catches | Ends in |
 |---|---|---|
 | **Clear** — one trigger, one observable response, no vague words | «швидко», «зручно», a number nobody fixed | a question to the user |
-| **Consistent** — with the other requirements and with `## Не в скоупі` | R-03 and R-07 demand opposite behaviour | a question |
+| **Consistent** — with the other requirements and with `## Out of scope` | R-03 and R-07 demand opposite behaviour | a question |
 | **Buildable here** — against the code, the schema, `AGENTS.md` hard rules, `INSIGHTS.md` | a requirement that needs a secret in the DB, a third copy of `@devdigest/shared`, a migration on boot | a question, with the rule cited |
 | **Already true?** — the code may do it today | a requirement with nothing to build | a plan line *"already holds — `file:line`"*, no step |
-| **Testable** — its `Перевірка` names a suite that exists and can see it | an e2e check with no flow, a server-integration check on a path without Docker | a step in the plan, or a question |
+| **Testable** — its `Verified by` column names a suite that exists and can see it | an e2e check with no flow, a server-integration check on a path without Docker | a step in the plan, or a question |
 | **Complete** — every Event-driven requirement that can fail has its Unwanted pair | the API call with no failure behaviour | a question; never invent the behaviour yourself |
 | **Open questions** in the requirements file | something `spec-creator` left unanswered | blocking → ask; non-blocking → carry to `## Risks / open questions` |
 
@@ -249,7 +249,7 @@ exists, you **edit it** — never write a second plan for the same feature.
 ````markdown
 # L0X — <feature> · implementation plan
 
-**Requirements:** `specs/L0X-<slug>.requirements.md` (Статус: Approved) | the task, quoted below
+**Requirements:** `specs/L0X-<slug>.requirements.md` (Status: Approved) | the task, quoted below
 **Execution:** multi-agent | single-agent — chosen by the user, <date>
 **Branch:** `lesson/L0X-<slug>` (never `main`)
 

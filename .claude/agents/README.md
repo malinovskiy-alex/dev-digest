@@ -183,7 +183,7 @@ Every agent here encodes rules rather than invents them. The two sources of trut
 | the parent receives only the final report → `implementation-planner`'s hand-back names the path instead of repeating the plan | " |
 | skills and subagents compose via the `skills:` field | features-overview |
 | *"trust-then-verify gap"* — always give the agent a way to verify → the verification tables | [best-practices](https://code.claude.com/docs/en/best-practices) |
-| *"infinite exploration"* — scope it or delegate it → `implementation-planner`'s ≤8 questions and the requirements' `Не в скоупі` | " |
+| *"infinite exploration"* — scope it or delegate it → `implementation-planner`'s ≤8 questions and the requirements' `Out of scope` | " |
 | progressive disclosure: metadata first, instructions on trigger → the skill tables in each body | [Agent Skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) |
 | omitting `Agent` from `tools:` is the documented way to stop a subagent spawning helpers | [sub-agents](https://code.claude.com/docs/en/sub-agents) |
 | `tools:` cannot be scoped to a path; a specifier in `disallowedTools` removes the whole tool → the write-path limits are prose, and `permissions.deny` is rejected because it would bind the main session too | " |

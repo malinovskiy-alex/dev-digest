@@ -35,7 +35,7 @@ The spec and the plan come **before** this command, run by hand:
 Stop, and say why, if:
 
 - no plan is found — *"run `implementation-planner` first"*;
-- the plan's `**Requirements:**` file says `Статус: Draft` with a blocking open
+- the plan's `**Requirements:**` file says `Status: Draft` with a blocking open
   question, or the plan's `## Risks / open questions` has a row blocking a step;
 - `.git/HEAD` points at `main` — lesson work belongs on `lesson/L<NN>-<slug>`.
   Creating the branch is the user's call.

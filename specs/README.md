@@ -21,6 +21,9 @@ as EARS requirements, written by the `spec-creator` agent â€” and `<slug>.md` â€
 *how*, the plan `implementation-planner` writes from it. The same pair works in every
 `<pkg>/specs/`.
 
+Every file in `specs/` and `<pkg>/specs/` is written in **English**, whatever
+language the request came in.
+
 ```
 specs/L01-run-cost-badge.md
 specs/L02-conventions-extractor.md
