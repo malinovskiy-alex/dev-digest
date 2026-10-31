@@ -1,7 +1,7 @@
 ---
 name: workflow-retro
-description: "Retrospective of a multi-agent workflow that just ran in this session — /implement, spec-creator → implementation-planner, a review loop, any chain of subagents. Collects the hard numbers from the session transcripts (tokens per agent, cache hit, launch order, parallelism, tool calls and errors, files read by several agents) with a script, then judges the run: what each agent found hard, what went easily, which information was duplicated, what was missed, and what to change in the agent definitions or the workflow. Use when a multi-agent workflow finishes, when the user asks how a run went or what it cost, or as /workflow-retro. Writes one report into .devdigest/cache/retro/; proposes, never applies, changes to agents."
-argument-hint: "[session-id | latest] [workflow name]"
+description: "Retrospective of a multi-agent workflow that just ran in this session — /run-plan, spec-creator → implementation-planner, a review loop, any chain of subagents. Collects the hard numbers from the session transcripts (tokens per agent, cache hit, launch order, parallelism, tool calls and errors, files read by several agents) with a script, then judges the run: what each agent found hard, what went easily, which information was duplicated, what was missed, and what to change in the agent definitions or the workflow. Use when a multi-agent workflow finishes, when the user asks how a run went or what it cost, or as /workflow-retro. Writes one report — `specs/<slug>.retro.md` when the workflow built a spec'd feature, else .devdigest/cache/retro/; proposes, never applies, changes to agents."
+argument-hint: "[spec slug | workflow name] [session-id | latest]"
 ---
 
 # /workflow-retro — how did the workflow go
@@ -50,7 +50,7 @@ Sources, in this order — do not re-read code the agents wrote:
    user corrected afterwards;
 2. the script output;
 3. the files the workflow produced (spec, plan, `.devdigest/cache/sdd/<slug>/findings.md`
-   and `state.md` for `/implement`).
+   and `state.md` for `/run-plan`).
 
 For **each agent**, answer:
 
@@ -76,7 +76,12 @@ For the **workflow as a whole**:
 
 ## 3. Write the report
 
-`.devdigest/cache/retro/<YYYY-MM-DD>-<workflow-slug>.md` (gitignored):
+| The workflow | File |
+|---|---|
+| built a feature with a spec (`/run-plan`, spec-creator → implementation-planner) | `<specs-dir>/<slug>.retro.md`, next to the plan — committed with the feature |
+| anything else | `.devdigest/cache/retro/<YYYY-MM-DD>-<workflow-slug>.md` (gitignored) |
+
+Written in English, like everything in `specs/`; talk to the user in their language.
 
 ```markdown
 # Retro — <workflow> · <date>

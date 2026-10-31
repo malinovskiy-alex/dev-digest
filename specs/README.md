@@ -21,6 +21,11 @@ as EARS requirements, written by the `spec-creator` agent — and `<slug>.md` �
 *how*, the plan `implementation-planner` writes from it. The same pair works in every
 `<pkg>/specs/`.
 
+After `/run-plan` the slug gains two records of how the plan was carried out:
+`<slug>.verification.md` — the final `plan-verifier` verdicts, the findings
+ledger and the last verification output — and `<slug>.retro.md`, the
+`/workflow-retro` of the run.
+
 Every file in `specs/` and `<pkg>/specs/` is written in **English**, whatever
 language the request came in.
 

@@ -78,7 +78,7 @@ client → `next-best-practices`, `react-best-practices`, `react-testing-library
 anywhere → `zod`, `typescript-expert`, `security`. docs → `mermaid-diagram`.
 end of a substantive task → `engineering-insights`, which files what you learned
 into the right `INSIGHTS.md`.
-an approved plan, to the pre-PR gate → `/implement <plan>` (user-invoked), which
+an approved plan, to the pre-PR gate → `/run-plan <plan>` (user-invoked), which
 runs `implementer`, then loops `architecture-reviewer` + `plan-verifier` → fix
 until nothing blocking is open. `spec-creator` and `implementation-planner` are
 run by hand before it.

@@ -1,11 +1,11 @@
 ---
-name: implement
-description: "Implements an approved plan from `specs/` through this repo's agent chain: implementer (code and the plan's tests) → review/fix loop (architecture-reviewer + plan-verifier, then implementer fix rounds until nothing blocking is open) → /pr-self-review. Starts from a plan that already exists — spec-creator and implementation-planner are run by hand before it. Keeps every review finding in one ledger with a status, resumes from any phase with --from. Invoked by the user as /implement. Never commits, pushes or opens a PR."
+name: run-plan
+description: "Implements an approved plan from `specs/` through this repo's agent chain: implementer (code and the plan's tests) → review/fix loop (architecture-reviewer + plan-verifier, then implementer fix rounds until nothing blocking is open) → /pr-self-review. Starts from a plan that already exists — spec-creator and implementation-planner are run by hand before it. Keeps every review finding in one ledger with a status, resumes from any phase with --from. Invoked by the user as /run-plan. Never commits, pushes or opens a PR."
 argument-hint: "<plan.md | slug> [--from implement|review|pr] [--max-fix N] [--test-writer] [--docs] [extra instructions]"
 disable-model-invocation: true
 ---
 
-# /implement — plan to pre-PR gate
+# /run-plan — plan to pre-PR gate
 
 You are the **orchestrator**. You run in the main session, spawn the agents in
 `.claude/agents/`, pass files between them by **path**, keep the findings ledger,
@@ -24,7 +24,7 @@ The spec and the plan come **before** this command, run by hand:
 
 | Token | Means |
 |---|---|
-| a path to `specs/**/<slug>.md` (not `*.requirements.md`) | the plan |
+| a path to `specs/**/<slug>.md` (not `*.requirements.md`, `*.verification.md`, `*.retro.md`) | the plan |
 | a bare word with an existing `<slug>.md` in `specs/` or `<pkg>/specs/` | the slug → the plan |
 | `--from implement\|review\|pr` | resume at that phase |
 | `--max-fix N` | cap on fix rounds, default **3** |
@@ -104,8 +104,14 @@ the PR.
 ### wrap-up
 
 1. `/engineering-insights`.
-2. The report (§5).
-3. Ask whether to commit. Never commit, push or open the PR unasked.
+2. The report (§5) — write it to **`<specs-dir>/<slug>.verification.md`**, next to
+   the plan, so it is committed with the feature: the §5 report, then the last
+   `plan-verifier` report **verbatim** (its per-item verdicts), then
+   `findings.md` copied in as `## Findings ledger`. The cache copies stay as the
+   working files; this one is the record.
+3. `/workflow-retro <slug>` — the run's retrospective, written to
+   `<specs-dir>/<slug>.retro.md`.
+4. Ask whether to commit. Never commit, push or open the PR unasked.
 
 ## 3. Questions from the agents
 
@@ -180,7 +186,7 @@ means the fix and the rule disagree — say so in the question instead of loopin
 ## 5. Final report
 
 ```markdown
-## /implement <slug> — done | stopped at <phase>
+## /run-plan <slug> — done | stopped at <phase>
 Plan `<path>` · Branch `<branch>` · Fix rounds: <n>
 
 ## Findings
@@ -202,7 +208,7 @@ commit? — or what blocks it
 - **Writers run one at a time** — two agents writing in one checkout destroy each
   other's work (`INSIGHTS.md`, *What Doesn't Work*). Only the read-only reviewers
   run in parallel.
-- **Never `--save-baseline` once `implement` has started** — the tree is no longer
+- **Never `--save-baseline` once the `implement` phase has started** — the tree is no longer
   clean, and that baseline would bless the failures you are looking for.
 - **No git writes**: no commit, push, branch switch, stash, `gh pr create`.
 - **Do not fix anything yourself**, however small. An unreviewed fix is the

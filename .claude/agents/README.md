@@ -75,8 +75,8 @@ and labels each failure `baseline` or `new` against
 `.devdigest/cache/verify/<slug>.<pkg>.json`, which `implementer` writes once before
 the first edit. Only `implementer` passes `--save-baseline`.
 
-**`/implement <plan>` runs everything after the plan**
-([`../skills/implement/SKILL.md`](../skills/implement/SKILL.md)). `spec-creator` and
+**`/run-plan <plan>` runs everything after the plan**
+([`../skills/run-plan/SKILL.md`](../skills/run-plan/SKILL.md)). `spec-creator` and
 `implementation-planner` are run by hand first. By default `implementer` also writes
 the plan's tests (one agent that already holds the code is cheaper than a second
 one re-reading it) — `--test-writer` brings `test-writer` back, `--docs` adds
