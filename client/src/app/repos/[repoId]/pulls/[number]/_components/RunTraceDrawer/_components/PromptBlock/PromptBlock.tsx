@@ -39,21 +39,28 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
   };
   return (
     <div style={s.promptRow}>
-      <div onClick={() => setOpen((o) => !o)} style={s.promptHead}>
-        <span style={s.promptDot(color)} />
-        <span style={s.promptLabel}>{label}</span>
-        <Badge color="var(--text-muted)" mono>
-          {t("trace.prompt.tokens", { count: tokens })}
-        </Badge>
+      <div style={s.promptHead}>
+        {/* The toggle is its own button, named by the row label, beside the
+            copy/fullscreen buttons — a button cannot contain buttons. */}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={label}
+          onClick={() => setOpen((o) => !o)}
+          style={s.promptToggleBtn}
+        >
+          <span style={s.promptDot(color)} />
+          <span style={s.promptLabel}>{label}</span>
+          <Badge color="var(--text-muted)" mono>
+            {t("trace.prompt.tokens", { count: tokens })}
+          </Badge>
+        </button>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"
             title={t("trace.prompt.copy")}
             aria-label={t("trace.prompt.copy")}
-            onClick={(e) => {
-              e.stopPropagation();
-              copy();
-            }}
+            onClick={copy}
             style={miniBtnStyle}
           >
             {copied ? <Icon.Check size={12} /> : <Icon.Copy size={12} />}
@@ -64,15 +71,16 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
             // The row label is in the name: every prompt row has this button,
             // and "Open fullscreen" alone cannot say which block it opens.
             aria-label={t("trace.prompt.fullscreenFor", { label })}
-            onClick={(e) => {
-              e.stopPropagation();
-              setFull(true);
-            }}
+            onClick={() => setFull(true)}
             style={miniBtnStyle}
           >
             <Icon.ExternalLink size={12} />
           </button>
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <span
+            aria-hidden
+            onClick={() => setOpen((o) => !o)}
+            style={{ fontSize: 12, color: "var(--text-muted)", cursor: "pointer" }}
+          >
             {open ? t("trace.collapse") : t("trace.expand")}
           </span>
         </span>

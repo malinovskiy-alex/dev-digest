@@ -149,6 +149,20 @@ describe("Run Trace drawer — project context (L05)", () => {
     expect(within(dialog).getAllByText(/UNIQUE-SEED-SENTENCE/).length).toBeGreaterThan(0);
   });
 
+  it("section and prompt-row headers are buttons named by their label, with aria-expanded (e2e flow 08 clicks them by role)", () => {
+    renderBody(L05_TRACE);
+    const section = screen.getByRole("button", { name: "Prompt assembly" });
+    expect(section).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(section);
+    expect(section).toHaveAttribute("aria-expanded", "true");
+
+    const row = screen.getByRole("button", { name: SPECS_LABEL });
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(row);
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/UNIQUE-SEED-SENTENCE/)).toBeInTheDocument();
+  });
+
   it("an old trace without the L05 fields shows no specs row, no Specs skipped, and Specs read: none (R-61)", () => {
     renderBody(TRACE);
     fireEvent.click(screen.getByText("Prompt assembly"));
