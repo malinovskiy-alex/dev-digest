@@ -2,6 +2,7 @@
   "name": "Run trace drawer shows the project-context block a seeded run sent",
   "description": "From PR #482, open the Agent runs tab, open the seeded run's trace drawer from the Timeline ('Open run trace & logs'), expand Prompt assembly (collapsed by default) and then the 'Project context — attached specs (untrusted)' row, and confirm the seeded document's text (docs/security-baseline.md, rule PX-7) is what the run sent. Covers R-58 (L05 Project Context). The run, its trace and the wrapped document are seeded by server/src/db/seed.ts (seedProjectContextRun) — no model call, and no step here starts a review. Assumes a freshly-seeded DB where acme/payments-api (PR #482) is the first repo — guaranteed by e2e-web.yml; run locally via the hermetic stack (see e2e/README.md).",
   "steps": [
+    { "cmd": ["set", "viewport", "1280", "2000"], "label": "tall viewport: the drawer sections below Stats must be on screen, agent-browser does not scroll before a click" },
     { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
     { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
     { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
