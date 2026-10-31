@@ -78,7 +78,7 @@ resolved; all six are closed.
 | C3 | **What to show without a full clone** | User decision: a deterministic skeleton from what the DB already has, with an honest status; generation needs a clone **and** an index; a `partial` index with a ranking may generate (AC-14…AC-16, AC-58). |
 | C4 | **Staleness and refresh** | The header shows when the tour was generated (AC-12); an "Outdated" badge appears when the index revision moves; regeneration is manual only (Q-07 → AC-74). |
 | C5 | **Security of untrusted repository text in the prompt and on the page** | From the package rules and existing code: all repo-derived text goes to the model inside `<untrusted>` blocks under the existing guard, with no keyword scanning (`reviewer-core/AGENTS.md`, invariant 3); every path, command, diagram component and task the model returns is checked against the facts; model text is rendered without HTML; env-file values never leave the clone (AC-33, AC-60…AC-65). |
-| C6 | **Failure, partial states and LLM cost** | Missing key, timeout, provider error and invalid output all fall back to the deterministic skeleton with the reason (AC-70…AC-72); exactly one model request per generation, no re-ask (Q-02 → AC-21); no model call on page open (AC-25); one generation per repository at a time, which survives leaving the page (AC-28, AC-29); the model and cost of the last generation are visible (AC-84). |
+| C6 | **Failure, partial states and LLM cost** | Missing key, timeout, provider error and invalid output all fall back to the deterministic skeleton with the reason (AC-70…AC-72), and a missing key is shown as soon as the page opens (AC-86); exactly one model call per generation, no schema re-ask or repair, adapter transport retries allowed (Q-02, REC-1 → AC-21); no model call on page open (AC-25); one generation per repository at a time, which survives leaving the page (AC-28, AC-29); the model and cost of the last generation are visible (AC-84). |
 
 ## Out of scope
 
@@ -112,6 +112,7 @@ resolved; all six are closed.
 | AC-84 | State-driven | [accepted UX-06] WHILE a generated tour is shown, the system shall show, in a tooltip on the header line of AC-12, the provider and model that generated it and the cost of that generation in USD, or "cost unknown" when the provider reported none. | client + server-integration |
 | AC-12 | State-driven | WHILE a generated tour is shown, the system shall show under the heading "Generated from index of N files · last refreshed <relative time>", where N is the number of files the index held when the tour was generated and the time is the moment the tour was generated. | client + server-integration |
 | AC-13 | Unwanted | IF the index used for the tour covers fewer files than the repository holds (the 5,000-file cap or the indexing time budget was hit), THEN the system shall show in the header "N of M source files indexed" instead of "N files", so the tour never claims full coverage. | client + server-unit |
+| AC-87 | Ubiquitous | [REC-4] The system shall show in the tour header coverage numbers N and M equal to the number of files actually present in the index and the number of source files found by the latest walk of the clone, after a full index and after any number of incremental refreshes, with no drift of N between refreshes. | server-integration |
 | AC-17 | State-driven | WHILE the tour is being loaded, the system shall show a skeleton placeholder in place of the five sections. | client |
 | AC-18 | Unwanted | IF the request for the tour fails, THEN the system shall show an error state with the reason and a "Retry" button. | client |
 | AC-19 | Unwanted | IF the repository id in the URL is unknown or belongs to another workspace, THEN the system shall show the existing "repository not found" screen and the API shall answer 404. | client + server-integration |
@@ -129,7 +130,7 @@ resolved; all six are closed.
 | ID | Pattern | Requirement | Verified by |
 |---|---|---|---|
 | AC-20 | Event-driven | WHEN generation starts, the system shall first collect, without any model call, the repository facts: the stack (languages by indexed file count, frameworks and runtime from dependency manifests), the top-level folder structure, the HTTP routes known to the index, the scripts declared in the manifests, the ranked reading path, the critical-path files and the first-task candidates. | server-unit + server-integration |
-| AC-21 | Ubiquitous | [decision Q-02] The system shall send exactly one model request per generation, which returns the text of all five sections at once: no section has a request of its own and no schema-repair re-ask is sent; only a transport retry after a network error that produced no answer is allowed. | server-unit |
+| AC-21 | Ubiquitous | [decision Q-02, REC-1] The system shall make exactly one model call per generation, which returns the text of all five sections at once: no section has a call of its own, and no schema re-ask or repair call follows an answer; the provider adapters' existing transport retries on a 429 or 5xx response, made before any usable answer, remain allowed, and the review engine package is not changed for this feature. | server-unit |
 | AC-22 | Ubiquitous | The system shall use the provider and model selected for the "Onboarding Tour" feature in Settings → Feature Models. | server-integration |
 | AC-23 | Ubiquitous | The system shall produce the same deterministic parts of the tour (reading-path order, critical-path files, run commands, first-task candidates) for the same index and clone revision, independent of the model's answer. | server-unit |
 | AC-24 | Event-driven | WHEN a generation succeeds, the system shall store the tour for the repository together with the revision it was built from, replacing the previous tour. | server-integration |
@@ -146,7 +147,7 @@ resolved; all six are closed.
 | AC-30 | State-driven | WHILE a generated tour is shown, the system shall show in Architecture overview the model's prose describing the stack, the entry points and how requests flow through the main parts. | client |
 | AC-31 | Ubiquitous | The system shall render file paths and identifiers in the prose as inline code, without altering underscores or other characters in them. | client |
 | AC-32 | State-driven | [decision Q-06] WHILE a generated tour is shown, the system shall draw under the prose, without any diagram library, a diagram of boxes and arrows built from the components (label, kind) and connections (from, to) the model returned as structured data, with box colour by component kind. | client |
-| AC-33 | Unwanted | [decision Q-06] IF a component returned by the model refers to nothing in the facts (no indexed or cloned path, no top-level folder, no dependency or service named in the manifests or compose file), THEN the system shall drop that component and every connection that names it. | server-unit |
+| AC-33 | Unwanted | [decision Q-06] [REC-2] IF a component returned by the model matches none of: an indexed file path, a top-level folder, or a dependency name declared in a manifest read under AC-68 (a "postgres" component passes through a `pg` or `postgres` dependency), THEN the system shall drop that component and every connection that names it. | server-unit |
 | AC-85 | Unwanted | [decision Q-06] IF fewer than two components or no connection remain after AC-33, THEN the system shall show Architecture overview without a diagram and without an error message. | client + server-unit |
 | AC-34 | State-driven | WHILE the skeleton is shown, the system shall show in Architecture overview the detected stack and the top-level folders with their indexed file counts, as a list, without prose. | client + server-unit |
 
@@ -164,8 +165,9 @@ resolved; all six are closed.
 | ID | Pattern | Requirement | Verified by |
 |---|---|---|---|
 | AC-39 | Ubiquitous | The system shall show How to run locally as a numbered list of shell commands, each in a monospace row. | client |
-| AC-40 | Ubiquitous | The system shall show only commands derived from files present in the clone: the install command of the package manager its lockfile identifies, a copy of an env-example file that exists, a compose command for a compose file that exists, and invocations of scripts declared in its manifests. | server-unit |
+| AC-40 | Ubiquitous | [REC-2, planner wording] The system shall show only commands derived deterministically from the clone: the install command of the package manager its lockfile identifies, a copy of an env-example file that exists, `docker compose up -d` when a compose file exists (detected by file name only; its content is not read), and invocations of manifest scripts whose names are on the allow-list `dev`, `start`, `serve`, `build`, `test`, `migrate`, `db:migrate`, `seed`, `db:seed`. | server-unit |
 | AC-41 | Unwanted | IF the model returns a command that is not in the derived set of AC-40, THEN the system shall not show it; the model may only order the derived commands and add a one-line comment to each. | server-unit |
+| AC-88 | Unwanted | [planner wording] IF the model's answer omits a command of the derived set of AC-40, THEN the system shall append that command after the commands the model ordered, in derivation order, without a comment. | server-unit |
 | AC-42 | Event-driven | WHEN the user clicks the copy button of a command row, the system shall copy that row's command text (without the step number) to the clipboard. | client |
 | AC-43 | Ubiquitous | The system shall give every copy button an accessible name "Copy command N", where N is the step number. | client |
 | AC-44 | Ubiquitous | The system shall never execute a command shown in the tour. | server-unit |
@@ -220,9 +222,10 @@ resolved; all six are closed.
 
 | ID | Pattern | Requirement | Verified by |
 |---|---|---|---|
+| AC-86 | Event-driven | [REC-3] WHEN the user opens the tour page and no API key is stored for the provider the generation would use, the system shall show, before any click, the status "No API key for <provider>" with a link to Settings → API Keys, and shall keep "Generate tour" / "Regenerate" disabled. | client + server-integration |
 | AC-70 | Unwanted | IF no API key is stored for the provider of the "Onboarding Tour" model, THEN the system shall not call the model, show the skeleton with the status "No API key for <provider>" and a link to Settings → API Keys. | client + server-integration |
 | AC-71 | Unwanted | [decision Q-03] IF the model call fails or does not answer within 120 seconds, THEN the system shall show the skeleton with the status "Generation failed — <reason>" and store nothing. | server-integration + client |
-| AC-72 | Unwanted | [decision Q-02] IF the model's answer does not match the expected structure, THEN the system shall treat it as the failure of AC-71 with the reason "the model returned invalid output", without asking the model again. | server-unit |
+| AC-72 | Unwanted | [decision Q-02] IF the model's answer does not match the expected structure, THEN the system shall treat it as the failure of AC-71 with the reason "the model returned invalid output", without a second model call (no schema re-ask or repair, AC-21). | server-unit |
 | AC-73 | Unwanted | [accepted UX-03] IF a regeneration fails while a stored tour exists, THEN the system shall keep showing the stored tour and show a dismissible notice "Regeneration failed — <reason>". | client + server-integration |
 
 ### Staleness
@@ -368,3 +371,8 @@ None. Q-01…Q-08 are resolved — see `## Decisions`.
 | Q-06 Diagram | The model returns components (label, kind) and connections as structured data; components are validated against the facts; the app draws boxes and arrows itself; no new dependency | user (via coordinator), 2026-10-31 → AC-32, AC-33, AC-85 |
 | Q-07 Staleness | "Outdated" badge when the index revision differs from the tour's revision; regenerate only on click | user (via coordinator), 2026-10-31 → AC-74 |
 | Q-08 Edge-case set | UX-01…UX-10 all accepted | user (via coordinator), 2026-10-31 → AC-16, AC-28, AC-29, AC-69, AC-73, AC-76, AC-77, AC-80, AC-81, AC-84 |
+| REC-1 (planner) "One call" precision | The onboarding module makes exactly one model call with no schema re-ask or repair; the adapters' existing transport retries on 429/5xx before a usable answer stay allowed; reviewer-core is not changed. Refines Q-02 | user (via coordinator), 2026-10-31 → AC-21, AC-72 |
+| REC-2 (planner) Compose file | The compose file is not read. Diagram components are validated only against indexed paths, top-level folders and manifest dependency names; the compose run command is derived from the file's presence by name only. AC-68 unchanged | user (via coordinator), 2026-10-31 → AC-33, AC-40 |
+| Planner wording for run commands | Script invocations come from a fixed allow-list of manifest script names; a derived command the model omits is appended | user (via coordinator), 2026-10-31 → AC-40, AC-88 |
+| REC-3 (planner) Missing key on open | The missing-key status with the Settings link is shown when the page opens, before any click, and Generate is disabled | user (via coordinator), 2026-10-31 → AC-86 |
+| REC-4 (planner) Coverage numbers | "N of M source files indexed" stays correct after incremental refreshes (no `filesIndexed` drift) | user (via coordinator), 2026-10-31 → AC-87 |
