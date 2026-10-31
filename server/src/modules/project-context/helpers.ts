@@ -1,5 +1,4 @@
 import type { ContextDoc } from '@devdigest/shared';
-import { docCategory } from '../_shared/context-docs/helpers.js';
 import { MAX_CONTEXT_DOC_CHARS, MAX_CONTEXT_TOTAL_CHARS } from './constants.js';
 
 /**
@@ -13,13 +12,13 @@ export function approxTokens(chars: number): number {
 }
 
 /** One listing row. `name`/`folder` split on the last `/`; `folder` is '' at the root. */
-export function toContextDoc(path: string, chars: number, usedBy: number): ContextDoc {
+export function toContextDoc(path: string, chars: number, usedBy: number, category: string): ContextDoc {
   const slash = path.lastIndexOf('/');
   return {
     path,
     name: slash >= 0 ? path.slice(slash + 1) : path,
     folder: slash >= 0 ? path.slice(0, slash) : '',
-    category: docCategory(path),
+    category,
     chars,
     approx_tokens: approxTokens(chars),
     truncated: chars > MAX_CONTEXT_DOC_CHARS,

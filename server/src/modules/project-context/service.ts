@@ -5,7 +5,11 @@ import type {
   RepoRef,
 } from '@devdigest/shared';
 import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
-import { isContextDocPath } from '../_shared/context-docs/helpers.js';
+import {
+  createContextDocMatcher,
+  isContextDocPath,
+  type ContextDocMatcher,
+} from '../_shared/context-docs/helpers.js';
 import {
   CONTENT_CACHE_ENTRIES,
   CONTEXT_DOC_NOT_FOUND,
@@ -38,6 +42,8 @@ export interface ProjectContextServiceDeps {
   repos: { getById(workspaceId: string, id: string): Promise<RepoLocator | undefined> };
   /** "Used by N" per path for a workspace (agents repository, one grouped query). */
   usage: (workspaceId: string) => Promise<Map<string, number>>;
+  /** Where documents are searched for (R-74); `DEFAULT_CONTEXT_DOC_GLOBS` when omitted. */
+  docGlobs?: readonly string[];
 }
 
 export type ContextSkipReason = 'not_found' | 'not_cloned' | 'read_error' | 'budget';
@@ -83,7 +89,11 @@ export class ProjectContextService {
   /** Prompt-ready (already cut) text per `repo@sha:path`, shared by every agent of a run. */
   private prompts = new Map<string, Promise<{ text: string; chars: number; truncated: boolean }>>();
 
-  constructor(private deps: ProjectContextServiceDeps) {}
+  private matcher: ContextDocMatcher;
+
+  constructor(private deps: ProjectContextServiceDeps) {
+    this.matcher = createContextDocMatcher(deps.docGlobs);
+  }
 
   /** The Project Context page's listing (R-02, R-07, R-08, R-12, R-66, D-REC5). */
   async listDocs(workspaceId: string, repoId: string): Promise<ContextDocList> {
@@ -100,7 +110,7 @@ export class ProjectContextService {
     // which is the safe side for a token estimate.
     const docs = listing.paths
       .slice(0, MAX_LISTED_DOCS)
-      .map((path) => toContextDoc(path, listing.sizes.get(path) ?? 0, usage.get(path) ?? 0));
+      .map((path) => toContextDoc(path, listing.sizes.get(path) ?? 0, usage.get(path) ?? 0, this.matcher.category(path)));
     return {
       cloned: true,
       sha,
@@ -197,7 +207,9 @@ export class ProjectContextService {
   private listing(ref: RepoRef, sha: string): Promise<Listing> {
     return memo(this.listings, `${ref.owner}/${ref.name}@${sha}`, LIST_CACHE_ENTRIES, async () => {
       const files = await this.deps.git.listFilesAt(ref, sha);
-      const docs = files.filter((f) => isContextDocPath(f.path));
+      // Only paths under a search root (R-74): a `.md` elsewhere is not listed,
+      // not readable (404) and skipped as `not_found` in a prompt.
+      const docs = files.filter((f) => this.matcher.matches(f.path));
       docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
       return { paths: docs.map((d) => d.path), sizes: new Map(docs.map((d) => [d.path, d.size])) };
     });

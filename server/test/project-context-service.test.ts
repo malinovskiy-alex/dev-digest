@@ -21,15 +21,20 @@ import { AppError, NotFoundError, ValidationError } from '../src/platform/errors
 const REPO: RepoLocator = { owner: 'acme', name: 'api', clonePath: '/mock/clones/acme/api' };
 const UNCLONED: RepoLocator = { ...REPO, clonePath: null };
 
-function makeService(git: MockGitClient | SimpleGitClient, opts: { repo?: RepoLocator; usage?: Map<string, number> } = {}) {
+function makeService(
+  git: MockGitClient | SimpleGitClient,
+  opts: { repo?: RepoLocator; usage?: Map<string, number>; docGlobs?: readonly string[] } = {},
+) {
   const getById = vi.fn(async (_ws: string, id: string) => (id === 'repo-1' ? (opts.repo ?? REPO) : undefined));
   const usage = vi.fn(async () => opts.usage ?? new Map<string, number>());
-  const service = new ProjectContextService({ git, repos: { getById }, usage });
+  const service = new ProjectContextService({ git, repos: { getById }, usage, docGlobs: opts.docGlobs });
   return { service, getById, usage };
 }
 
 const FILES: Record<string, string> = {
-  'README.md': '# Readme',
+  'docs/README.md': '# Readme',
+  'README.md': 'root readme — outside every search root (R-74)',
+  'server/notes/x.md': 'outside every search root',
   'docs/security-baseline.md': 'sec',
   'specs/feature.md': 'feature spec',
   'src/index.ts': 'export {}',
@@ -48,10 +53,43 @@ describe('ProjectContextService.listDocs', () => {
     expect(list.sha).toBe('abc1234');
     expect(list.total).toBe(3);
     expect(list.capped).toBe(false);
-    expect(list.docs.map((d) => d.path)).toEqual(['README.md', 'docs/security-baseline.md', 'specs/feature.md']);
+    expect(list.docs.map((d) => d.path)).toEqual(['docs/README.md', 'docs/security-baseline.md', 'specs/feature.md']);
     const sec = list.docs[1]!;
     expect(sec).toMatchObject({ name: 'security-baseline.md', folder: 'docs', category: 'docs', chars: 3, used_by: 2 });
-    expect(list.docs[0]).toMatchObject({ category: 'root', folder: '', used_by: 0 });
+    expect(list.docs[0]).toMatchObject({ category: 'docs', folder: 'docs', used_by: 0 });
+  });
+
+  it('a .md outside specs/, docs/, insights/ is not listed, not readable and not_found in a prompt (R-74)', async () => {
+    const git = new MockGitClient({ files: FILES, head: 'abc1234' });
+    const { service } = makeService(git);
+    const list = await service.listDocs('ws', 'repo-1');
+    expect(list.docs.map((d) => d.path)).not.toContain('README.md');
+    expect(list.docs.map((d) => d.path)).not.toContain('server/notes/x.md');
+    const err = await service.readDoc('ws', 'repo-1', 'README.md').catch((e) => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(404);
+    const out = await service.resolveForPrompt(REPO, { agent: ['README.md', 'docs/README.md'], skills: [] });
+    expect(out.docs.map((d) => d.path)).toEqual(['docs/README.md']);
+    expect(out.skipped).toEqual([{ path: 'README.md', reason: 'not_found' }]);
+  });
+
+  it('nested search roots count, with the root folder as category (R-74, R-09)', async () => {
+    const git = new MockGitClient({ files: { 'server/docs/a.md': 'a', 'client/specs/b/c.md': 'c', 'insights/i.md': 'i' } });
+    const { service } = makeService(git);
+    const list = await service.listDocs('ws', 'repo-1');
+    expect(list.docs.map((d) => [d.path, d.category])).toEqual([
+      ['client/specs/b/c.md', 'specs'],
+      ['insights/i.md', 'insights'],
+      ['server/docs/a.md', 'docs'],
+    ]);
+  });
+
+  it('configured globs replace the default (CONTEXT_DOC_GLOBS)', async () => {
+    const git = new MockGitClient({ files: FILES });
+    const { service } = makeService(git, { docGlobs: ['*.md'] });
+    const list = await service.listDocs('ws', 'repo-1');
+    expect(list.docs.map((d) => d.path)).toEqual(['README.md']);
+    expect(list.docs[0]).toMatchObject({ category: 'root' });
   });
 
   it('listing reads no blob: an unreadable entry stays listed with its tree size (F-14)', async () => {
@@ -98,7 +136,7 @@ describe('ProjectContextService.listDocs', () => {
     const readFileAt = vi.spyOn(git, 'readFileAt');
     const { service } = makeService(git);
     await service.listDocs('ws', 'repo-1');
-    await service.readDoc('ws', 'repo-1', 'README.md');
+    await service.readDoc('ws', 'repo-1', 'docs/README.md');
     expect(listFilesAt).toHaveBeenCalled();
     // MockGitClient.listFilesAt declares no params; the service passes (ref, sha)
     expect(listFilesAt.mock.calls.every((c) => (c as unknown[])[1] === 'feedface')).toBe(true);
@@ -201,7 +239,7 @@ describe('ProjectContextService.readDoc', () => {
 
   it('an uncloned repo is 409 context_not_cloned', async () => {
     const { service } = makeService(new MockGitClient({ files: FILES }), { repo: UNCLONED });
-    const err = await service.readDoc('ws', 'repo-1', 'README.md').catch((e) => e);
+    const err = await service.readDoc('ws', 'repo-1', 'docs/README.md').catch((e) => e);
     expect(err.statusCode).toBe(409);
     expect(err.code).toBe('context_not_cloned');
   });
@@ -240,11 +278,11 @@ describe('ProjectContextService.resolveForPrompt', () => {
 
   it('an uncloned repo skips every ref as not_cloned', async () => {
     const { service } = makeService(new MockGitClient({ files: FILES }));
-    const out = await service.resolveForPrompt(UNCLONED, { agent: ['README.md'], skills: [{ skillName: 's', paths: ['specs/feature.md'] }] });
+    const out = await service.resolveForPrompt(UNCLONED, { agent: ['docs/README.md'], skills: [{ skillName: 's', paths: ['specs/feature.md'] }] });
     expect(out).toEqual({
       docs: [],
       skipped: [
-        { path: 'README.md', reason: 'not_cloned' },
+        { path: 'docs/README.md', reason: 'not_cloned' },
         { path: 'specs/feature.md', reason: 'not_cloned' },
       ],
     });
@@ -254,18 +292,18 @@ describe('ProjectContextService.resolveForPrompt', () => {
     const git = new MockGitClient({ files: FILES });
     vi.spyOn(git, 'listFilesAt').mockRejectedValue(new Error('fatal: bad object'));
     const { service } = makeService(git);
-    const out = await service.resolveForPrompt(REPO, { agent: ['README.md'], skills: [] });
-    expect(out).toEqual({ docs: [], skipped: [{ path: 'README.md', reason: 'read_error' }] });
+    const out = await service.resolveForPrompt(REPO, { agent: ['docs/README.md'], skills: [] });
+    expect(out).toEqual({ docs: [], skipped: [{ path: 'docs/README.md', reason: 'read_error' }] });
   });
 
   it('a failed readFileAt is read_error once and retried on the next call, not cached (F-14)', async () => {
     const git = new MockGitClient({ files: FILES });
     const readFileAt = vi.spyOn(git, 'readFileAt').mockRejectedValueOnce(new Error('fatal: transient'));
     const { service } = makeService(git);
-    const refs = { agent: ['README.md'], skills: [] };
+    const refs = { agent: ['docs/README.md'], skills: [] };
     expect(await service.resolveForPrompt(REPO, refs)).toEqual({
       docs: [],
-      skipped: [{ path: 'README.md', reason: 'read_error' }],
+      skipped: [{ path: 'docs/README.md', reason: 'read_error' }],
     });
     const again = await service.resolveForPrompt(REPO, refs);
     expect(again.docs.map((d) => d.text)).toEqual(['# Readme']);
@@ -277,9 +315,9 @@ describe('ProjectContextService.resolveForPrompt', () => {
     const git = new MockGitClient({ files: FILES });
     const listFilesAt = vi.spyOn(git, 'listFilesAt').mockRejectedValueOnce(new Error('fatal: transient'));
     const { service } = makeService(git);
-    const refs = { agent: ['README.md'], skills: [] };
-    expect((await service.resolveForPrompt(REPO, refs)).skipped).toEqual([{ path: 'README.md', reason: 'read_error' }]);
-    expect((await service.resolveForPrompt(REPO, refs)).docs.map((d) => d.path)).toEqual(['README.md']);
+    const refs = { agent: ['docs/README.md'], skills: [] };
+    expect((await service.resolveForPrompt(REPO, refs)).skipped).toEqual([{ path: 'docs/README.md', reason: 'read_error' }]);
+    expect((await service.resolveForPrompt(REPO, refs)).docs.map((d) => d.path)).toEqual(['docs/README.md']);
     expect(listFilesAt).toHaveBeenCalledTimes(2);
   });
 

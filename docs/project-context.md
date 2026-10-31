@@ -33,6 +33,8 @@ A document is identified by its repo-relative path and nothing else. The attachm
 
 `isContextDocPath` in `server/src/modules/_shared/context-docs/helpers.ts` is the single definition: a relative POSIX path ending in `.md` (any case), with no empty, `.` or `..` segment, no segment in the excluded-directory list, no backslash, colon or NUL, no leading `/` or `-`, at most 1024 characters. It is purely syntactic. Whether the file exists is a separate question, answered against the git tree.
 
+On top of that, a tree path is listed only when it matches a search-root glob — by default `**/{specs,docs,insights}/**/*.md`, so `server/docs/a.md` counts and the root `README.md` does not. `CONTEXT_DOC_GLOBS` (comma-separated, `AppConfig.contextDocGlobs`) replaces the default; `createContextDocMatcher` in the same helpers file compiles it with a small built-in glob (`**`, `*`, `?`, `{a,b}`, case-insensitive). The listing is the only membership check, so a path outside the roots is a 404 in the viewer and `not_found` in a prompt, even if it was attached before the roots changed.
+
 The excluded directories are a copy of the list `repo-intel` uses for the same purpose. A module may not import a sibling, so the copy is deliberate and a unit test (`server/test/context-docs-helpers.test.ts`) keeps the two equal.
 
 The path rule lives in `_shared` because three modules need it (project-context, agents, skills) and that is the only folder all three may import. The same file holds the request body schema for attachment writes: an ordered array of `{ path, enabled }`, at most 500 entries, paths unique.
@@ -49,7 +51,7 @@ Consequences worth knowing:
 - **A path that is not in the tree** answers 404 `context_doc_not_found`; a syntactically bad path answers 422.
 - **The listing is capped.** At most `MAX_LISTED_DOCS` (1,000) documents, first by path, are measured. The response carries `total` and `capped`, and the page shows a warning. The cap applies to the listing only: reading one document and resolving a prompt check membership against the full tree, so a document past the cap is still readable and still attachable.
 
-Each listed document carries `chars`, `approx_tokens`, a `truncated` flag, a `category` (first folder, or `root`) and `used_by`. `approx_tokens` is `ceil(min(chars, 32000) / 4)`, computed once on the server (`server/src/modules/project-context/helpers.ts`) so the page and the tabs show one number. The client's `estimateTokens` in `client/src/lib/tokens.ts` uses the same `chars / 4` rule for the trace.
+Each listed document carries `chars`, `approx_tokens`, a `truncated` flag, a `category` (the first search-root folder in the path, else the first folder, else `root`) and `used_by`. `approx_tokens` is `ceil(min(chars, 32000) / 4)`, computed once on the server (`server/src/modules/project-context/helpers.ts`) so the page and the tabs show one number. The client's `estimateTokens` in `client/src/lib/tokens.ts` uses the same `chars / 4` rule for the trace.
 
 `used_by` is the number of agents that get the document, directly or through a skill, each counted once, whether or not `agents.enabled` is set. `AgentsRepository.contextDocUsage` computes it as one `UNION` of the two sources so an agent holding a document both ways is not counted twice.
 

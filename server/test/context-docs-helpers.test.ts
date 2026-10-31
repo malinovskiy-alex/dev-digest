@@ -6,12 +6,16 @@ import { describe, it, expect } from 'vitest';
 import {
   CONTEXT_DOC_EXCLUDED_DIRS,
   ContextDocLinksBody,
+  DEFAULT_CONTEXT_DOC_GLOBS,
+  createContextDocMatcher,
   docCategory,
+  globToRegExp,
   isContextDocPath,
 } from '../src/modules/_shared/context-docs/helpers.js';
 import { EXCLUDED_DIRS } from '../src/modules/repo-intel/constants.js';
 import { applyPromptBudget, budgetChars, mergePromptDocs, truncateForPrompt } from '../src/modules/project-context/helpers.js';
 import { MAX_CONTEXT_DOC_CHARS, MAX_CONTEXT_TOTAL_CHARS } from '../src/modules/project-context/constants.js';
+import { parseGlobs } from '../src/platform/config.js';
 
 describe('isContextDocPath', () => {
   it.each(['docs/a.md', 'README.MD', 'README.md', 'specs/deep/x.Md'])('accepts %j', (p) => {
@@ -58,10 +62,71 @@ describe('CONTEXT_DOC_EXCLUDED_DIRS', () => {
 });
 
 describe('docCategory', () => {
-  it('is the first folder, or root at the repo root', () => {
+  it('is the first search-root folder, else the first folder, else root', () => {
     expect(docCategory('specs/feature/a.md')).toBe('specs');
     expect(docCategory('docs/a.md')).toBe('docs');
+    expect(docCategory('server/docs/a.md')).toBe('docs');
+    expect(docCategory('client/Insights/x.md')).toBe('insights');
+    expect(docCategory('notes/a.md')).toBe('notes');
     expect(docCategory('README.md')).toBe('root');
+  });
+});
+
+describe('createContextDocMatcher — default globs (R-74)', () => {
+  const m = createContextDocMatcher();
+
+  it('is **/{specs,docs,insights}/**/*.md', () => {
+    expect(DEFAULT_CONTEXT_DOC_GLOBS).toEqual(['**/{specs,docs,insights}/**/*.md']);
+  });
+
+  it.each([
+    'specs/a.md',
+    'docs/a.md',
+    'insights/a.md',
+    'docs/deep/er/a.md',
+    'server/docs/a.md',
+    'client/specs/x/y.md',
+    'pkg/insights/a.MD',
+    'Docs/a.md',
+  ])('matches %j', (p) => {
+    expect(m.matches(p)).toBe(true);
+  });
+
+  it.each([
+    'README.md',
+    'INSIGHTS.md',
+    'server/README.md',
+    'notes/a.md',
+    'mydocs/a.md',
+    'docs.md',
+    'docs/a.txt',
+    'node_modules/x/docs/a.md',
+    'docs/dist/a.md',
+    'docs/../a.md',
+  ])('does not match %j', (p) => {
+    expect(m.matches(p)).toBe(false);
+  });
+
+  it('gives the search-root folder as the category', () => {
+    expect(m.category('server/docs/a.md')).toBe('docs');
+    expect(m.category('insights/x.md')).toBe('insights');
+  });
+});
+
+describe('createContextDocMatcher — configured globs', () => {
+  it('uses only the configured globs and their folder names', () => {
+    const m = createContextDocMatcher(['handbook/*.md', '**/adr/**/*.md']);
+    expect(m.matches('handbook/a.md')).toBe(true);
+    expect(m.matches('handbook/deep/a.md')).toBe(false);
+    expect(m.matches('x/adr/0001.md')).toBe(true);
+    expect(m.matches('docs/a.md')).toBe(false);
+    expect(m.category('x/adr/0001.md')).toBe('adr');
+  });
+
+  it('escapes regex characters in literal parts', () => {
+    const re = globToRegExp('a.b/(x)+.md');
+    expect(re.test('a.b/(x)+.md')).toBe(true);
+    expect(re.test('aXb/(x)+.md')).toBe(false);
   });
 });
 
@@ -164,5 +229,20 @@ describe('budgetChars (F-29)', () => {
     const big = ['a.md', 'b.md', 'c.md', 'd.md'].map((path) => ({ path, chars: 40_000, text: '' }));
     const fifth = { path: 'e.md', chars: 1, text: 'e' };
     expect(applyPromptBudget([...big, fifth], MAX_CONTEXT_TOTAL_CHARS, budgetChars)).toEqual({ kept: big, over: [fifth] });
+  });
+});
+
+describe('parseGlobs (CONTEXT_DOC_GLOBS)', () => {
+  it('splits on commas outside braces, trims, drops empties', () => {
+    expect(parseGlobs(' a/*.md , {b,c}/**/*.md ,')).toEqual(['a/*.md', '{b,c}/**/*.md']);
+  });
+
+  it('is undefined when unset or blank (→ the default globs)', () => {
+    expect(parseGlobs(undefined)).toBeUndefined();
+    expect(parseGlobs(' , ')).toBeUndefined();
+  });
+
+  it.each(['**/{docs,specs/**/*.md', 'docs}/*.md'])('throws at boot on unbalanced braces: %j', (raw) => {
+    expect(() => parseGlobs(raw)).toThrow(/CONTEXT_DOC_GLOBS/);
   });
 });

@@ -109,6 +109,7 @@ flowchart TB
 | `GITHUB_TOKEN` | — | optional; PAT with repo scope (`GITHUB_PAT` accepted as a fallback) |
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
+| `CONTEXT_DOC_GLOBS` | `**/{specs,docs,insights}/**/*.md` | comma-separated globs a markdown file must match to appear in Project Context |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `PROMPT_LOG_VERBOSE` | — | `true` adds a per-section detail line (item sizes, fingerprints) to the `prompt.assembled` log; **local only** — honoured only with `NODE_ENV=development`. No mode logs prompt text |

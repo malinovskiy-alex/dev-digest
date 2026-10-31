@@ -141,6 +141,7 @@ export class Container {
       git: this.git,
       repos: this.reposRepo,
       usage: (workspaceId) => this.agentsRepo.contextDocUsage(workspaceId),
+      docGlobs: this.config.contextDocGlobs,
     }));
   }
 
