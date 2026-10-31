@@ -16,6 +16,8 @@ setup instructions ([`../README.md`](../README.md)).
   [security](agent-prompts/security-reviewer.md) ·
   [performance](agent-prompts/performance-reviewer.md) ·
   [choosing a model](agent-prompts/choosing-a-model.md).
+- [`project-context.md`](project-context.md) — how repo markdown documents are
+  listed, attached to agents and skills, and rendered into a review prompt.
 
 ## Writing a doc
 

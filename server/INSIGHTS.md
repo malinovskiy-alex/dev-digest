@@ -262,6 +262,12 @@ model costs determinism, while sending it costs the whole run.
 
 ## Recurring Errors & Fixes
 
+### 2026-10-30 — a finished run's trace can be missing right after the run reports `done`
+**Symptom:** an integration test waited for the PR's runs to be `done`, then `GET /runs/:id/trace` returned no trace (or the previous one).
+**Cause:** `run-executor` sets `agent_runs.status = 'done'` before it calls `saveRunTrace`, so a poller on status wins the race.
+**Rule:** in tests, poll `/runs/:id/trace` until it is present instead of reading it once after the status flips; do not rely on status order in UI code either. Existing behaviour, not fixed in L05.
+**Where:** `server/src/modules/reviews/run-executor.ts:350` (status `'done'`) and `:397` (`saveRunTrace`)
+
 ### 2026-09-20 — `--no-file-parallelism` is the fix for the integration suite skipping itself
 **Symptom:** `pnpm exec vitest run .it.test` reported **3 passed / 7 skipped**
 (20 of 73 tests) on a machine with Docker running — the failure mode already
@@ -326,3 +332,4 @@ before anything else. The fix is a fresh token in Settings (written to
   `server/.dependency-cruiser.cjs` + `pnpm arch` with the 21 current violations
   grandfathered in a baseline and planned out in `specs/onion-debt.md`. Nothing
   under `src/` changed; `pnpm typecheck` and `pnpm arch` both exit 0.
+- 2026-10-30 — L05 Project Context: project-context module, agent/skill_context_docs (migration 0015), docs in the review prompt with a 128,000-char budget; on Windows both db:migrate and db:seed were no-ops and were run through runMigrations/seed from a script.

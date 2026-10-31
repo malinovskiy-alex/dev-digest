@@ -3,7 +3,15 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { Agent, AgentSkillLink, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
+import type {
+  Agent,
+  AgentContextDocs,
+  AgentSkillLink,
+  ContextDocLinkInput,
+  ModelInfo,
+  Provider,
+  ReviewStrategy,
+} from "@devdigest/shared";
 
 export function useAgents() {
   return useQuery({
@@ -122,6 +130,32 @@ export function useSetAgentSkills() {
       qc.setQueryData(["agent-skills", agentId], data);
       qc.invalidateQueries({ queryKey: ["agent", agentId] });
       qc.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
+/** The agent's project-context documents: its own attachments + what it inherits through skills. */
+export function useAgentContextDocs(agentId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["agent-context-docs", agentId],
+    queryFn: () => api.get<AgentContextDocs>(`/agents/${agentId}/context-docs`),
+    enabled: !!agentId,
+  });
+}
+
+/**
+ * Check, uncheck and reorder all PUT the WHOLE ordered list (replace
+ * semantics, last write wins). Does not touch `agents.version`. The listing is
+ * invalidated because its "Used by N" counts just changed.
+ */
+export function useSetAgentContextDocs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, docs }: { agentId: string; docs: ContextDocLinkInput[] }) =>
+      api.put<AgentContextDocs>(`/agents/${agentId}/context-docs`, { docs }),
+    onSuccess: (data, { agentId }) => {
+      qc.setQueryData(["agent-context-docs", agentId], data);
+      qc.invalidateQueries({ queryKey: ["context-docs"] });
     },
   });
 }

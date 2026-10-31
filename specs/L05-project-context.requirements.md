@@ -1,6 +1,6 @@
 # L05 — Project Context · requirements
 
-**Status:** Approved — approved by the user on 2026-10-30. Q-07, Q-08, Q-11, Q-12, Q-15 and UX-02, UX-03, UX-07, UX-08 are unresolved; they do not block the plan and stay open.
+**Status:** Approved — approved by the user on 2026-10-30; the remaining questions were answered during planning the same day. No open questions; UX-02 is deferred and UX-07 is beyond L05.
 **Goal:** the user sees every markdown document in the project, attaches the ones they need to agents and skills, knows before a run how many tokens they will add to the prompt, and can read the full text of the attached documents in the review trace.
 **Packages:** server · client · reviewer-core · vendored `@devdigest/shared` (both copies)
 **Designs:**
@@ -90,17 +90,19 @@ folders, and upload are out of scope; the idea is recorded as UX-07.
 | R-03 | Ubiquitous | [decision Q-01] The system shall exclude from the document list any file that lies, at any depth, inside a build or dependency folder: `node_modules`, `dist`, `build`, `coverage`, `.next`, `out`, `vendor`, `.git`. | server-unit |
 | R-04 | Event-driven | WHEN the user selects a document in the list, the system shall show the file name and the full rendered markdown content of the document on the right. | client |
 | R-05 | Ubiquitous | [decision] The system shall show a document view-only: the page has no Edit toggle and no controls to create, upload or delete files or folders. | client |
-| R-06 | Event-driven | WHEN the user clicks the refresh button, the system shall re-read the document list from the repository, showing added files and removing deleted ones. | client + server-integration |
-| R-07 | Ubiquitous | The system shall show, for the selected document, an estimate of the number of tokens it will add to the prompt. | client |
-| R-08 | Ubiquitous | [decision] The system shall show, for the selected document, "Used by N agents", where N is counted by the rule in Q-07. | client + server-integration |
-| R-09 | Ubiquitous | [decision Q-01] The system shall show next to every document that lies in a folder a category equal to the name of the first folder of its path (`specs/public-api.md` → `specs`, `docs/a/b.md` → `docs`). The category of a document in the repository root is Q-15. | client + server-unit |
+| R-06 | Event-driven | WHEN the user clicks the refresh button, the system shall re-read the document list from the local clone at its current HEAD (no fetch from origin), showing added files and removing deleted ones. | client + server-integration |
+| R-07 | Ubiquitous | The system shall show, for the selected document, an estimate of the number of tokens it will add to the prompt, computed as `ceil(min(chars, 32000) / 4)` so that a document longer than the R-52 limit is counted at its truncated length. | client |
+| R-08 | Ubiquitous | [decision] The system shall show, for the selected document, "Used by N agents", where N is the number of agents that have the document attached directly plus the agents that get it through an active skill, each agent counted once, whether or not the agent is enabled. | client + server-integration |
+| R-09 | Ubiquitous | [decision Q-01] The system shall show next to every document that lies in a folder a category equal to the name of the first folder of its path (`specs/public-api.md` → `specs`, `docs/a/b.md` → `docs`). A document in the repository root gets the category `root`. | client + server-unit |
 | R-10 | State-driven | WHILE the document list is loading, the system shall show a skeleton instead of the list. | client |
 | R-11 | Unwanted | IF the repository (outside the folders excluded by R-03) has no `*.md` file, THEN the system shall show an empty state saying that no markdown documents were found. | client |
 | R-12 | Unwanted | IF the repository has not been cloned yet (no local copy), THEN the system shall show, instead of the list, a message that documents become available after cloning. | client + server-integration |
 | R-13 | Unwanted | IF a request for the list or for a document's content fails, THEN the system shall show an error state with the reason and a "Retry" button. | client |
 | R-14 | Unwanted | IF the selected document disappeared from the repository between loading the list and opening it, THEN the system shall show that the file was not found and offer to refresh the list. | client + server-integration |
 | R-15 | Unwanted | IF there is no active repository, THEN the system shall show on the Project Context page a prompt to add or select a repository. | client |
-| R-66 | Ubiquitous | [decision UX-04] The system shall show, below the document list, the line "Indexed: N files · M tokens total", where N is the number of documents in the list and M is the sum of the token estimates of all of them by the `ceil(chars / 4)` rule (Q-06), together with the time of the last list refresh; the word "chunks" is not used. | client + server-integration |
+| R-66 | Ubiquitous | [decision UX-04] The system shall show, below the document list, the line "Indexed: N files · M tokens total", where N is the number of documents in the list and M is the sum of the token estimates of all of them by the R-07 rule, together with the time of the last list refresh; the word "chunks" is not used. | client + server-integration |
+| R-70 | Unwanted | [decision REC-5] IF the repository has more than 1,000 documents, THEN the system shall list the first 1,000 by path and show a "list truncated" warning with the total number of documents. | client + server-unit |
+| R-72 | Ubiquitous | [decision UX-03] The system shall truncate a long document path in the middle, show the full path in a tooltip, and scroll a long document list inside its panel with the filter always visible, on the Project Context page and on both Context tabs. | client |
 | R-16 | Ubiquitous | The system shall return through the API the content of `*.md` files of the active repository outside the folders excluded by R-03 only; a request for any other path (including `..`, absolute paths, non-`.md` files, files inside excluded folders) shall be refused with a 4xx. | server-unit + server-integration |
 | R-17 | Ubiquitous | The system shall render document content as markdown without executing embedded HTML or scripts. | client |
 
@@ -139,7 +141,7 @@ folders, and upload are out of scope; the idea is recorded as UX-07.
 | R-36 | Ubiquitous | The system shall show on the skill's Context tab an explanation that every agent using this skill inherits these documents. | client |
 | R-37 | Event-driven | WHEN the user checks, unchecks or reorders a document in a skill, the system shall save the change so that it survives a reload. | client + server-integration |
 | R-38 | Ubiquitous | The system shall show on the skill's Context tab a total estimate "≈ N tokens" of the documents attached to the skill (user requirement; the `lab5-4.png` design does not have it). | client |
-| R-39 | Ubiquitous | The system shall show a "Serializes as" block with how the skill's attached documents will look in the prompt, in the saved order (format — Q-08). | client |
+| R-39 | Ubiquitous | The system shall show a "Serializes as" block with how the skill's attached documents will look in the prompt: the heading `## Project context` followed by one `- <path>` line per attached document, in the saved order. | client |
 | R-40 | Unwanted | IF saving changes on the skill's Context tab fails, THEN the system shall show a message with the reason and restore the last saved state. | client |
 | R-41 | Ubiquitous | [decision] The system shall not change the skill's version when documents are attached, detached or reordered. | server-integration |
 | R-42 | Ubiquitous | The system shall show on the skill card and in its editor the number of agents that use it ("Used by N agents"). | client |
@@ -154,12 +156,14 @@ folders, and upload are out of scope; the idea is recorded as UX-07.
 | R-45 | Ubiquitous | The system shall put the text of all read documents into one `## Project context` section of the prompt, each document as a separate untrusted block labelled with the document's path. | reviewer-core + server-unit |
 | R-46 | Ubiquitous | [decision Q-04] The system shall place in the section first the documents attached to the agent, in the agent's order, then the documents inherited from skills, in the order of the skills on the agent and in the order of documents within each skill. | server-unit |
 | R-47 | Ubiquitous | [decision Q-04] The system shall include a document attached both directly and through a skill (or through several skills) in the prompt exactly once — at the position of its first occurrence in the R-46 order. | server-unit |
-| R-48 | Ubiquitous | The system shall escape in a document's text any attempt to close the untrusted block, so that the document text cannot escape its block. | reviewer-core |
+| R-48 | Ubiquitous | The system shall escape in a document's text every closing tag of the untrusted block, in any letter case and with any whitespace inside the tag, so that the document text cannot escape its block. | reviewer-core |
+| R-71 | State-driven | [decision UX-08] WHILE at least one document is attached, the system shall open the `## Project context` section with a trusted rule stating that the documents are a reference to check the code against, not instructions to the model; the global injection guard text stays unchanged. | reviewer-core |
 | R-49 | State-driven | WHILE no document is attached to the agent or its skills, the system shall build the prompt without a `## Project context` section, byte-for-byte identical to the prompt before this feature. | server-unit |
 | R-50 | Unwanted | [decision] IF an attached document does not exist in the repository at run time, THEN the system shall skip it, continue the review with the remaining documents, and record the skip (path and reason "not found") in the run log and in the trace. | server-integration |
 | R-51 | Unwanted | IF a document could not be read for another reason (repository not cloned, read error), THEN the system shall skip it as in R-50, with a reason that distinguishes this case from "not found". | server-integration |
 | R-52 | Unwanted | [decision Q-05] IF a document's text is longer than 32,000 characters (≈ 8,000 tokens by `ceil(chars/4)`), THEN the system shall add only the first 32,000 characters to the prompt with a visible "truncated" marker in that document's block. | server-unit |
 | R-65 | Unwanted | [decision Q-05] IF a document was truncated under R-52, THEN the system shall mark that document "truncated" in the run trace (in the list of attached documents). | server-integration + client |
+| R-73 | Unwanted | [decision F-15] IF the attached documents of one run together exceed 128,000 characters after the R-52 per-document cut, THEN the system shall add documents in R-46 order while they fit, skip the rest with the reason "budget", and show those skips in the trace like R-55. | server-unit + server-integration |
 | R-53 | Event-driven | WHEN a document is added to the prompt, the system shall write a run-log line with the document's path and size. | server-integration |
 | R-54 | Ubiquitous | The system shall record in the run trace the list of paths of the attached documents in prompt order, and the "Specs read" row in Configuration shall show exactly that list. | server-integration + client |
 | R-55 | Ubiquitous | The system shall show skipped documents (R-50, R-51) in the run trace separately from attached ones, with the reason for the skip. | client |
@@ -179,27 +183,27 @@ folders, and upload are out of scope; the idea is recorded as UX-07.
 
 | Screen / action | Covered | Missing | → |
 |---|---|---|---|
-| N6 / document source | `.devdigest/specs/` tree | the Context tabs show `specs/`, `docs/`, `insights/` — a different source; the category rule is not defined | R-02, R-03, R-09 (Q-01 resolved), Q-15 |
+| N6 / document source | `.devdigest/specs/` tree | the Context tabs show `specs/`, `docs/`, `insights/` — a different source; the category rule is not defined | R-02, R-03, R-09 (Q-01, Q-15 resolved) |
 | N6 / Edit, new file, new folder, upload | buttons present | writing to the read-only clone is wiped by `reset --hard` | R-05, UX-07 |
 | N6 / COVERAGE 78 | ring present | what it measures is undefined; the user removed it | Q-13, Out of scope |
 | N6 / "Indexed: 12 files · 1,240 chunks" | line present | there are no chunks (`code_chunks` is empty) → "tokens total" | R-66 (UX-04 resolved) |
-| N6 / "Used by 3 agents" | present | counting rule (direct / through skills) | R-08, Q-07 |
+| N6 / "Used by 3 agents" | present | counting rule (direct / through skills) | R-08 (Q-07 resolved) |
 | N6 / tokens | absent | user requirement | R-07 |
 | N6 / states | happy path only | loading, empty, not cloned, error, file disappeared, no repo | R-10…R-15 |
-| N6 / long paths, hundreds of files | — | path truncation, scrolling | UX-03 |
+| N6 / long paths, hundreds of files | — | path truncation, scrolling | R-72 |
 | Agent Context / list | checkbox, drag, category, Preview, filter, "2 of 7", "≈ 317 tokens" | keyboard reordering, accessible names | R-23, R-33 |
 | Agent Context / documents from skills | not shown | the user does not see that the agent already gets a document through a skill | UX-01 |
 | Agent Context / document disappeared | — | undefined | R-32 |
 | Agent Context / save error | — | undefined | R-30 |
 | Agent Context / documents bound to a repo, the agent to the workspace | — | which repository the tab shows | R-62, R-63, R-43 (Q-02 resolved) |
 | Skill Context / tokens | **absent** | the user requires it | R-38 |
-| Skill Context / "Serializes as" | `## Project specifications` + list of paths | a different heading from `## Project context`, and no text — contradicts the requirement "added to the prompt as text" | Q-08 |
+| Skill Context / "Serializes as" | `## Project specifications` + list of paths | a different heading from `## Project context`, and no text — contradicts the requirement "added to the prompt as text" | R-39 (Q-08 resolved) |
 | Skill Context / Preview | eye icon only | no accessible name | R-33 (same pattern) |
 | Run drawer / Specs read | paths | skipped documents are not visible | R-55 |
 | Run drawer / Prompt assembly | "Project context — attached specs (untrusted)" row, copy, expand | current label "Project context (dynamic)"; opening a single document | R-57, UX-02 |
 | Run drawer / old traces | — | `specs: null`, `specs_read: []` | R-61 |
 | Anywhere / very large document | — | limit, truncation | R-52, R-65 (Q-05 resolved) |
-| Anywhere / concurrent edits from two tabs | — | last write wins? | Q-11 |
+| Anywhere / concurrent edits from two tabs | — | last write wins? | R-21, R-37 (Q-11 resolved: last write wins) |
 
 ## Module interaction
 
@@ -254,26 +258,17 @@ sequenceDiagram
 | ID | Proposal | Why | Status |
 |---|---|---|---|
 | UX-01 | On the agent's Context tab, show documents inherited from skills as dimmed rows marked "via <skill>", and count them in "≈ N tokens". | Otherwise the tab's token total is lower than the real one, and the user may attach a document a second time without knowing about the skill | accepted → R-69 |
-| UX-02 | In the Prompt assembly row, allow opening each attached document separately (a subheading or a jump by path). | "Open and read" a specific document without scrolling the whole block | pending |
-| UX-03 | Truncate a long path in the middle with the full path in a tooltip; a list > 50 documents scrolls inside the panel, the filter is always visible. | The design assumes 6–7 short names | pending |
+| UX-02 | In the Prompt assembly row, allow opening each attached document separately (a subheading or a jump by path). | "Open and read" a specific document without scrolling the whole block | deferred (user, 2026-10-30) |
+| UX-03 | Truncate a long path in the middle with the full path in a tooltip; a list > 50 documents scrolls inside the panel, the filter is always visible. | The design assumes 6–7 short names | accepted → R-72 |
 | UX-04 | Instead of "Indexed: N files · N chunks", show "N documents · updated <time>". | Chunks do not exist; the count and freshness are what actually exists | accepted in a modified form: "N files · M tokens total" → R-66 |
 | UX-05 | Show the token estimate in every row of the Context tab lists, not only the total. | Shows which document is "expensive" before attaching it | accepted → R-67 |
 | UX-06 | Mark on the Context tabs a document longer than the R-52 limit ("will be truncated to ≈ 8k tokens") and count it in "≈ N tokens" already truncated. | The user learns the cost before the run, not from the bill | accepted → R-68 |
 | UX-07 | Edit documents through a GitHub PR (branch + commit + PR) instead of writing to the clone. | The only way to edit that survives `reset --hard` and is visible to the team | pending (beyond L05) |
-| UX-08 | Name "project context documents" explicitly in the `INJECTION_GUARD` text among the examples of untrusted data, and state that requirements from them are a reference for checking the code, not instructions to the model. | The guard currently lists diff, PR, README, intent — project documents are missing from the list | pending |
+| UX-08 | Name "project context documents" explicitly in the `INJECTION_GUARD` text among the examples of untrusted data, and state that requirements from them are a reference for checking the code, not instructions to the model. | The guard currently lists diff, PR, README, intent — project documents are missing from the list | accepted as a rule inside `## Project context`, not an `INJECTION_GUARD` edit (keeps R-49) → R-71 |
 
 ## Open questions
 
-No blocking questions. Q-01…Q-05 are resolved — see `## Decisions`. The rest do
-not block the plan; each names a recommended option.
-
-| ID | Question | Blocks | Who answers |
-|---|---|---|---|
-| Q-15 | What category does a document in the repository root (`README.md`, `CHANGELOG.md`) get, when its path has no folder? Recommended: the tag `root`. | R-09 (root files only) | user |
-| Q-07 | "Used by N agents" for a document: count agents that attached it directly **plus** agents that get it through an active skill (each agent once)? Recommended yes — it is the number of agents whose prompt the document actually reaches. | R-08 | user |
-| Q-08 | The "Serializes as" block in `lab5-4.png` shows `## Project specifications` and only a list of paths, while the agent's prompt has `## Project context` with the full text. Recommended: one `## Project context` section with text in the prompt; "Serializes as" shows the heading and the ordered paths as a preview. | R-39, R-45 | user |
-| Q-11 | Two browser tabs change the attachments of one agent at the same time: last write wins (as in the L02 Skills tab) — acceptable? | R-21, R-37 | user |
-| Q-12 | Does a running review see attachment changes made after it started? Recommended: no — the document set is fixed at the start of the run. | R-43 | user |
+None. Q-01…Q-15 are resolved — see `## Decisions`.
 
 ## Decisions
 
@@ -293,3 +288,13 @@ not block the plan; each names a recommended option.
 | UX-04 "Indexed" line on N6 | Replace the word "chunks" with "tokens total": "Indexed: N files · M tokens total" | user, 2026-10-30 → R-66 |
 | Untrusted wrapping | Documents are untrusted data in the `## Project context` section (as in the lab5-2 design and the existing slot `prompt.ts:205`); no keyword scanning — only `wrapUntrusted` + `INJECTION_GUARD` (`reviewer-core/AGENTS.md`, invariant 3) | design + package rules |
 | Spec language | English, like the other specs in `specs/` | user, 2026-10-30 |
+| Q-07 "Used by N agents" | Direct attachments plus agents that get the document through an active skill, each agent once, enabled or not | user, 2026-10-30 → R-08 |
+| Q-08 "Serializes as" | `## Project context` followed by the attached paths in saved order | user, 2026-10-30 → R-39 |
+| Q-11 Concurrent edits | Last write wins (as in the L02 Skills tab) | user, 2026-10-30 → R-21, R-37 |
+| Q-12 Changes during a run | The document set is fixed when each agent's run starts | user, 2026-10-30 → R-43 |
+| Q-15 Root files | Category `root` | user, 2026-10-30 → R-09 |
+| Refresh (R-06) | Re-read the local clone at its current HEAD, no fetch | user, 2026-10-30 → R-06 |
+| Listing cap (REC-5) | First 1,000 documents by path, with a "list truncated" warning | user, 2026-10-30 → R-70 |
+| Prompt hardening (REC-3, UX-08) | Case- and whitespace-insensitive escape of the closing tag; a trusted rule heads `## Project context` only when documents are attached; `INJECTION_GUARD` unchanged | user, 2026-10-30 → R-48, R-71 |
+| UX-02, UX-03 | UX-03 built now, UX-02 deferred | user, 2026-10-30 → R-72 |
+| Total prompt budget (F-15) | 128,000 characters for the whole `## Project context` section; overflow skipped with reason "budget" | user, 2026-10-30 → R-73 |

@@ -4,7 +4,7 @@
    Each block carries its own weight in tokens. That number is the point of the
    section: it is what makes "the skills block costs a third of this prompt" a
    thing you can read off the screen instead of guess at. It is an estimate —
-   see helpers.estimateTokens. */
+   see `estimateTokens` in lib/tokens. */
 "use client";
 
 import React from "react";
@@ -12,7 +12,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, Icon, Modal } from "@devdigest/ui";
 import { s } from "../../styles";
 import { PromptModalBody } from "../PromptModalBody";
-import { estimateTokens } from "./helpers";
+import { estimateTokens } from "@/lib/tokens";
 
 const miniBtnStyle: React.CSSProperties = {
   display: "inline-flex",
@@ -61,7 +61,9 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
           <button
             type="button"
             title={t("trace.prompt.fullscreen")}
-            aria-label={t("trace.prompt.fullscreen")}
+            // The row label is in the name: every prompt row has this button,
+            // and "Open fullscreen" alone cannot say which block it opens.
+            aria-label={t("trace.prompt.fullscreenFor", { label })}
             onClick={(e) => {
               e.stopPropagation();
               setFull(true);

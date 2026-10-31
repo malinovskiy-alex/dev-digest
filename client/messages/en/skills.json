@@ -48,7 +48,7 @@
       "extracted": "Extracted",
       "community": "Community"
     },
-    "agentCount": "{count, plural, =0 {no agents} one {# agent} other {# agents}}"
+    "agentCount": "{count, plural, =0 {Used by no agents} one {Used by # agent} other {Used by # agents}}"
   },
   "preview": {
     "enabled": "Enabled",
@@ -112,8 +112,10 @@
     "tabs": {
       "config": "Config",
       "preview": "Preview",
-      "versions": "Versioning"
-    }
+      "versions": "Versioning",
+      "context": "Context"
+    },
+    "usedBy": "{count, plural, =0 {Used by no agents} one {Used by # agent} other {Used by # agents}}"
   },
   "versions": {
     "count": "Version history · {count} versions",
@@ -133,5 +135,15 @@
     "title": "Delete “{name}”?",
     "body": "This cannot be undone. {count, plural, =0 {No agent currently sends this skill} one {# agent currently sends this skill and will lose it from its prompt} other {# agents currently send this skill and will lose it from their prompt}}.",
     "label": "Delete “{name}”"
+  },
+  "context": {
+    "title": "Project context",
+    "attachedCount": "{count} attached",
+    "inheritHint": "Every agent that has this skill active gets these documents too, after its own.",
+    "total": "≈ {count} tokens in the prompt",
+    "serializesAs": "Serializes as",
+    "serializesNone": "Nothing attached — this skill adds no project context.",
+    "saved": "Context documents updated",
+    "saveError": "Couldn’t save the documents: {message}"
   }
 }

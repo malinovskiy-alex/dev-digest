@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import type { RunTrace } from '@devdigest/shared';
+import { assemblePrompt } from '@devdigest/reviewer-core';
 import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
@@ -41,6 +43,100 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  * Later course lessons populate the remaining tables (conventions, memory,
  * eval, …) once their features are built — those still start empty here.
  */
+
+/** Path of the project-context document in the seeded run's prompt (L05). */
+export const SEED_DOC_PATH = 'docs/security-baseline.md';
+
+/**
+ * The seeded project-context document. Its last sentence occurs nowhere else
+ * in the app, so the e2e can wait for it in the trace drawer.
+ */
+export const SEED_DOC = [
+  '# Security baseline',
+  '',
+  '- Secrets (API keys, tokens, live Stripe keys) never appear in source; they come from the environment.',
+  '- Public endpoints are rate limited per client before any database work.',
+  '- Every list endpoint runs a bounded number of queries, independent of the page size.',
+  '',
+  'Payments-api rule PX-7: a committed sk_live key must be rotated within one hour of discovery.',
+].join('\n');
+
+/** The diff the seeded run "reviewed" — a slice of PR #482. */
+const SEED_RUN_DIFF =
+  'diff --git a/src/config.ts b/src/config.ts\n--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,3 +10,4 @@\n   port: 3000,\n+  stripeKey: "sk_live_xxx",\n   redisUrl: x,';
+
+/**
+ * One `agent_runs` + `run_traces` row for PR #482's sample review, and the
+ * review pointed at it. The prompt assembly is built by reviewer-core's own
+ * `assemblePrompt`, so the stored `specs` block is byte-for-byte what a real
+ * run with that document attached would have sent.
+ */
+async function seedProjectContextRun(
+  db: Db,
+  input: { workspaceId: string; prId: string; agent: typeof t.agents.$inferSelect },
+): Promise<void> {
+  const [review] = await db
+    .select()
+    .from(t.reviews)
+    .where(and(eq(t.reviews.prId, input.prId), eq(t.reviews.model, 'seed'), isNull(t.reviews.runId)));
+  if (!review) return;
+
+  const { assembly } = assemblePrompt({
+    system: input.agent.systemPrompt,
+    task: "Review PR #482 'Add rate limiting to public API endpoints'",
+    specs: [{ label: SEED_DOC_PATH, text: SEED_DOC }],
+    diff: SEED_RUN_DIFF,
+  });
+
+  const [run] = await db
+    .insert(t.agentRuns)
+    .values({
+      workspaceId: input.workspaceId,
+      agentId: input.agent.id,
+      prId: input.prId,
+      provider: input.agent.provider,
+      model: 'seed',
+      durationMs: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      costUsd: null,
+      status: 'done',
+      findingsCount: 2,
+      grounding: '2/2 passed',
+      score: review.score,
+    })
+    .returning();
+
+  const trace: RunTrace = {
+    config: {
+      agent: input.agent.name,
+      version: String(input.agent.version),
+      provider: input.agent.provider,
+      model: 'seed',
+      pr: 482,
+      source: 'local',
+    },
+    stats: {
+      duration_ms: 0,
+      tokens_in: 0,
+      tokens_out: 0,
+      cost_usd: null,
+      findings: 2,
+      grounding: '2/2 passed',
+    },
+    prompt_assembly: assembly,
+    tool_calls: [],
+    raw_output: '',
+    memory_pulled: [],
+    specs_read: [SEED_DOC_PATH],
+    log: [
+      { t: '00.00', kind: 'info', msg: 'Seeded run — no model was called' },
+      { t: '00.00', kind: 'info', msg: `context doc: ${SEED_DOC_PATH} (${SEED_DOC.length} chars) → prompt` },
+    ],
+  };
+  await db.insert(t.runTraces).values({ runId: run!.id, trace });
+  await db.update(t.reviews).set({ runId: run!.id }).where(eq(t.reviews.id, review.id));
+}
 
 export const DEFAULT_WORKSPACE_NAME = 'default';
 export const SYSTEM_USER_EMAIL = 'you@local';
@@ -345,6 +441,22 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         order: 0,
       })
       .onConflictDoNothing();
+  }
+
+  // ---- L05: a seeded run (+ trace) for PR #482's sample review ----
+  // Gives the Run trace drawer one run whose prompt carried a project-context
+  // document, with no model call, so the e2e can walk "Project context —
+  // attached specs (untrusted)" on seeded data. Reached from PR #482 → Agent
+  // runs tab → Run history → "Open run trace & logs" (`?trace=<runId>`).
+  // It lives HERE, not inside the `if (!pr)` block above, because it needs the
+  // General Reviewer's id and the agents are seeded after the PR. Idempotent:
+  // only the sample review (model 'seed') that has no run yet gets one.
+  if (generalReviewer) {
+    await seedProjectContextRun(db, {
+      workspaceId,
+      prId: pr!.id,
+      agent: generalReviewer,
+    });
   }
 
   // ---- API Contract Reviewer (the L03 agent) ----

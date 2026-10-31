@@ -72,12 +72,15 @@ flowchart TB
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
   subgraph Agents["Agents & skills"]
-    agents["agents<br/>/agents · /agents/:id · /agents/:id/skills"]
-    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions<br/>/skills/import/preview · /skills/import"]
+    agents["agents<br/>/agents · /agents/:id · /agents/:id/skills<br/>/agents/:id/context-docs (GET · PUT)"]
+    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions<br/>/skills/import/preview · /skills/import<br/>/skills/:id/context-docs (GET · PUT)"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     conventions["conventions<br/>/repos/:id/conventions · /conventions/extract<br/>/conventions/:id · /conventions/skill-draft · /conventions/skill"]
+  end
+  subgraph Context["Project context (L05)"]
+    projectContext["project-context<br/>GET /repos/:id/context-docs · /repos/:id/context-docs/content?path="]
   end
   subgraph Brief["PR brief (L04)"]
     blast["blast<br/>GET /pulls/:id/blast"]
@@ -85,6 +88,7 @@ flowchart TB
   end
   GH["GitHub"]
   blast -->|"getBlastRadius · getIndexState (index read, no LLM)"| repoIntel
+  reviews -->|"resolveForPrompt (git objects at HEAD, no LLM)"| projectContext
   prHistory -->|"listPullFiles (≤8 per request, cached in pr_files)"| GH
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]

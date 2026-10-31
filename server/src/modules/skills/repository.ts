@@ -3,6 +3,7 @@ import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { SkillSource, SkillType } from '@devdigest/shared';
 import { isBodyChange } from './helpers.js';
+import { activeSkillOnAgent } from '../../db/skill-gates.js';
 
 /**
  * A1 — skills data-access. Owns `skills` and `skill_versions`; reads the
@@ -265,12 +266,117 @@ export class SkillsRepository {
         and(
           eq(t.agentSkills.agentId, agentId),
           // Two independent gates: the skill is on globally (Skills page) AND
-          // this agent has its row checked. Either one off keeps it out.
-          eq(t.agentSkills.enabled, true),
-          eq(t.skills.enabled, true),
-          eq(t.skills.workspaceId, t.agents.workspaceId),
+          // this agent has its row checked. Either one off keeps it out. The
+          // predicate is shared with the project-context reads below.
+          activeSkillOnAgent(),
         ),
       )
       .orderBy(asc(t.agentSkills.order));
   }
+
+  // ---------------------------------------------------------- project context
+
+  /**
+   * Documents an agent gets through its skills: only through an ACTIVE skill
+   * (the same `activeSkillOnAgent` gates as `promptBodiesForAgent`), and only
+   * the skill's checked documents. Ordered by the skill's position on the
+   * agent, then the document's position in the skill (R-46).
+   */
+  async inheritedContextDocs(agentId: string): Promise<InheritedContextDocRow[]> {
+    return this.db
+      .select({
+        path: t.skillContextDocs.path,
+        skillId: t.skills.id,
+        skillName: t.skills.name,
+      })
+      .from(t.agentSkills)
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .innerJoin(t.skillContextDocs, eq(t.skillContextDocs.skillId, t.skills.id))
+      .where(
+        and(
+          eq(t.agentSkills.agentId, agentId),
+          activeSkillOnAgent(),
+          eq(t.skillContextDocs.enabled, true),
+        ),
+      )
+      .orderBy(asc(t.agentSkills.order), asc(t.skillContextDocs.order), asc(t.skillContextDocs.path));
+  }
+
+  /**
+   * The skills half of an agent's `## Project context`, grouped by skill in
+   * the skill's order on the agent — the shape `resolveForPrompt` merges after
+   * the agent's own documents.
+   */
+  async promptContextDocsForAgent(agentId: string): Promise<SkillContextDocGroup[]> {
+    const groups: SkillContextDocGroup[] = [];
+    for (const row of await this.inheritedContextDocs(agentId)) {
+      const last = groups[groups.length - 1];
+      if (last && last.skillId === row.skillId) last.paths.push(row.path);
+      else groups.push({ skillId: row.skillId, skillName: row.skillName, paths: [row.path] });
+    }
+    return groups;
+  }
+
+  /** The skill's document attachments, in stored order (checked and parked alike). */
+  async contextDocLinks(skillId: string): Promise<SkillContextDocLinkRow[]> {
+    return this.db
+      .select({
+        path: t.skillContextDocs.path,
+        order: t.skillContextDocs.order,
+        enabled: t.skillContextDocs.enabled,
+      })
+      .from(t.skillContextDocs)
+      .where(eq(t.skillContextDocs.skillId, skillId))
+      .orderBy(asc(t.skillContextDocs.order), asc(t.skillContextDocs.path));
+  }
+
+  /**
+   * Replace the skill's whole document list, order = index. An unchanged list
+   * writes nothing; the delete + insert are one transaction. Never touches
+   * `skills.version` or `skill_versions` — attachments are not the body.
+   */
+  async setContextDocs(skillId: string, entries: SkillContextDocLinkInput[]): Promise<void> {
+    const current = await this.contextDocLinks(skillId);
+    const unchanged =
+      current.length === entries.length &&
+      current.every((link, i) => link.path === entries[i]!.path && link.enabled === entries[i]!.enabled);
+    if (unchanged) return;
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.skillContextDocs).where(eq(t.skillContextDocs.skillId, skillId));
+      if (entries.length > 0) {
+        await tx
+          .insert(t.skillContextDocs)
+          .values(entries.map((e, i) => ({ skillId, path: e.path, order: i, enabled: e.enabled })));
+      }
+    });
+  }
+}
+
+/** A stored document attachment of a skill: position + flag. */
+export interface SkillContextDocLinkRow {
+  path: string;
+  order: number;
+  enabled: boolean;
+}
+
+/** A document an agent gets through one of its active skills. */
+export interface InheritedContextDocRow {
+  path: string;
+  skillId: string;
+  skillName: string;
+}
+
+/** One active skill's checked documents, in the skill's order. */
+export interface SkillContextDocGroup {
+  skillId: string;
+  skillName: string;
+  paths: string[];
+}
+
+/** One row of the skill's document list as the editor posts it back. */
+export interface SkillContextDocLinkInput {
+  path: string;
+  enabled: boolean;
 }

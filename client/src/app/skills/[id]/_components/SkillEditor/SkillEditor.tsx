@@ -11,6 +11,7 @@ import type { Skill } from "@devdigest/shared";
 import { ConfigTab } from "./_components/ConfigTab";
 import { PreviewTab } from "./_components/PreviewTab";
 import { VersionsTab } from "./_components/VersionsTab";
+import { ContextTab } from "./_components/ContextTab";
 import { TABS } from "./constants";
 import { s } from "./styles";
 
@@ -36,6 +37,7 @@ export function SkillEditor({
       <div style={s.body}>
         {tab === "preview" && <PreviewTab skill={skill} />}
         {tab === "versions" && <VersionsTab skill={skill} />}
+        {tab === "context" && <ContextTab skill={skill} />}
         {tab === "config" && <ConfigTab skill={skill} onDeleted={onDeleted} />}
       </div>
     </div>

@@ -29,6 +29,7 @@ import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import { RepoRepository } from '../modules/repos/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
+import { ProjectContextService } from '../modules/project-context/service.js';
 import { resolveFeatureModel } from '../modules/settings/feature-models.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
@@ -79,6 +80,7 @@ export class Container {
   private _reviewRepo?: ReviewRepository;
   private _reposRepo?: RepoRepository;
   private _skillsRepo?: SkillsRepository;
+  private _projectContext?: ProjectContextService;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
@@ -125,6 +127,21 @@ export class Container {
    */
   get skillsRepo(): SkillsRepository {
     return (this._skillsRepo ??= new SkillsRepository(this.db));
+  }
+
+  /**
+   * The project-context service, shared because the review path needs it
+   * outside its module: `run-executor` resolves an agent's attached documents
+   * through it, and it shares the per-sha listing cache with the page's routes.
+   * Same reason as `skillsRepo` (L02 6.7). Explicit deps — it never sees the
+   * container.
+   */
+  get projectContext(): ProjectContextService {
+    return (this._projectContext ??= new ProjectContextService({
+      git: this.git,
+      repos: this.reposRepo,
+      usage: (workspaceId) => this.agentsRepo.contextDocUsage(workspaceId),
+    }));
   }
 
   get codeIndex(): CodeIndex {

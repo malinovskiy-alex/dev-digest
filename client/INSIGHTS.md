@@ -19,6 +19,12 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-10-30 — dropping context-doc rows that the active repo's listing lacks loses other repos' attachments
+**Symptom:** after any check/uncheck/reorder on an agent's or skill's Context tab, parked attachments for documents of another repository disappeared from the DB.
+**Cause:** attachments are stored by relative path with no repo column, so they apply to every repo, while the tab builds rows from the ACTIVE repo's listing (capped at 1,000, possibly not cloned). `toEntries` filtered out stored rows marked `missing`, and the PUT replaces the whole list.
+**Rule:** `toEntries` writes back every stored row; a row leaves the list only when the user explicitly unchecks a missing, checked row. Never derive the saved list from what the current listing contains.
+**Where:** `client/src/lib/context-docs.ts:142` (`toEntries`)
+
 ### 2026-10-03 — Showing the flat diff as a "loading" fallback, then re-rendering it as groups
 **Symptom:** a 100-file PR (about 7k changed lines) on *Files changed* leaves
 the tab frozen for minutes. Chrome DevTools/CDP calls time out with
@@ -247,3 +253,4 @@ the shorthand/longhand mix React warns about — the existing comment claiming
 - 2026-10-03 — Smart Diff (L04): *Files changed* is grouped by role from
   `GET /pulls/:id/smart-diff`, findings render inline through `DiffViewer`'s
   `findings` / `renderFinding` slot, and the route-private `FindingCard` is reused.
+- 2026-10-30 — L05 Project Context page and agent/skill Context tabs; untrusted repo markdown goes through UntrustedMarkdown (no <img>, inert relative links).

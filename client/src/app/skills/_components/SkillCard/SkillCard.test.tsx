@@ -55,7 +55,7 @@ describe("SkillCard", () => {
       screen.getByText("Name the branches of a changed function that no test reaches."),
     ).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
-    expect(screen.getByText("2 agents")).toBeInTheDocument();
+    expect(screen.getByText("Used by 2 agents")).toBeInTheDocument();
   });
 
   it("flips the global kill-switch without opening the card", () => {

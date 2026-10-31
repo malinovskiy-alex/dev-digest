@@ -1,0 +1,22 @@
+{
+  "name": "Run trace drawer shows the project-context block a seeded run sent",
+  "description": "From PR #482, open the Agent runs tab, open the seeded run's trace drawer from the Timeline ('Open run trace & logs'), expand Prompt assembly (collapsed by default) and then the 'Project context — attached specs (untrusted)' row, and confirm the seeded document's text (docs/security-baseline.md, rule PX-7) is what the run sent. Covers R-58 (L05 Project Context). The run, its trace and the wrapped document are seeded by server/src/db/seed.ts (seedProjectContextRun) — no model call, and no step here starts a review. Assumes a freshly-seeded DB where acme/payments-api (PR #482) is the first repo — guaranteed by e2e-web.yml; run locally via the hermetic stack (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Agent runs"], "label": "switch to the Agent runs tab" },
+    { "cmd": ["wait", "--url", "tab=findings"], "label": "findings tab is active in the URL" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Open run trace & logs"], "label": "open the seeded run's trace drawer from the Timeline" },
+    { "cmd": ["wait", "--url", "trace="], "label": "the drawer's run id is in the URL" },
+    { "cmd": ["wait", "--text", "docs/security-baseline.md"], "label": "Specs read lists the seeded document" },
+    { "cmd": ["find", "text", "Prompt assembly", "click"], "label": "expand the Prompt assembly section (collapsed by default)" },
+    { "cmd": ["wait", "--text", "Project context — attached specs (untrusted)"], "label": "the project-context row is labelled as untrusted attached specs" },
+    { "cmd": ["find", "text", "Project context — attached specs (untrusted)", "click"], "label": "expand the project-context row" },
+    { "cmd": ["wait", "--text", "rule PX-7"], "label": "the seeded document's text is the block the run sent" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Open fullscreen: Project context — attached specs (untrusted)"], "label": "open the project-context block full screen" },
+    { "cmd": ["wait", "--text", "rule PX-7"], "label": "the full-screen view shows the same seeded document" }
+  ]
+}

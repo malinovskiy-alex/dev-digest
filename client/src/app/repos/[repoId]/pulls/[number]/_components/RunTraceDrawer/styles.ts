@@ -97,6 +97,9 @@ export const s = {
   specsWrap: { display: "flex", gap: 6, flexWrap: "wrap" } satisfies CSSProperties,
   specsNone: { color: "var(--text-muted)" } satisfies CSSProperties,
   spec: { fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
+  specTruncated: { marginLeft: 4, fontSize: 11, color: "var(--warn)" } satisfies CSSProperties,
+  skippedList: { display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
+  skippedReason: { marginLeft: 6, fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
   statsRow: { display: "flex", gap: 10 } satisfies CSSProperties,
   rawPre: {
     margin: 0,

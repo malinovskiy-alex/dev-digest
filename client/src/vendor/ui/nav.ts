@@ -27,13 +27,15 @@ export interface NavGroup {
  * L02 ships the `/skills` and `/repos/:repoId/conventions` screens; leaving
  * them reachable only from the command palette was the alternative. If this
  * library is ever re-vendored, re-apply the SKILLS LAB group and the `g s` /
- * `g c` shortcuts below.
+ * `g c` shortcuts below, and the WORKSPACE "Project Context" item (L05,
+ * `/repos/:repoId/context`, no shortcut).
  */
 export const NAV: NavGroup[] = [
   {
     section: "WORKSPACE",
     items: [
       { key: "pulls", label: "Pull Requests", icon: "GitPullRequest", href: "/repos/:repoId/pulls", gKey: "p" },
+      { key: "context", label: "Project Context", icon: "FileText", href: "/repos/:repoId/context" },
     ],
   },
   {

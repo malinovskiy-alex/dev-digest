@@ -4,7 +4,14 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { Skill, SkillImportPreview, SkillType, SkillVersion } from "@devdigest/shared";
+import type {
+  ContextDocLinkInput,
+  Skill,
+  SkillContextDocs,
+  SkillImportPreview,
+  SkillType,
+  SkillVersion,
+} from "@devdigest/shared";
 
 export function useSkills() {
   return useQuery({
@@ -117,6 +124,33 @@ export function useConfirmImport() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.setQueryData(["skill", data.id], data);
+    },
+  });
+}
+
+/** The skill's project-context attachments, in saved order. */
+export function useSkillContextDocs(skillId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["skill-context-docs", skillId],
+    queryFn: () => api.get<SkillContextDocs>(`/skills/${skillId}/context-docs`),
+    enabled: !!skillId,
+  });
+}
+
+/**
+ * PUT the skill's whole ordered list (replace semantics). Does not version the
+ * skill. Invalidates the listing ("Used by N") and every agent's Context tab,
+ * because what agents inherit through this skill just changed.
+ */
+export function useSetSkillContextDocs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ skillId, docs }: { skillId: string; docs: ContextDocLinkInput[] }) =>
+      api.put<SkillContextDocs>(`/skills/${skillId}/context-docs`, { docs }),
+    onSuccess: (data, { skillId }) => {
+      qc.setQueryData(["skill-context-docs", skillId], data);
+      qc.invalidateQueries({ queryKey: ["context-docs"] });
+      qc.invalidateQueries({ queryKey: ["agent-context-docs"] });
     },
   });
 }

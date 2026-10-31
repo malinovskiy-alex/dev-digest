@@ -16,7 +16,7 @@ import { useAgents, useAgent, useUpdateAgent } from "@/lib/hooks/agents";
 import { filterAgents } from "@/lib/agents";
 import { ApiError } from "@/lib/api";
 
-const VALID_TABS = ["config", "skills"];
+const VALID_TABS = ["config", "skills", "context"];
 
 export default function AgentEditorPage() {
   const t = useTranslations("agents");

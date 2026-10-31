@@ -48,7 +48,8 @@
       "skills": "Skills",
       "evals": "Evals",
       "stats": "Stats",
-      "ci": "CI"
+      "ci": "CI",
+      "context": "Context"
     }
   },
   "config": {
@@ -110,5 +111,14 @@
     "confirm": "Delete agent",
     "label": "Delete “{name}”",
     "done": "Deleted “{name}”"
+  },
+  "context": {
+    "title": "Project context",
+    "attachedCount": "{attached} of {total} attached",
+    "total": "≈ {count} tokens in the prompt",
+    "orderHint": "Checked documents go into every review this agent runs, in this order, under ## Project context. Documents from active skills are added after them (dimmed).",
+    "untrustedHint": "Documents are sent as untrusted data inside ## Project context: the model checks the diff against them but never follows instructions found in them.",
+    "saved": "Context documents updated",
+    "saveError": "Couldn’t save the documents: {message}"
   }
 }

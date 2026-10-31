@@ -7,7 +7,9 @@ import {
   jsonb,
   primaryKey,
   index,
+  check,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { now } from './_shared';
 import { workspaces, users } from './core';
 import { skills } from './skills';
@@ -81,4 +83,24 @@ export const agentSkills = pgTable(
     enabled: boolean('enabled').notNull().default(true),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
+);
+
+// A project-context document (a repo-relative `.md` path) attached to an agent.
+// Keyed by path, not by repo: the same path resolves against whichever repo the
+// agent reviews. Same row model as `agent_skills`: `enabled = false` parks the
+// row in place instead of dropping it to the bottom.
+export const agentContextDocs = pgTable(
+  'agent_context_docs',
+  {
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    order: integer('order').notNull().default(0),
+    enabled: boolean('enabled').notNull().default(true),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.agentId, t.path] }),
+    pathLength: check('agent_context_docs_path_length', sql`char_length(${t.path}) between 1 and 1024`),
+  }),
 );
