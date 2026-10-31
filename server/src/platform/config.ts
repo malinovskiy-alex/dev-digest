@@ -26,6 +26,9 @@ const EnvSchema = z.object({
   // Note: even when on, sections only populate once the repo is indexed; an
   // unindexed repo degrades gracefully. Per-agent override: agents.repo_intel.
   REPO_INTEL_ENABLED: z.string().optional(),
+  // Project Context search roots (R-74): comma-separated globs over repo-relative
+  // paths. Unset → `**/{specs,docs,insights}/**/*.md`.
+  CONTEXT_DOC_GLOBS: z.string().optional(),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -69,6 +72,11 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
+  /**
+   * Globs a markdown file must match to be a Project Context document (R-74).
+   * undefined → the project-context default, `**\/{specs,docs,insights}/**\/*.md`.
+   */
+  contextDocGlobs: readonly string[] | undefined;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -92,5 +100,33 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     promptLogVerboseRefused: parsed.PROMPT_LOG_VERBOSE === 'true' && env.NODE_ENV !== 'development',
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
+    contextDocGlobs: parseGlobs(parsed.CONTEXT_DOC_GLOBS),
   };
+}
+
+/**
+ * `CONTEXT_DOC_GLOBS` → its non-empty, trimmed entries; undefined when nothing
+ * is left. Unbalanced braces throw here, at boot: compiled later they would be
+ * an invalid RegExp and a 500 on every Project Context request.
+ */
+export function parseGlobs(raw: string | undefined): readonly string[] | undefined {
+  // Brace alternations hold commas, so split only on commas outside `{…}`.
+  const globs: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of raw ?? '') {
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      if (depth === 0) throw new Error(`CONTEXT_DOC_GLOBS: unmatched '}' in ${JSON.stringify(raw)}`);
+      depth--;
+    }
+    if (ch === ',' && depth === 0) {
+      globs.push(current);
+      current = '';
+    } else current += ch;
+  }
+  if (depth !== 0) throw new Error(`CONTEXT_DOC_GLOBS: unclosed '{' in ${JSON.stringify(raw)}`);
+  globs.push(current);
+  const cleaned = globs.map((g) => g.trim()).filter(Boolean);
+  return cleaned.length > 0 ? cleaned : undefined;
 }

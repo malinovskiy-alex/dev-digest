@@ -9,6 +9,7 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  GitTreeFile,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './diff-parser.js';
 
@@ -147,6 +148,32 @@ export class SimpleGitClient implements GitClient {
     }
     return this.git(repo).raw(['show', `${sha}:${path}`]);
   }
+
+  async listFilesAt(repo: RepoRef, sha: string): Promise<GitTreeFile[]> {
+    // Same guard as readFileAt: the sha is its own argv entry, but it must never
+    // be readable as an option. `-z` gives raw (unquoted) paths, NUL-separated.
+    if (!/^[0-9a-f]{7,64}$/i.test(sha)) throw new Error(`listFilesAt: invalid sha "${sha}"`);
+    const raw = await this.git(repo).raw(['ls-tree', '-r', '-l', '-z', '--full-tree', sha]);
+    return parseLsTree(raw);
+  }
+}
+
+/**
+ * Parse `git ls-tree -r -l -z` output: `<mode> <type> <oid> <size>\t<path>\0`
+ * (the size is space-padded). Only regular blobs survive — mode 120000
+ * (symlink) and 160000 (submodule, type `commit`) are dropped.
+ */
+function parseLsTree(raw: string): GitTreeFile[] {
+  const out: GitTreeFile[] = [];
+  for (const entry of raw.split('\0')) {
+    if (!entry) continue;
+    const tab = entry.indexOf('\t');
+    if (tab < 0) continue;
+    const [mode, type, , size] = entry.slice(0, tab).trim().split(/\s+/);
+    if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) continue;
+    out.push({ path: entry.slice(tab + 1), size: Number(size) });
+  }
+  return out;
 }
 
 function parseBlamePorcelain(raw: string): BlameLine[] {

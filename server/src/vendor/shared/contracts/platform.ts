@@ -259,6 +259,84 @@ export const SpecFile = z.object({
 });
 export type SpecFile = z.infer<typeof SpecFile>;
 
+/** One markdown document of the active repo's clone, as listed on the Project Context page. */
+export const ContextDoc = z.object({
+  /** Repo-relative POSIX path. */
+  path: z.string(),
+  /** Basename. */
+  name: z.string(),
+  /** Dirname; '' at the repo root. */
+  folder: z.string(),
+  /** First folder of the path; 'root' for a root file. */
+  category: z.string(),
+  chars: z.number().int(),
+  /** ceil(min(chars, 32000) / 4) — what the document costs in a prompt. */
+  approx_tokens: z.number().int(),
+  /** chars > 32000 — the prompt gets a truncated copy. */
+  truncated: z.boolean(),
+  /** Agents that get this doc, directly or through an active skill, each counted once. */
+  used_by: z.number().int(),
+});
+export type ContextDoc = z.infer<typeof ContextDoc>;
+
+export const ContextDocList = z.object({
+  /** false → the repo has no local clone yet, and `docs` is empty. */
+  cloned: z.boolean(),
+  sha: z.string().nullable(),
+  /** ISO timestamp of this listing ("last refresh"). */
+  listed_at: z.string(),
+  /** Docs found in the tree before the cap. */
+  total: z.number().int(),
+  /** total > the listing cap → the page shows a "list truncated" warning. */
+  capped: z.boolean(),
+  /** Path ascending, at most the listing cap. */
+  docs: z.array(ContextDoc),
+});
+export type ContextDocList = z.infer<typeof ContextDocList>;
+
+export const ContextDocContent = z.object({
+  path: z.string(),
+  sha: z.string(),
+  content: z.string(),
+  chars: z.number().int(),
+});
+export type ContextDocContent = z.infer<typeof ContextDocContent>;
+
+/** A stored attachment of a doc to an agent or a skill. */
+export const ContextDocLink = z.object({
+  path: z.string(),
+  order: z.number().int(),
+  enabled: z.boolean(),
+});
+export type ContextDocLink = z.infer<typeof ContextDocLink>;
+
+export const ContextDocLinkInput = z.object({
+  path: z.string(),
+  enabled: z.boolean(),
+});
+export type ContextDocLinkInput = z.infer<typeof ContextDocLinkInput>;
+
+/** A doc an agent gets through one of its active skills. */
+export const InheritedContextDoc = z.object({
+  path: z.string(),
+  skill_id: z.string(),
+  skill_name: z.string(),
+});
+export type InheritedContextDoc = z.infer<typeof InheritedContextDoc>;
+
+export const AgentContextDocs = z.object({
+  /** Order ascending. */
+  attached: z.array(ContextDocLink),
+  /** Skill order on the agent, then doc order in the skill. */
+  inherited: z.array(InheritedContextDoc),
+});
+export type AgentContextDocs = z.infer<typeof AgentContextDocs>;
+
+export const SkillContextDocs = z.object({
+  attached: z.array(ContextDocLink),
+});
+export type SkillContextDocs = z.infer<typeof SkillContextDocs>;
+
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),
   pct: z.number().min(0).max(100),

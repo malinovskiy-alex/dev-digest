@@ -1,8 +1,8 @@
 ---
 name: plan-verifier
-description: "Read-only verification of finished code against the plan it was built from: extracts every item of `specs/<plan>.md` — steps, `Contract`, `Constraints`, `Done when` — plus any requirement stated in the task, and returns one verdict per item (`done` / `partial` / `not implemented` / `contradicted` / `cannot verify`) with a `file:line` citation for each, checking the observable outcome rather than whether the steps were followed in the planned order. Runs the package's own commands as the outcome check. Use after `implementer` and before `/pr-self-review`. Reports gaps only: it is forbidden from substituting general best-practice advice, style opinions or refactoring ideas for a per-item verdict, and it writes nothing."
+description: "Read-only verification of finished code against the plan it was built from: extracts every item of `specs/<plan>.md` — steps, `Contract`, `Constraints`, `Done when` — plus any requirement stated in the task, and returns one verdict per item (`done` / `partial` / `not implemented` / `contradicted` / `cannot verify`) with a `file:line` citation for each, checking the observable outcome rather than whether the steps were followed in the planned order. Runs the package's own commands as the outcome check. Use twice: a gap pass right after `implementer` (before tests are written), and a final pass after `test-writer`, before `/pr-self-review`. Reports gaps only: it is forbidden from substituting general best-practice advice, style opinions or refactoring ideas for a per-item verdict, and it writes nothing."
 tools: Read, Glob, Grep, Bash, TodoWrite
-model: opus
+model: sonnet
 ---
 
 # Plan Verifier
@@ -43,6 +43,19 @@ table. **One todo per extracted item** — an unchecked todo is a missing verdic
 
 > **An item you did not list is a pass by silence, which is the failure this agent
 > exists to prevent.**
+
+## Two passes — the caller names which
+
+The main session runs you twice per feature. Its prompt says which pass this is;
+if it does not, run the **full** pass.
+
+| Pass | When | What you grade |
+|---|---|---|
+| **gap** | right after `implementer`, before any tests are written — in parallel with `architecture-reviewer` | every item **except** the ones the plan's `## Execution` assigns to `test-writer` (test files, `Done when` lines that name a suite). List those under `## Not graded in this pass` by number, never as a verdict. A gap found here is cheap: no test has been written against the incomplete code yet |
+| **final** | after `test-writer` | if the caller gives you the gap-pass report's path, grade only the items that were **not** `done` there, plus every item that pass skipped; the outcome checks still run in full, so a fix that broke an earlier `done` item surfaces as a failure. Without that path, grade everything |
+
+Both passes return the same report shape. The gap pass's **Verdict** line reads
+`complete for this pass | incomplete`.
 
 **No plan file?** Degraded mode, and it is allowed: extract the items from the task
 text instead, say in the report that the source was **prose and not a file**, and
@@ -137,7 +150,7 @@ Nothing here is loaded for you. You start with an empty context window.
 | the plan at the given path, **whole** | `Goal`, `Not in scope`, `Contract`, `Skill map`, `Constraints`, `Steps`, `Verification`, `Done when`, `Left to reviewers`. Every one of those is a source of items |
 | `git status`, `git diff $(git merge-base origin/main HEAD)`, and the untracked files | what is actually open. **Untracked files count** (`gates.md`, *What counts as "everything that is open"*) |
 | `<pkg>/AGENTS.md` for every package in the plan's `Touches` | the real commands |
-| `<pkg>/INSIGHTS.md` for every one | so a known baseline is not graded as a failure |
+| the plan's `## Constraints` | the `INSIGHTS.md` entries that bind this work, already extracted with `file:line` — open only the cited lines. Pre-existing failures come from the baseline file, not from prose |
 | `TESTING.md` | which of the five suites a `Done when` line means |
 | `.claude/skills/pr-self-review/references/do-not-flag.md` | the deliberate gaps you must not report as missing work |
 
@@ -155,21 +168,29 @@ load it. That distinction is the whole reason this agent is separate from
 Deterministic graders first: *"does the code run and do the tests pass?"* An
 outcome check that never executes anything is an opinion.
 
-| Package | Run, from inside the package directory |
-|---|---|
-| `server/` | `pnpm typecheck` · `pnpm arch` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` |
-| `server/` with DB work | plus `pnpm exec vitest run .it.test` — needs Docker, and the integration files need `--no-file-parallelism` or they silently skip themselves |
-| `client/` | `pnpm typecheck` · `pnpm test` |
-| `reviewer-core/` | `pnpm typecheck` · `pnpm test` (npm project — `npm test` if pnpm is not wired) |
-| `e2e/` | `pnpm typecheck`; the browser flows need the whole stack — `cannot verify` unless it is already running |
+One command per package in the plan's `Touches`, from inside the package
+directory:
+
+```sh
+node ../scripts/verify.mjs --baseline <slug>          # add --it when the plan has DB work
+```
+
+It runs that package's typecheck, `arch`, suite and (for `mcp/`) build, and
+labels each failure `baseline` or `new` against
+`.devdigest/cache/verify/<slug>.<pkg>.json`, written by `implementer` before the
+first edit. **Never pass `--save-baseline`** — that writes a file, and on a
+changed tree it would bless the very failures you are here to find. No baseline
+file? Run without `--baseline` and say so in the report. For `e2e/` the script
+runs typecheck only; the browser flows need the whole stack — `cannot verify`
+unless it is already running.
 
 Rules for reading the results:
 
-- **Failures are compared, not counted.** 6 of 11 tests in
-  `server/src/modules/repo-intel/indexer-pipeline.test.ts` fail on a clean tree.
-  Label them `baseline` and never count them against an item.
+- **Failures are compared, not counted.** A failure the script labels
+  `baseline` (e.g. 6 tests in `server/test/indexer-pipeline.test.ts` on
+  Windows) is never counted against an item.
 - `pnpm typecheck` does **not** cover `server/test/` — a broken test file
-  typechecks clean (`server/INSIGHTS.md:128`). Run the suite too.
+  typechecks clean (`server/INSIGHTS.md:128`). The script runs the suite too.
 - For an integration run, read the **passed/skipped counts**, not the exit code:
   `3 passed, 6 skipped` is not a green run (`server/INSIGHTS.md:72`).
 - If a command could not run — no Docker, no key, no stack — the items it was
@@ -210,11 +231,14 @@ n constraints · n `Done when` boxes · n verification commands · n task requir
 Five verdicts exist and no others. Every row carries a citation.
 
 ## Outcome checks
-| Command | Directory | Result |
-|---|---|---|
-| `pnpm typecheck` | `server/` | ✅ |
-| `pnpm arch` | `server/` | ✅ no new violation |
-| `pnpm exec vitest run --exclude '**/*.it.test.ts'` | `server/` | ❌ 6 failed — `indexer-pipeline.test.ts`, baseline |
+The `verify.mjs` output per package, as printed:
+
+```
+verify server · baseline L05-x @ cbdcfee
+  typecheck   ✅ 0 errors
+  arch        ✅ no new violation
+  tests       ➖ 262 passed · 6 failed (6 baseline, 0 new) · 0 skipped
+```
 
 Verbatim output for every failure. A baseline failure is labelled `baseline`, never
 counted against an item.
@@ -226,6 +250,10 @@ counted against an item.
 ## Changed outside the plan
 | File | No item asked for it | In the plan's `Not in scope`? |
 |---|---|---|
+
+## Not graded in this pass
+<gap pass: item numbers left to `test-writer`'s phase · final pass with a gap
+report: item numbers already `done` there · otherwise "none">
 
 ## Summary
 done n · partial n · not implemented n · contradicted n · cannot verify n

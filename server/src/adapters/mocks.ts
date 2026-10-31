@@ -23,6 +23,7 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  GitTreeFile,
   CodeIndex,
   CodeMatch,
   CodeSymbol,
@@ -259,6 +260,8 @@ export interface MockGitOptions {
   head?: string;
   /** Head `currentHead()` returns AFTER `sync()` runs — simulates fetch+reset advancing HEAD. */
   syncedHead?: string;
+  /** Override `listFilesAt()`; by default the tree is the `files` map. */
+  tree?: GitTreeFile[];
 }
 
 export class MockGitClient implements GitClient {
@@ -308,6 +311,10 @@ export class MockGitClient implements GitClient {
     const content = this.opts.files?.[path];
     if (content === undefined) throw new Error(`fatal: path '${path}' does not exist`);
     return content;
+  }
+  async listFilesAt(): Promise<GitTreeFile[]> {
+    if (this.opts.tree) return this.opts.tree;
+    return Object.entries(this.opts.files ?? {}).map(([path, content]) => ({ path, size: content.length }));
   }
 }
 

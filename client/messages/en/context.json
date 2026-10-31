@@ -1,24 +1,62 @@
 {
   "title": "Project Context",
-  "chunks": "{count} chunks",
-  "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
-  "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+  "page": {
+    "crumbRepoFallback": "repo",
+    "subtitle": "The markdown documents of the cloned repo, read at its current HEAD. Attach them to an agent or a skill to put them into a review.",
+    "documents": "Documents",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "selectPrompt": "Select a document to read it.",
+    "readOnly": "Read-only — edit documents in the repository itself."
   },
-  "mode": {
-    "preview": "preview",
-    "edit": "edit"
+  "states": {
+    "notCloned": {
+      "title": "Available after cloning",
+      "body": "Project documents are read from the local clone. Clone this repository first, then come back."
+    },
+    "empty": {
+      "title": "No markdown documents found",
+      "body": "The repository has no .md files outside node_modules, dist, build, vendor and similar folders."
+    },
+    "loadError": "Couldn’t load the project documents.",
+    "contentError": "Couldn’t load this document.",
+    "notFound": "File not found at the current HEAD — it may have been moved or deleted.",
+    "refreshList": "Refresh list"
   },
-  "editor": {
-    "loadError": "Couldn’t load spec",
-    "save": "Save",
-    "saving": "Saving…"
+  "footer": {
+    "indexed": "Indexed: {files} files · {tokens} tokens total",
+    "refreshed": "refreshed {time}"
+  },
+  "listCapped": "List truncated: showing the first {shown} of {total} documents",
+  "doc": {
+    "tokens": "≈ {count} tokens",
+    "truncated": "truncated to ≈ 8k tokens in a prompt",
+    "usedBy": "{count, plural, =0 {Used by no agents} one {Used by # agent} other {Used by # agents}}"
+  },
+  "tree": {
+    "label": "Project documents",
+    "toggleFolder": "Toggle folder {folder}"
+  },
+  "list": {
+    "filterPlaceholder": "Filter documents…",
+    "filterLabel": "Filter documents by path",
+    "preview": "Preview {path}",
+    "previewButton": "Preview",
+    "reorder": "Reorder {path} (↑ / ↓)",
+    "reorderDisabled": "Check {path} to reorder it",
+    "attach": "Attach {path}",
+    "notFound": "file not found",
+    "viaSkill": "via {skills}",
+    "willTruncate": "will be truncated to ≈ 8k tokens",
+    "tokens": "≈ {count} tok",
+    "none": "No documents to attach — the active repo has no markdown documents.",
+    "noMatches": "No documents match “{q}”.",
+    "previewTitle": "Preview",
+    "previewLoadError": "Couldn’t load this document.",
+    "close": "Close"
+  },
+  "markdown": {
+    "image": "Image: {alt}",
+    "imageNoAlt": "Image"
   }
 }

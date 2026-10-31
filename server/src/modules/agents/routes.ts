@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
+import { AgentContextDocs, CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
+import { ContextDocLinksBody } from '../_shared/context-docs/helpers.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { AgentsService } from './service.js';
 
@@ -26,6 +27,8 @@ const VersionParams = z.object({
  *   GET    /agents/:id/versions/:version → one config snapshot
  *   GET    /agents/:id/skills       → linked skills (ordered)
  *   POST   /agents/:id/skills       → set/reorder linked skills OR link one
+ *   GET    /agents/:id/context-docs → attached + inherited project-context docs
+ *   PUT    /agents/:id/context-docs → replace the attached list (ordered, flagged)
  *   GET    /agents/:id/models       → dynamic model list for the agent's provider
  *   GET    /providers/:id/models    → dynamic model list for a provider (editor)
  */
@@ -186,6 +189,24 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
           : await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
       if (!links) throw new NotFoundError('Agent not found');
       return links;
+    },
+  );
+
+  app.get('/agents/:id/context-docs', { schema: { params: IdParams, response: { 200: AgentContextDocs } } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    const docs = await service.contextDocs(workspaceId, req.params.id);
+    if (!docs) throw new NotFoundError('Agent not found');
+    return docs;
+  });
+
+  app.put(
+    '/agents/:id/context-docs',
+    { schema: { params: IdParams, body: ContextDocLinksBody, response: { 200: AgentContextDocs } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const docs = await service.setContextDocs(workspaceId, req.params.id, req.body.docs);
+      if (!docs) throw new NotFoundError('Agent not found');
+      return docs;
     },
   );
 

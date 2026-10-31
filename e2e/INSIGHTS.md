@@ -30,7 +30,19 @@ flows coexist in one folder.
 
 ## Tool & Library Notes
 
-*(nothing yet)*
+### 2026-10-31 — `find … click` on an element below the fold does nothing, yet the step passes
+**Symptom:** flow 08: "expand the Prompt assembly section" ✓, then
+`wait --text "Project context — attached specs (untrusted)"` times out. The
+failure screenshot shows the trace drawer still scrolled to the top.
+**Cause:** CI's viewport is 1280×577 and agent-browser does not scroll before a
+click; the section header sits below Stats, off screen, so the click lands
+nowhere — and the command still exits 0. Locally the window is taller and the
+flow passes.
+**Rule:** a flow that clicks anything below the first screen starts with
+`["set", "viewport", "1280", "2000"]` (or `scrollintoview <css>` before the
+click). Click by `find role button … --name`, so the target must be a real
+`<button>` — a clickable `<div>` is not reachable that way.
+**Where:** `e2e/specs/08-run-trace-project-context.flow.json:5`
 
 ## Recurring Errors & Fixes
 

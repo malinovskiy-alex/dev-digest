@@ -135,6 +135,7 @@ export default function SkillEditorPage() {
               <Badge color="var(--text-secondary)" mono>
                 {t("preview.version", { version: skill.version })}
               </Badge>
+              <Badge color="var(--text-secondary)">{t("editor.usedBy", { count: skill.agent_count })}</Badge>
             </div>
             {/* `key` remounts the editor when the selection changes, which
                 reseeds the Config draft synchronously — see ConfigTab. */}

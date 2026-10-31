@@ -39,6 +39,24 @@ payload the test asserts on)
 
 ## What Doesn't Work
 
+### 2026-10-30 — relaying the user's approval to a subagent does not unlock a denied command
+**Symptom:** `implementer` was told the user approved `npm i -g agent-browser && agent-browser install`; the auto-mode permission classifier still denied it ("Code from External"), and the e2e suite could not run.
+**Cause:** permission decisions are per session and are not granted by a message from the coordinator; a coordinator running the same command itself would be laundering the denial.
+**Rule:** for a global install or any other classifier-denied step, ask the user to run it themselves (`! <command>`) before spawning the agent that needs it.
+**Where:** `e2e/run.ts:54` (needs `agent-browser` on PATH)
+
+### 2026-10-30 — `/run-plan --test-writer` cannot finish an e2e step through `test-writer`
+**Symptom:** plan step 23 (`e2e/specs/08-*.flow.json`) came back blocked from `test-writer`.
+**Cause:** `test-writer`'s hard rules exclude `e2e/`; a launching prompt cannot override them.
+**Rule:** route e2e flow steps to `implementer` (its scope includes `e2e/`), or have the planner assign them there in `## Execution`.
+**Where:** `.claude/agents/test-writer.md:1` (scope), `.claude/skills/run-plan/SKILL.md:87` (tests phase)
+
+### 2026-10-28 — a long `skills:` list in an agent's frontmatter is paid in full on every spawn
+**Symptom:** `implementer` used too many tokens even on small plans.
+**Cause:** `skills:` in a subagent's frontmatter injects every listed `SKILL.md` whole at startup, before the agent has read the plan. `implementer` listed twelve (≈128 KB, ≈30k tokens), most irrelevant to any one plan; telling it to "load before writing" in the body only made it load some of them a second time with `Skill`.
+**Rule:** preload only a skill that nearly every run of that agent needs (here: `onion-architecture`, `frontend-ui-architecture`). Everything else is loaded with the `Skill` tool when a step hits it, so the agent needs `Skill` in `tools:`. Measure before adding: `wc -c .claude/skills/<name>/SKILL.md`.
+**Where:** `.claude/agents/implementer.md:6` (`skills:`); rationale in `.claude/agents/README.md`, *Permissions at a glance*.
+
 ### 2026-09-20 — two agent sessions in ONE checkout: a `git checkout --` and a branch switch both hit the other's work
 **Symptom:** an uncommitted refactor of
 `server/src/modules/settings/feature-models.ts` reverted itself mid-session — a
@@ -141,6 +159,12 @@ work only through tsconfig `paths`, consumed as TypeScript source (tsx/vitest).
 
 ## Tool & Library Notes
 
+### 2026-10-28 — `pnpm -s <script>` is rejected on this machine; use `pnpm run <script>`
+**Symptom:** `error: unexpected argument '-s' found` followed by `Usage: pnpm [OPTIONS] <COMMAND>`, exit non-zero — a wrapper script reports typecheck and `arch` as failed when they pass.
+**Cause:** the `pnpm` on this Windows PATH parses its arguments strictly and has no `-s` / `--silent` shorthand before the script name.
+**Rule:** call package scripts as `pnpm run <script>` (and `npm run <script>`) from any wrapper; quiet the output by filtering it in the wrapper, not with `-s`.
+**Where:** `scripts/verify.mjs:61` (`script`).
+
 ### 2026-09-19 — a hook cannot see an inline `VAR=1 cmd` prefix, but a brand-new `.claude/settings.json` takes effect at once
 **Symptom:** two surprises while wiring the first hook in this repo. A documented
 bypass `PR_SELF_REVIEW_SKIP=1 gh pr create` did nothing, and the hook started
@@ -202,3 +226,5 @@ whole-file diff means you flipped the endings, not that you edited the file.
   G1–G12 plus `pnpm arch`, and blocks `gh pr create` through the first
   `.claude/settings.json` hook in this repo. Severity, verdict and the block rule
   are read from the product's own contracts rather than invented.
+- 2026-10-28 — audited the spec → plan → implement → review chain for token cost. Trimmed agent `skills:` preloads, added `scripts/verify.mjs` (compact, baseline-aware verification shared by all agents), moved `plan-verifier` (gap pass) and `architecture-reviewer` before `test-writer` with an `implementer` fix round resumed via `SendMessage`.
+- 2026-10-30 — L05 via spec-creator → implementation-planner → /run-plan: 6 fix rounds (cap 3, extended by the user), 34 findings, 31 fixed; e2e flow written but not run (agent-browser not installable from an agent).

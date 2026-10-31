@@ -1,6 +1,7 @@
 import type { Container } from '../../platform/container.js';
 import type {
   Agent,
+  AgentContextDocs,
   AgentSkillLink,
   AgentVersion,
   CiFailOn,
@@ -8,7 +9,11 @@ import type {
   Provider,
   ReviewStrategy,
 } from '@devdigest/shared';
-import { AgentsRepository, type SkillLinkInput } from './repository.js';
+import {
+  AgentsRepository,
+  type ContextDocLinkInput,
+  type SkillLinkInput,
+} from './repository.js';
 import { toAgentDto, toAgentVersionDto } from './helpers.js';
 
 /**
@@ -165,6 +170,46 @@ export class AgentsService {
     if (!agent) return undefined;
     await this.repo.setSkills(agentId, entries);
     return this.skillLinks(agentId);
+  }
+
+  /**
+   * The agent's project-context documents: its own attachments (checked and
+   * parked, in order) plus what it inherits through active skills.
+   * `undefined` when the agent is not in this workspace.
+   */
+  async contextDocs(workspaceId: string, agentId: string): Promise<AgentContextDocs | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    return this.readContextDocs(agentId);
+  }
+
+  /** The DTO for an agent already resolved in its workspace — no second lookup. */
+  private async readContextDocs(agentId: string): Promise<AgentContextDocs> {
+    const [attached, inherited] = await Promise.all([
+      this.repo.contextDocLinks(agentId),
+      // Inherited rows come from the skills data layer, which owns
+      // `skill_context_docs` and the active-skill gates (shared with the prompt).
+      this.container.skillsRepo.inheritedContextDocs(agentId),
+    ]);
+    return {
+      attached: attached.map((l) => ({ path: l.path, order: l.order, enabled: l.enabled })),
+      inherited: inherited.map((r) => ({ path: r.path, skill_id: r.skillId, skill_name: r.skillName })),
+    };
+  }
+
+  /**
+   * Replace the agent's document list (replace semantics, last write wins).
+   * Does not bump `agents.version`. `undefined` for a missing/foreign agent.
+   */
+  async setContextDocs(
+    workspaceId: string,
+    agentId: string,
+    entries: ContextDocLinkInput[],
+  ): Promise<AgentContextDocs | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    await this.repo.setContextDocs(agentId, entries);
+    return this.readContextDocs(agentId);
   }
 
   /** Link a single skill (append or set order) — additive to existing links. */

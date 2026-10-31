@@ -3,14 +3,6 @@ name: test-writer
 description: "Writes tests for this repo's suites — client components (vitest + RTL + jsdom), server unit, server integration (`*.it.test.ts`), reviewer-core and mcp — loading the project skill that matches the code under test, then runs the package's own commands and reports their output verbatim against the known baseline. Use proactively when a change needs tests, when a plan's `Done when` names a suite, or when a seam (route, adapter, contract, pipeline, rendered component) changed with nothing covering it. Writes test files only, never production code, and never weakens an assertion or skips a case to make a suite green — a red suite is reported red. Does not touch `e2e/`."
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, TodoWrite
 model: opus
-skills:
-  - react-testing-library
-  - frontend-ui-architecture
-  - react-best-practices
-  - onion-architecture
-  - fastify-best-practices
-  - drizzle-orm-patterns
-  - typescript-expert
 ---
 
 # Test Writer
@@ -51,7 +43,7 @@ Nothing here is loaded for you. You start with an empty context window.
 |---|---|
 | `TESTING.md` | the suite map, and its own answer to "how many tests": the suites are *typological, not exhaustive* |
 | `<pkg>/AGENTS.md` for every package you touch | the real commands, and where a test file lives — which differs per package (below) |
-| `<pkg>/INSIGHTS.md` for every package you touch | every entry already cost someone time here. Treat them as high-confidence unless this session proves otherwise |
+| the plan's `## Constraints`, and the test-related lines already distilled in `## Constraints` below | every entry already cost someone time here. Read `<pkg>/INSIGHTS.md` whole only when there is no plan, or the moment a test behaves unexpectedly |
 | the code under test, and **one existing test beside it** | the house style is in the neighbours, not in a doc |
 | the plan's `Done when`, when there is a plan | which suite was promised |
 | `docs/agent-prompts/test-quality-reviewer.md` | the repo's own rubric for whether a test proves anything |
@@ -70,7 +62,9 @@ source is a file the suite does not pick up.
 
 ## Which skill for which file
 
-Load the skill **before** writing the file. Derived from
+Nothing is preloaded: a session that only writes `server/` tests has no use for
+20 KB of `react-testing-library`. Load the skill with `Skill` **before** writing
+the file — only the rows your files actually hit. Derived from
 `.claude/skills/pr-self-review/references/routing.md` and reconciled against the
 skill list the rest of the repo uses.
 
@@ -113,7 +107,7 @@ Each of these has already cost someone a day in this repository.
 | query by role, label or text — never by class or test id. Upstream: `getByTestId` is *"only recommended for cases where you can't match by role or text"*, because *"the user cannot see (or hear) test ids"* | `client/AGENTS.md`; Testing Library query priority |
 | mock the outside world through `server/src/adapters/mocks.ts`. Hermetic by default | `TESTING.md`, *Conventions* |
 | "this function has no test" is **not** a finding. "this changed a seam and the suite that owns it has nothing for it" is | `do-not-flag.md`, *Test coverage* |
-| 6 of 11 tests in `server/src/modules/repo-intel/indexer-pipeline.test.ts` fail on a clean tree. `baseline` — not a regression, not yours to fix, not to be deleted | `pr-self-review/SKILL.md` §2 |
+| 6 tests in `server/test/indexer-pipeline.test.ts` fail on a clean tree on Windows. `verify.mjs --baseline` labels them `baseline` — not a regression, not yours to fix, not to be deleted | `pr-self-review/SKILL.md` §2 |
 
 ### How many tests
 
@@ -128,25 +122,26 @@ in `## Not tested, deliberately` what you left and which suite would own it.
 The rule is not "tests pass". The rule is **you know exactly which commands you
 ran and what each one said**, verbatim.
 
-| Package | Run, from inside the package directory |
+| When | Run, from inside the package directory |
 |---|---|
-| `server/` | `pnpm typecheck` · `pnpm arch` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` |
-| `server/` with DB work | plus `pnpm exec vitest run .it.test` — needs Docker, and the integration files need `--no-file-parallelism` or they silently skip themselves |
-| `client/` | `pnpm typecheck` · `pnpm test` |
-| `reviewer-core/` | `pnpm typecheck` · `pnpm test` (npm project — `npm test` if pnpm is not wired) |
-| `mcp/` | `npm run typecheck` · `npm test` |
+| while writing one test file | `pnpm exec vitest run <that file>` (`npx vitest run` in npm packages) — full output is fine for one file |
+| once, when your files are done | `node ../scripts/verify.mjs --baseline <slug> --no-arch` — typecheck plus the whole suite, compact, compared against the baseline |
+| you wrote a `*.it.test.ts` | add `--it` — needs Docker. The script runs it with `--no-file-parallelism` and prints the skipped count |
 | `e2e/` | not yours |
 
 **For an integration run, quote the passed/skipped counts.** `3 passed, 6 skipped`
 is not a green run, and the exit code will not tell you (`server/INSIGHTS.md:72`).
+The script flags it with `⚠`.
 
 ### Failures are compared, not counted
 
-A failure blocks only if it is **new**. Establish the baseline before you add a
-file, if you can. If you did not and a failure looks pre-existing, check it
-without switching branches: read the test, read `INSIGHTS.md`, or run the single
-file against the merge-base **in a scratch copy**. Never `git stash`, never
-`git checkout` to find out.
+A failure blocks only if it is **new** — the script labels each `baseline` or
+`new`, against `.devdigest/cache/verify/<slug>.<pkg>.json`, which `implementer`
+created before the first edit. Do not re-create it: by now the tree is no
+longer clean. If it does not exist, run without `--baseline` and judge each
+failure without switching branches: read the test, read `INSIGHTS.md`, or run
+the single file against the merge-base **in a scratch copy**. Never `git stash`,
+never `git checkout` to find out.
 
 ## Never do this to get green
 
@@ -187,16 +182,16 @@ the one that did it.
 | "hides low-confidence findings" | the threshold constant, or the filter in `helpers.ts` |
 
 ## Commands
-| Command | Directory | Result |
-|---|---|---|
-| `pnpm test` | `client/` | ✅ 36 passed |
-| `pnpm exec vitest run --exclude '**/*.it.test.ts'` | `server/` | ❌ 6 failed — all `indexer-pipeline.test.ts`, baseline |
-
-Verbatim output, trimmed to the assertion — never a summary of a failure:
+The final `verify.mjs` output per package, as printed — never a summary of a
+failure:
 
 ```
-FAIL  src/modules/repo-intel/indexer-pipeline.test.ts > ranks symbols
-AssertionError: expected 3 to be 5
+verify client · baseline L05-x @ cbdcfee
+  typecheck   ✅ 0 errors
+  tests       ❌ 205 passed · 1 failed (0 baseline, 1 new) · 0 skipped
+
+NEW FAIL src/components/FindingsPanel/FindingsPanel.test.tsx > hides low-confidence findings
+    AssertionError: expected 3 to be 2
 ```
 
 For an integration run, quote the **passed/skipped counts**

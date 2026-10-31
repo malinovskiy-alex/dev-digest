@@ -87,6 +87,18 @@ export const RunTrace = z.object({
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
   specs_read: z.array(z.string()),
+  /** Attached project-context docs that did not reach the prompt, with why. Absent on old traces. */
+  specs_skipped: z
+    .array(
+      z.object({
+        path: z.string(),
+        // 'budget': the section's total size cap was reached (R-73).
+        reason: z.enum(['not_found', 'not_cloned', 'read_error', 'budget']),
+      }),
+    )
+    .optional(),
+  /** Paths of project-context docs that were cut to the prompt limit. Absent on old traces. */
+  specs_truncated: z.array(z.string()).optional(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;

@@ -1,6 +1,7 @@
 import type { Container } from '../../platform/container.js';
 import type {
   Skill,
+  SkillContextDocs,
   SkillImportPreview,
   SkillType,
   SkillVersion,
@@ -9,7 +10,11 @@ import { AppError } from '../../platform/errors.js';
 import { IMPORT_SOURCE } from './constants.js';
 import { toSkillDto, toSkillVersionDto } from './helpers.js';
 import { parseUpload, type ImportUpload } from './import-parse.js';
-import { SkillsRepository, type PromptSkill } from './repository.js';
+import {
+  SkillsRepository,
+  type PromptSkill,
+  type SkillContextDocLinkInput,
+} from './repository.js';
 
 /**
  * A1 — skills service. CRUD over the workspace's skill library, the body
@@ -222,5 +227,33 @@ export class SkillsService {
    */
   async promptBodiesForAgent(agentId: string): Promise<PromptSkill[]> {
     return this.repo.promptBodiesForAgent(agentId);
+  }
+
+  /** The skill's project-context attachments; `undefined` when not in this workspace. */
+  async contextDocs(workspaceId: string, skillId: string): Promise<SkillContextDocs | undefined> {
+    const skill = await this.repo.getById(workspaceId, skillId);
+    if (!skill) return undefined;
+    return this.readContextDocs(skillId);
+  }
+
+  /** The DTO for a skill already resolved in its workspace — no second lookup. */
+  private async readContextDocs(skillId: string): Promise<SkillContextDocs> {
+    const links = await this.repo.contextDocLinks(skillId);
+    return { attached: links.map((l) => ({ path: l.path, order: l.order, enabled: l.enabled })) };
+  }
+
+  /**
+   * Replace the skill's document list (replace semantics, last write wins).
+   * Does not version the skill. `undefined` for a missing/foreign skill.
+   */
+  async setContextDocs(
+    workspaceId: string,
+    skillId: string,
+    entries: SkillContextDocLinkInput[],
+  ): Promise<SkillContextDocs | undefined> {
+    const skill = await this.repo.getById(workspaceId, skillId);
+    if (!skill) return undefined;
+    await this.repo.setContextDocs(skillId, entries);
+    return this.readContextDocs(skillId);
   }
 }

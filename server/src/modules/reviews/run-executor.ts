@@ -227,6 +227,35 @@ export class ReviewRunExecutor {
         runLog.info(`skills: ${skills.length} block(s), ${chars} chars added to the prompt`);
       }
 
+      // L05 — project-context documents. The set is fixed HERE, once per agent
+      // (D-13): the agent's own checked docs, then each active skill's checked
+      // docs, deduped, read from git objects at the clone's HEAD. Untrusted
+      // DATA — reviewer-core wraps each in its own `<untrusted source="<path>">`.
+      // A doc that cannot be used is skipped with its reason; the review goes
+      // on (R-50, R-51). A DB error on the refs fails the run, like the skills
+      // read above.
+      // The skills half comes from the skills repository, through the same
+      // active-skill gates as `promptBodiesForAgent` above (db/skill-gates.ts).
+      const [agentDocPaths, skillDocGroups] = await Promise.all([
+        this.container.agentsRepo.enabledContextDocPaths(agent.id),
+        this.container.skillsRepo.promptContextDocsForAgent(agent.id),
+      ]);
+      const context = await this.container.projectContext.resolveForPrompt(
+        { owner: repo.owner, name: repo.name, clonePath: repo.clonePath },
+        { agent: agentDocPaths, skills: skillDocGroups },
+      );
+      for (const d of context.docs) {
+        runLog.info(
+          `context doc: ${d.path} (${d.chars} chars${d.truncated ? ', truncated to 32000' : ''}) → prompt`,
+        );
+      }
+      for (const s of context.skipped) runLog.info(`context doc skipped: ${s.path} — ${s.reason}`);
+      if (context.docs.length > 0) {
+        const chars = context.docs.reduce((n, d) => n + d.text.length, 0);
+        runLog.info(`project context: ${context.docs.length} document(s), ${chars} chars added to the prompt`);
+      }
+      const specsTruncated = context.docs.filter((d) => d.truncated).map((d) => d.path);
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -251,6 +280,11 @@ export class ReviewRunExecutor {
         // arm of the lesson's control experiment — not passing `[]` keeps it
         // exact rather than merely equivalent.
         ...(skills.length ? { skills: skills.map((s) => s.body) } : {}),
+        // L05 — project-context docs, labelled by path. Same omit-when-empty
+        // contract: no docs → no `## Project context`, byte-identical prompt (R-49).
+        ...(context.docs.length
+          ? { specs: context.docs.map((d) => ({ label: d.path, text: d.text })) }
+          : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -351,7 +385,10 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        // L05 — the docs that reached the prompt, in prompt order (R-54).
+        specs_read: context.docs.map((d) => d.path),
+        ...(context.skipped.length ? { specs_skipped: context.skipped } : {}),
+        ...(specsTruncated.length ? { specs_truncated: specsTruncated } : {}),
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),

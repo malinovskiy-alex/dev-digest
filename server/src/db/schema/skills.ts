@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey, check } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { now } from './_shared';
 import { workspaces } from './core';
 
@@ -34,4 +35,23 @@ export const skillVersions = pgTable(
     createdAt: now(),
   },
   (t) => ({ pk: primaryKey({ columns: [t.skillId, t.version] }) }),
+);
+
+// A project-context document (a repo-relative `.md` path) attached to a skill.
+// Every agent with the skill active inherits it. Same row model as
+// `agent_context_docs`.
+export const skillContextDocs = pgTable(
+  'skill_context_docs',
+  {
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => skills.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    order: integer('order').notNull().default(0),
+    enabled: boolean('enabled').notNull().default(true),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.skillId, t.path] }),
+    pathLength: check('skill_context_docs_path_length', sql`char_length(${t.path}) between 1 and 1024`),
+  }),
 );

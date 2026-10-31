@@ -1,4 +1,6 @@
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { union } from 'drizzle-orm/pg-core';
+import { activeSkillOnAgent } from '../../db/skill-gates.js';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
@@ -52,6 +54,19 @@ export interface LinkedSkillRow {
 /** One row of the agent's skill list as the editor posts it back: position + flag. */
 export interface SkillLinkInput {
   skillId: string;
+  enabled: boolean;
+}
+
+/** A stored project-context attachment (agent or skill side): position + flag. */
+export interface ContextDocLinkRow {
+  path: string;
+  order: number;
+  enabled: boolean;
+}
+
+/** One row of a document list as the editor posts it back. */
+export interface ContextDocLinkInput {
+  path: string;
   enabled: boolean;
 }
 
@@ -303,6 +318,94 @@ export class AgentsRepository {
           );
       }
     });
+  }
+
+  // ---------------------------------------------------------- project context
+
+  /** The agent's own document attachments, in stored order (checked and parked alike). */
+  async contextDocLinks(agentId: string): Promise<ContextDocLinkRow[]> {
+    return this.db
+      .select({
+        path: t.agentContextDocs.path,
+        order: t.agentContextDocs.order,
+        enabled: t.agentContextDocs.enabled,
+      })
+      .from(t.agentContextDocs)
+      .where(eq(t.agentContextDocs.agentId, agentId))
+      .orderBy(asc(t.agentContextDocs.order), asc(t.agentContextDocs.path));
+  }
+
+  /**
+   * Replace the agent's whole document list with `entries`, order = index.
+   * Same contract as `setSkills`: an unchanged list writes nothing, and the
+   * delete + insert are one transaction. Never touches `agents.version` —
+   * attachments are not part of the versioned config. Last write wins.
+   */
+  async setContextDocs(agentId: string, entries: ContextDocLinkInput[]): Promise<void> {
+    const current = await this.contextDocLinks(agentId);
+    const unchanged =
+      current.length === entries.length &&
+      current.every((link, i) => link.path === entries[i]!.path && link.enabled === entries[i]!.enabled);
+    if (unchanged) return;
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.agentContextDocs).where(eq(t.agentContextDocs.agentId, agentId));
+      if (entries.length > 0) {
+        await tx
+          .insert(t.agentContextDocs)
+          .values(entries.map((e, i) => ({ agentId, path: e.path, order: i, enabled: e.enabled })));
+      }
+    });
+  }
+
+  /**
+   * The agent's OWN checked documents, in order — the first half of its
+   * `## Project context`. What it inherits through skills is read by the
+   * skills repository (`promptContextDocsForAgent`), which owns that table
+   * and the active-skill gates.
+   */
+  async enabledContextDocPaths(agentId: string): Promise<string[]> {
+    const links = await this.contextDocLinks(agentId);
+    return links.filter((l) => l.enabled).map((l) => l.path);
+  }
+
+  /**
+   * "Used by N" per document path, for one workspace, in ONE grouped query:
+   * the agents that have the path checked directly, UNION the agents that get
+   * it through an active skill. UNION (not ALL) dedups the (agent, path)
+   * pairs, so an agent that has a doc both ways counts once.
+   * `agents.enabled` is deliberately not filtered.
+   *
+   * The via-skill half reads `skill_context_docs` here rather than in the
+   * skills repository because the count has to be one UNION over both halves
+   * (a query builder must not cross a repository boundary). Its gates are the
+   * shared `activeSkillOnAgent()`, so they cannot drift from the prompt read.
+   */
+  async contextDocUsage(workspaceId: string): Promise<Map<string, number>> {
+    const direct = this.db
+      .select({ agentId: t.agentContextDocs.agentId, path: t.agentContextDocs.path })
+      .from(t.agentContextDocs)
+      .innerJoin(t.agents, eq(t.agentContextDocs.agentId, t.agents.id))
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agentContextDocs.enabled, true)));
+    const viaSkill = this.db
+      .select({ agentId: t.agentSkills.agentId, path: t.skillContextDocs.path })
+      .from(t.agentSkills)
+      .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .innerJoin(t.skillContextDocs, eq(t.skillContextDocs.skillId, t.skills.id))
+      .where(
+        and(
+          eq(t.agents.workspaceId, workspaceId),
+          activeSkillOnAgent(),
+          eq(t.skillContextDocs.enabled, true),
+        ),
+      );
+    const pairs = union(direct, viaSkill).as('pairs');
+    const rows = await this.db
+      .select({ path: pairs.path, n: count() })
+      .from(pairs)
+      .groupBy(pairs.path);
+    return new Map(rows.map((r) => [r.path, r.n]));
   }
 
 }

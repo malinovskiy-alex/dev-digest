@@ -24,4 +24,6 @@ export const TABS: readonly EditorTab[] = [
   { key: "config", labelKey: "editor.tabs.config", icon: "Settings" },
   { key: "preview", labelKey: "editor.tabs.preview", icon: "FileText" },
   { key: "versions", labelKey: "editor.tabs.versions", icon: "GitBranch" },
+  // L05 — project-context documents every agent with this skill inherits.
+  { key: "context", labelKey: "editor.tabs.context", icon: "FileText" },
 ];

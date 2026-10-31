@@ -205,6 +205,14 @@ export interface GitCommit {
   date: string;
 }
 
+/** One regular file (blob) of a commit's tree. */
+export interface GitTreeFile {
+  /** Repo-relative POSIX path. */
+  path: string;
+  /** Blob size in bytes. */
+  size: number;
+}
+
 export interface GitClient {
   clone(repo: RepoRef, url: string, opts?: CloneOptions): Promise<{ path: string }>;
   fetchPullHead(repo: RepoRef, n: number): Promise<void>;
@@ -234,6 +242,12 @@ export interface GitClient {
    * normalized repo-relative path; rejects when the file does not exist there.
    */
   readFileAt(repo: RepoRef, sha: string, path: string): Promise<string>;
+  /**
+   * Every regular file of the tree at `sha` (`git ls-tree -r -l -z`), with POSIX
+   * paths. Symlinks and submodules are left out, so a listed path read through
+   * `readFileAt` is always the blob itself, never what a link points at.
+   */
+  listFilesAt(repo: RepoRef, sha: string): Promise<GitTreeFile[]>;
   clonePathFor(repo: RepoRef): string;
 }
 

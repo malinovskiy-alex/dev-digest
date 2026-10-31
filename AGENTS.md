@@ -78,6 +78,10 @@ client → `next-best-practices`, `react-best-practices`, `react-testing-library
 anywhere → `zod`, `typescript-expert`, `security`. docs → `mermaid-diagram`.
 end of a substantive task → `engineering-insights`, which files what you learned
 into the right `INSIGHTS.md`.
+an approved plan, to the pre-PR gate → `/run-plan <plan>` (user-invoked), which
+runs `implementer`, then loops `architecture-reviewer` + `plan-verifier` → fix
+until nothing blocking is open. `spec-creator` and `implementation-planner` are
+run by hand before it.
 before you open a pull request → `pr-self-review`, which reviews every open
 change and refuses to open the PR while a CRITICAL stands.
 
@@ -87,7 +91,12 @@ Delegate when the work does not need this conversation's context. Roster,
 permissions and the handoff rules → [.claude/agents/README.md](.claude/agents/README.md).
 
 a fact has to be looked up and cited → `researcher`, which writes nothing.
-something does not exist yet → `planner`, which writes the plan to `specs/` and
+a feature is described but has no requirements → `spec-creator`, which writes
+EARS requirements to `<pkg>/specs/<slug>.requirements.md` (top-level `specs/` when
+the feature spans several packages), analyses the design sources you give it for
+gaps, asks the blocking questions first and leaves the rest in the file.
+requirements exist → `implementation-planner`, which checks them, asks what is unclear,
+recommends improvements, asks multi- vs single-agent, writes the plan to `specs/` and
 names the skills the implementation will use.
 the plan exists → `implementer`, which executes it and runs the package's own
 tests. It does not review its own architecture or security, and it never commits,
@@ -121,7 +130,10 @@ everywhere else.
 
 **Before you touch a package**, read its `INSIGHTS.md`. Treat what is there as
 high-confidence guidance unless this session proves otherwise — every entry is
-something that already cost someone time here.
+something that already cost someone time here. One exception: an agent executing
+a plan from `specs/` reads the plan's `## Constraints` (the planner already
+extracted the binding entries with `file:line`) and opens `INSIGHTS.md` whole only
+when something behaves unexpectedly.
 
 **When a task ends, run `/engineering-insights`.** It appends what this session
 learned to the `INSIGHTS.md` of the package you touched. Skip it only when the

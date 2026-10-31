@@ -19,6 +19,8 @@ import { Row, Stat } from "../atoms";
 export function TraceBody({ trace, findings }: { trace: RunTrace; findings: FindingRecord[] }) {
   const t = useTranslations("runs");
   const stats = trace.stats;
+  // L05 — paths cut to the prompt limit; absent on traces older than L05.
+  const truncated = new Set(trace.specs_truncated ?? []);
   return (
     <>
       <TraceSection icon="Settings" title={t("trace.configuration")}>
@@ -44,11 +46,26 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
                 trace.specs_read.map((sp, i) => (
                   <span key={i} className="mono" style={s.spec}>
                     {sp}
+                    {truncated.has(sp) && <span style={s.specTruncated}>{t("trace.config.truncated")}</span>}
                   </span>
                 ))
               )}
             </div>
           </Row>
+          {/* L05 — attached docs that did not reach the prompt, with why. Old
+              traces have no `specs_skipped`, so the row simply is not there. */}
+          {trace.specs_skipped && trace.specs_skipped.length > 0 && (
+            <Row label={t("trace.config.specsSkipped")}>
+              <div style={s.skippedList}>
+                {trace.specs_skipped.map((sk) => (
+                  <span key={sk.path} className="mono" style={s.spec}>
+                    {sk.path}
+                    <span style={s.skippedReason}>{t(`trace.config.skipReason.${sk.reason}`)}</span>
+                  </span>
+                ))}
+              </div>
+            </Row>
+          )}
         </div>
       </TraceSection>
 

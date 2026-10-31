@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { SkillType } from '@devdigest/shared';
+import { SkillContextDocs, SkillType } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
+import { ContextDocLinksBody } from '../_shared/context-docs/helpers.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { SkillsService } from './service.js';
 
@@ -15,6 +16,8 @@ import { SkillsService } from './service.js';
  *   PUT    /skills/:id              → partial update (a changed body versions)
  *   DELETE /skills/:id              → delete, reporting the agents that lost it
  *   GET    /skills/:id/versions     → body history (newest first)
+ *   GET    /skills/:id/context-docs → attached project-context docs (ordered)
+ *   PUT    /skills/:id/context-docs → replace the attached list (no version bump)
  *   POST   /skills/import/preview   → parse an upload; writes NOTHING
  *   POST   /skills/import           → persist a previewed upload (disabled, D6)
  *
@@ -147,6 +150,24 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
     if (!versions) throw new NotFoundError('Skill not found');
     return versions;
   });
+
+  app.get('/skills/:id/context-docs', { schema: { params: IdParams, response: { 200: SkillContextDocs } } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    const docs = await service.contextDocs(workspaceId, req.params.id);
+    if (!docs) throw new NotFoundError('Skill not found');
+    return docs;
+  });
+
+  app.put(
+    '/skills/:id/context-docs',
+    { schema: { params: IdParams, body: ContextDocLinksBody, response: { 200: SkillContextDocs } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const docs = await service.setContextDocs(workspaceId, req.params.id, req.body.docs);
+      if (!docs) throw new NotFoundError('Skill not found');
+      return docs;
+    },
+  );
 
   /** Parse only. Writes nothing — not even for a valid upload. */
   app.post(
