@@ -138,6 +138,12 @@ export interface IndexedFileRow {
   importers: number;
 }
 
+/** One import edge: `from` imports `to` (`file_edges`). */
+export interface ImportEdgeRow {
+  from: string;
+  to: string;
+}
+
 /** One HTTP endpoint the indexer found in a file (`file_facts.endpoints`). */
 export interface EndpointRow {
   file: string;
@@ -198,4 +204,6 @@ export interface RepoIntel {
   countIndexedFiles(repoId: string): Promise<number>;
   /** Every `(file, endpoint)` from `file_facts`, file ASC then endpoint ASC, de-duplicated. */
   getEndpoints(repoId: string): Promise<EndpointRow[]>;
+  /** The import edges whose target is one of `paths` — "who imports these files?". */
+  getImporters(repoId: string, paths: string[]): Promise<ImportEdgeRow[]>;
 }

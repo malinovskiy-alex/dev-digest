@@ -36,8 +36,16 @@ export const MIN_MODEL_TASKS = 3;
 export const MAX_TASKS = 5;
 
 // ---- The one model call (AC-21, AC-71, AC-83) ----
-/** Output token cap of the single call (AC-83). */
-export const OUTPUT_MAX_TOKENS = 4_000;
+/**
+ * Output token cap of the single call (AC-83). It covers the model's hidden
+ * reasoning tokens as well as the JSON answer: on the default OpenRouter model
+ * (`deepseek/deepseek-v4-flash`) reasoning alone took 2,600–4,000+ tokens for
+ * `sindresorhus/ky`, so at 4,000 the answer was cut mid-string
+ * (`finish_reason: length`) and failed as invalid output (F-37). The answer
+ * itself is ~1,400 tokens; 10,000 leaves room for both and still finishes well
+ * inside the 120 s wall at the observed ~110 tokens/s.
+ */
+export const OUTPUT_MAX_TOKENS = 10_000;
 /** Wall-clock cap around the call (AC-71, D-21). */
 export const GENERATION_TIMEOUT_MS = 120_000;
 /** Deterministic sampling. */
@@ -74,6 +82,10 @@ export const FACTS_CACHE_ENTRIES = 20;
 export const FAILURE_MESSAGE_MAX = 300;
 /** The stored envelope's version (D-4). */
 export const STORED_TOUR_VERSION = 1;
+/** Raw model output logged on a failed generation, in chars (F-37). */
+export const RAW_EXCERPT_LOG_MAX = 300;
+/** zod issues logged on a failed generation (F-37). */
+export const ZOD_ISSUES_LOG_MAX = 10;
 /** The exact failure text for a schema-invalid answer (AC-72). */
 export const INVALID_OUTPUT_MESSAGE = 'the model returned invalid output';
 /** The failure text when the job runner failed before the handler ran (F-35). */
@@ -181,6 +193,12 @@ export const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
 
 /** Test-file basename, for the missing-tests rule (D-16). */
 export const TEST_FILE_PATTERN = /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/;
+
+/**
+ * A directory segment that marks every file under it as a test file — `ky`
+ * keeps its tests in `test/*.ts` with no `.test.` in the name (F-39).
+ */
+export const TEST_DIR_SEGMENTS: ReadonlySet<string> = new Set(['test', 'tests', '__tests__', 'spec', 'specs']);
 
 /**
  * A TODO/FIXME/HACK marker inside a comment (D-15). A `#` comment needs a line

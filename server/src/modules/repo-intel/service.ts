@@ -34,6 +34,7 @@ import type {
   BlastChangedSymbol,
   BlastResult,
   EndpointRow,
+  ImportEdgeRow,
   FileRankRow,
   IndexedFileRow,
   IndexResult,
@@ -717,6 +718,16 @@ export class RepoIntelService implements RepoIntel {
   async countIndexedFiles(repoId: string): Promise<number> {
     if (!this.container.config.repoIntelEnabled) return 0;
     return this.repo.countIndexedFiles(repoId);
+  }
+
+  /**
+   * The import edges whose target is one of `paths` (onboarding: which test
+   * files import a file, F-39). `[]` when the flag is off or `paths` is empty.
+   */
+  async getImporters(repoId: string, paths: string[]): Promise<ImportEdgeRow[]> {
+    if (!this.container.config.repoIntelEnabled || paths.length === 0) return [];
+    const rows = await this.repo.getEdgesTo(repoId, paths);
+    return rows.map((r) => ({ from: r.fromFile, to: r.toFile }));
   }
 
   /**

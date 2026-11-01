@@ -1,7 +1,8 @@
 /* CopyControl — copies a string to the clipboard. On success "Copied" shows
    for 2 s in a live region (AC-76); when the clipboard is unavailable a
    read-only field with the text, selected on focus, and "Copy it manually"
-   take its place (AC-77). */
+   take its place (AC-77). With a label it is an outlined button (the header's
+   "Share link", design D-6); without one, a quiet icon button (D-13). */
 "use client";
 
 import React from "react";
@@ -15,14 +16,18 @@ export function CopyControl({
   text,
   label,
   ariaLabel,
+  icon = "Copy",
 }: {
   text: string;
   /** Visible button text; icon-only when absent. */
   label?: string;
   ariaLabel: string;
+  /** The leading `@devdigest/ui` icon. */
+  icon?: keyof typeof Icon;
 }): React.JSX.Element {
   const t = useTranslations("onboarding");
   const [state, setState] = React.useState<"idle" | "copied" | "failed">("idle");
+  const ButtonIcon = Icon[icon];
 
   // Clears the "Copied" confirmation after COPIED_MS — a timer, cleaned up.
   React.useEffect(() => {
@@ -37,8 +42,13 @@ export function CopyControl({
 
   return (
     <span className={cx.wrap}>
-      <button type="button" className={cx.button} aria-label={ariaLabel} onClick={() => void onCopy()}>
-        <Icon.Copy size={12} />
+      <button
+        type="button"
+        className={label ? cx.button : cx.iconButton}
+        aria-label={ariaLabel}
+        onClick={() => void onCopy()}
+      >
+        <ButtonIcon size={label ? 16 : 15} aria-hidden="true" />
         {label}
       </button>
       <span role="status" className={cx.copied}>

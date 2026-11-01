@@ -31,6 +31,8 @@ import {
   MAX_TASKS,
   MIN_MODEL_TASKS,
   ONE_LINE_MAX,
+  RAW_EXCERPT_LOG_MAX,
+  ZOD_ISSUES_LOG_MAX,
 } from '../constants.js';
 import { oneLine, type DerivedCommand, type TaskCandidate } from '../facts/helpers.js';
 
@@ -360,7 +362,8 @@ function scrubPlain(text: string, known: ReadonlySet<string>): string {
 }
 
 /**
- * Scrub model prose (D-26): a path-like code span not in K is removed; a link
+ * Scrub model prose (D-26): a path-like code span not in K is removed, and
+ * so is a "()" it leaves empty (F-43); a link
  * whose href is external or unknown becomes its text; a link reference
  * definition is escaped (`\[`, insertion only); a bare URL, `www.`, email or
  * `<scheme:…>` autolink becomes code;
@@ -382,7 +385,16 @@ export function scrubProse(prose: string, known: ReadonlySet<string>): string {
       if (!(looksLikePath(inner) && !known.has(inner) && !known.has(inner.replace(/^\.\//, '')))) {
         out += span;
       } else {
-        out = out.replace(/[ \t]+$/, ''); // no double space where the span was
+        // An unknown path is removed (AC-61), with no double space where it
+        // was. When it was the only thing inside parentheses, the emptied
+        // "()" goes too — the prose read "server () providing" (F-43).
+        out = out.replace(/[ \t]+$/, '');
+        const closing = /^[ \t]*\)/.exec(prose.slice(start + span.length));
+        if (out.endsWith('(') && closing) {
+          out = out.slice(0, -1).replace(/[ \t]+$/, '');
+          at = start + span.length + closing[0].length;
+          continue;
+        }
       }
     }
     at = start + span.length;
@@ -409,4 +421,52 @@ export function classifyGenerationError(err: unknown): { code: TourFailureCode; 
     return { code: 'invalid_output', message: INVALID_OUTPUT_MESSAGE };
   }
   return { code: 'provider_error', message: oneLine(message, FAILURE_MESSAGE_MAX) || 'unknown error' };
+}
+
+/** What the server logs about a failed generation (F-37). Nothing of it is stored. */
+export interface GenerationFailureLog {
+  code: TourFailureCode;
+  /** The error's own message, one line, ≤ 300 chars — not the fixed UI text. */
+  error: string;
+  errorName: string | null;
+  /** The provider's `finish_reason` (`length` = the output cap cut the answer). */
+  finishReason?: string;
+  /** zod issue paths + messages, at most `ZOD_ISSUES_LOG_MAX`. */
+  issues?: string[];
+  /** The first `RAW_EXCERPT_LOG_MAX` chars of the raw model output. */
+  rawExcerpt?: string;
+}
+
+/**
+ * The log record of a failed generation. The adapters today throw a plain
+ * `Error` with only a message; `finishReason`, `issues` (zod issues or a
+ * string) and `raw` are duck-typed off the error so they are logged the moment
+ * an adapter attaches them. A raw excerpt is model output, never a secret.
+ */
+export function generationFailureLog(err: unknown): GenerationFailureLog {
+  const e = (err ?? {}) as {
+    name?: unknown;
+    message?: unknown;
+    finishReason?: unknown;
+    issues?: unknown;
+    raw?: unknown;
+  };
+  const message = typeof e.message === 'string' ? e.message : String(err);
+  const out: GenerationFailureLog = {
+    code: classifyGenerationError(err).code,
+    error: oneLine(message, FAILURE_MESSAGE_MAX),
+    errorName: typeof e.name === 'string' ? e.name : null,
+  };
+  if (typeof e.finishReason === 'string') out.finishReason = e.finishReason;
+  if (Array.isArray(e.issues)) {
+    out.issues = e.issues.slice(0, ZOD_ISSUES_LOG_MAX).map((i) => {
+      const issue = (i ?? {}) as { path?: unknown; message?: unknown };
+      const path = Array.isArray(issue.path) ? issue.path.join('.') : '';
+      return oneLine(`${path || '(root)'}: ${typeof issue.message === 'string' ? issue.message : String(i)}`, ONE_LINE_MAX);
+    });
+  } else if (typeof e.issues === 'string') {
+    out.issues = e.issues.split(/\r?\n/).filter(Boolean).slice(0, ZOD_ISSUES_LOG_MAX).map((l) => oneLine(l, ONE_LINE_MAX));
+  }
+  if (typeof e.raw === 'string') out.rawExcerpt = oneLine(e.raw, RAW_EXCERPT_LOG_MAX);
+  return out;
 }

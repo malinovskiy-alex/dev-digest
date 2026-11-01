@@ -77,7 +77,7 @@ import {
   type TaskCandidate,
   type TourFacts,
 } from './facts/helpers.js';
-import { classifyGenerationError } from './grounding/helpers.js';
+import { classifyGenerationError, generationFailureLog } from './grounding/helpers.js';
 import {
   coveragePartial,
   deriveStatus,
@@ -115,12 +115,19 @@ export interface IndexFacade {
   getEndpoints(repoId: string): Promise<Array<{ file: string; endpoint: string }>>;
   getTopFilesByRank(repoId: string, n: number): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+  /** The import edges whose target is one of `paths` (missing-tests, F-39). */
+  getImporters(repoId: string, paths: string[]): Promise<Array<{ from: string; to: string }>>;
 }
 
 /** The background job queue (structurally `JobRunner`). */
 export interface JobQueue {
   register(kind: string, handler: (payload: unknown) => Promise<void>): void;
   enqueue(workspaceId: string, kind: string, payload: unknown): Promise<{ id: string; done: Promise<void> }>;
+}
+
+/** Where a failed generation's cause is logged (structurally pino's logger). */
+export interface TourLogger {
+  warn(obj: object, msg?: string): void;
 }
 
 /** Payload of a tour generation job. */
@@ -147,6 +154,8 @@ export interface OnboardingServiceDeps {
   now?: () => Date;
   /** Overrides the 120 s wall around the model call (tests). */
   generationTimeoutMs?: number;
+  /** Logs why a generation failed — server only, never stored (F-37). */
+  log?: TourLogger;
 }
 
 type Failure = NonNullable<TourGeneration['failure']>;
@@ -401,6 +410,8 @@ export class OnboardingService {
    */
   private async run(workspaceId: string, s: StartedGeneration): Promise<void> {
     const { repo, choice, llm } = s;
+    /** Set once the request is built, for the failure log (F-37). */
+    let call: { promptChars: number; trimmed: boolean; startedAt: number } | null = null;
     try {
       // Read now, not at POST: the job may have waited in the shared queue
       // while the index refreshed, and the revision, rows and coverage stored
@@ -412,6 +423,8 @@ export class OnboardingService {
       const { text, trimmed } = fitBudget(renderFactBlocks(facts, candidates));
       const system = await renderPrompt(TOUR_PROMPT_FILE, { language: TOUR_LANGUAGE });
       const timeoutMs = this.deps.generationTimeoutMs ?? GENERATION_TIMEOUT_MS;
+      const user = buildUserMessage(repo.fullName, text);
+      call = { promptChars: system.length + user.length, trimmed, startedAt: Date.now() };
 
       // The one model call of a generation (AC-21, AC-83, INV-4). The outer
       // wall is needed because not every adapter honours `timeoutMs` (D-21).
@@ -426,7 +439,7 @@ export class OnboardingService {
           maxRetries: GENERATION_MAX_RETRIES,
           messages: [
             { role: 'system', content: system },
-            { role: 'user', content: buildUserMessage(repo.fullName, text) },
+            { role: 'user', content: user },
           ],
         }),
         timeoutMs,
@@ -456,6 +469,21 @@ export class OnboardingService {
         provider: choice.provider,
         at: this.now().toISOString(),
       });
+      // The page shows only the fixed failure text; the cause goes to the
+      // server log (no key, no prompt — only sizes and model output, F-37).
+      this.deps.log?.warn(
+        {
+          repoId: repo.id,
+          provider: choice.provider,
+          model: choice.model,
+          maxTokens: OUTPUT_MAX_TOKENS,
+          ...(call
+            ? { promptChars: call.promptChars, trimmed: call.trimmed, elapsedMs: Date.now() - call.startedAt }
+            : { stage: 'facts' }),
+          ...generationFailureLog(err),
+        },
+        'onboarding tour generation failed',
+      );
     }
   }
 
@@ -528,6 +556,15 @@ export class OnboardingService {
     const readingPaths = topPaths.slice(0, READING_PATH_SIZE);
     const scanPaths = topPaths.slice(0, TODO_SCAN_FILES);
     const indexedPaths = indexed.map((f) => f.path);
+    // Who imports each scanned file — a test importing it covers it (F-39). A
+    // failed read leaves the fact out: only the test-name rule applies then.
+    const importers = await (async () => {
+      try {
+        return await this.deps.repoIntel.getImporters(repo.id, scanPaths);
+      } catch {
+        return [];
+      }
+    })();
 
     /** The whole blob, at most `READ_MAX_BYTES`; each use site cuts its own excerpt. */
     const read = async (path: string): Promise<string | null> => {
@@ -564,7 +601,7 @@ export class OnboardingService {
 
     const fileCandidates: TaskCandidate[] = [
       ...scanPaths.flatMap((p, i) => (scanTexts[i] != null ? scanTodos(p, scanTexts[i]!) : [])),
-      ...missingTestCandidates(scanPaths, treePaths),
+      ...missingTestCandidates(scanPaths, treePaths, importers),
     ];
 
     const facts: TourFacts = {

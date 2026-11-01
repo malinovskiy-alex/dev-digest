@@ -38,6 +38,8 @@ export default async function onboardingRoutes(appBase: FastifyInstance) {
     llm: (provider) => c.llm(provider),
     hasLlmKey: (provider) => c.hasLlmKey(provider),
     jobs: c.jobs,
+    // The app logger, not `req.log`: a generation outlives its request (F-37).
+    log: app.log,
   });
 
   app.get('/repos/:id/tour', { schema: { params: IdParams } }, async (req) => {

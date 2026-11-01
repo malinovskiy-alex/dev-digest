@@ -31,6 +31,7 @@ import {
   README_PATTERN,
   SAFE_DIR_SEGMENT,
   SCRIPT_ALLOW_LIST,
+  TEST_DIR_SEGMENTS,
   TEST_FILE_PATTERN,
   TODO_PATTERN,
   TODO_TEXT_MAX,
@@ -470,20 +471,35 @@ export function scanTodos(path: string, text: string): TaskCandidate[] {
   return out;
 }
 
+/** A test file: a `*.test.*` / `*.spec.*` basename, or under a test directory (F-39). */
+export function isTestPath(path: string): boolean {
+  const segments = path.split('/');
+  const name = segments.pop() ?? '';
+  return TEST_FILE_PATTERN.test(name) || segments.some((s) => TEST_DIR_SEGMENTS.has(s));
+}
+
 /**
- * Scanned files that are not tests themselves and have no test file anywhere
- * in the tree whose basename is `<stem>.(test|spec).<ext>` (D-16).
+ * Scanned files that are not tests themselves and that no test covers (D-16,
+ * F-39). A file is covered when a test file imports it directly — the index's
+ * import edges (`importers`, "who imports these files") — or, for a test the
+ * import graph missed, when a test file anywhere in the tree has its stem
+ * (`<stem>.(test|spec).<ext>`). The order of `scanPaths` is kept.
  */
-export function missingTestCandidates(scanPaths: string[], treePaths: string[]): TaskCandidate[] {
+export function missingTestCandidates(
+  scanPaths: string[],
+  treePaths: string[],
+  importers: ReadonlyArray<{ from: string; to: string }> = [],
+): TaskCandidate[] {
   const testedStems = new Set<string>();
   for (const p of treePaths) {
     const name = basename(p);
     if (TEST_FILE_PATTERN.test(name)) testedStems.add(name.replace(TEST_FILE_PATTERN, ''));
   }
+  const importedByTest = new Set(importers.filter((e) => isTestPath(e.from)).map((e) => e.to));
   const out: TaskCandidate[] = [];
   for (const path of scanPaths) {
+    if (isTestPath(path) || importedByTest.has(path)) continue;
     const name = basename(path);
-    if (TEST_FILE_PATTERN.test(name)) continue;
     const dot = name.lastIndexOf('.');
     const stem = dot > 0 ? name.slice(0, dot) : name;
     if (testedStems.has(stem)) continue;

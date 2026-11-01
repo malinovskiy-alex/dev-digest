@@ -1,11 +1,13 @@
-/** Tailwind class strings for the "On this page" aside. */
+/** Tailwind class strings for the "On this page" column (design D-1, D-2). */
 export const cx = {
-  nav: "flex flex-col gap-1",
+  nav: "flex flex-col",
   title:
-    "m-0 mb-1 text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-muted)]",
-  list: "m-0 flex list-none flex-col gap-0.5 p-0",
+    "m-0 mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]",
+  // A thin rule down the list's left edge; the current item lays an accent
+  // segment over it (`-ml-px` puts the item's border on the rule).
+  list: "m-0 flex list-none flex-col border-l border-[var(--border)] p-0",
   item:
-    "w-full cursor-pointer rounded-md border-0 bg-transparent px-2 py-1 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]",
+    "-ml-px w-full cursor-pointer border-l-2 border-transparent bg-transparent py-1.5 pl-4 pr-2 text-left text-[14px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
   itemActive:
-    "w-full cursor-pointer rounded-md border-0 bg-[var(--accent-bg)] px-2 py-1 text-left text-[13px] font-semibold text-[var(--accent-text)]",
+    "-ml-px w-full cursor-pointer border-l-2 border-[var(--accent)] bg-transparent py-1.5 pl-4 pr-2 text-left text-[14px] font-medium text-[var(--text-primary)]",
 } as const;

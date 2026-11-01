@@ -3,7 +3,7 @@
    AC-62) and the diagram when
    at least two grounded components and one connection survived (AC-85).
    Without prose (a skeleton) it lists the stack and the top-level folders
-   (AC-34). */
+   (AC-34). Inline code in the prose is an accent mono chip (design D-9). */
 "use client";
 
 import React from "react";
@@ -20,7 +20,9 @@ export function ArchitectureSection({ architecture }: { architecture: TourArchit
   if (a.prose) {
     return (
       <>
-        <UntrustedMarkdown inertLinks>{a.prose}</UntrustedMarkdown>
+        <div className={cx.prose}>
+          <UntrustedMarkdown inertLinks>{a.prose}</UntrustedMarkdown>
+        </div>
         {a.components.length >= 2 && a.connections.length >= 1 && (
           <ArchitectureDiagram components={a.components} connections={a.connections} />
         )}

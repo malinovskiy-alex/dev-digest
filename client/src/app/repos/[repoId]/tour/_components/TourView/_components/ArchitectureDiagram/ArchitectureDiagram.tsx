@@ -1,5 +1,7 @@
 /* ArchitectureDiagram — a hand-drawn box-and-arrow SVG of the grounded
-   components, coloured by kind (AC-32). Labels are plain SVG text: no links,
+   components, coloured by kind (AC-32): a quiet tinted fill and a coloured border per kind
+   inside a darker inset panel (design D-10). Edges are orthogonal routes that
+   never cross a box (F-45). Labels are plain SVG text: no links,
    no handlers, no raw HTML (AC-63). A visually hidden list repeats the
    connections for screen readers. */
 "use client";
@@ -8,7 +10,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import type { TourComponent, TourConnection } from "@devdigest/shared";
 import { KIND_COLORS, KIND_STROKES } from "./constants";
-import { boxLabel, layoutDiagram } from "./helpers";
+import { boxLabel, layoutDiagram, routePath } from "./helpers";
 import { cx } from "./styles";
 
 export function ArchitectureDiagram({
@@ -27,6 +29,7 @@ export function ArchitectureDiagram({
     <div className={cx.wrap}>
       <svg
         role="img"
+        className={cx.svg}
         aria-label={t("diagramLabel", { count: components.length })}
         width={layout.width}
         height={layout.height}
@@ -38,14 +41,14 @@ export function ArchitectureDiagram({
           </marker>
         </defs>
         {layout.edges.map((e) => (
-          <line key={e.key} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} className={cx.edge} strokeWidth={1.25} markerEnd={`url(#${markerId})`} />
+          <path key={e.key} d={routePath(e.points)} fill="none" className={cx.edge} strokeWidth={1.25} strokeLinejoin="round" markerEnd={`url(#${markerId})`} />
         ))}
         {layout.nodes.map((n) => {
           const c = byId.get(n.id)!;
           return (
             <g key={n.id}>
               <title>{c.label}</title>
-              <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={6} fill={KIND_COLORS[c.kind]} stroke={KIND_STROKES[c.kind]} />
+              <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={8} fill={KIND_COLORS[c.kind]} stroke={KIND_STROKES[c.kind]} strokeWidth={1.5} />
               <text x={n.x + n.w / 2} y={n.y + n.h / 2} textAnchor="middle" dominantBaseline="central" className={cx.label}>
                 {boxLabel(c.label)}
               </text>

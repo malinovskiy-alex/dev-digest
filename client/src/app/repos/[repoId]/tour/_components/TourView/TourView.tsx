@@ -7,8 +7,8 @@
    generation, and the query polls until it ends.
 
    States, in order: no such repo → RepoNotFound, loading → section skeletons,
-   error → ErrorState with Retry, data → header + "On this page" + the five
-   sections, whatever the status (AC-07). */
+   error → ErrorState with Retry, data → "On this page" on the left, then the
+   header and the five sections, whatever the status (AC-07). */
 "use client";
 
 import React from "react";
@@ -115,23 +115,25 @@ export function TourView(): React.JSX.Element {
   return (
     <AppShell crumb={crumb}>
       <div className={cx.page}>
-        <TourHeader
-          tour={tour}
-          indexReasonText={indexReasonText}
-          generating={generate.isPending}
-          onGenerate={() => generate.mutate()}
-        />
         <div className={cx.layout}>
-          <div className={cx.sections}>
-            {SECTION_ORDER.map((s, i) => (
-              <TourSection key={s.id} id={s.id} title={sections[i]!.title}>
-                {body[s.key]}
-              </TourSection>
-            ))}
-          </div>
           <aside className={cx.aside}>
             <OnThisPage items={sections} />
           </aside>
+          <div className={cx.content}>
+            <TourHeader
+              tour={tour}
+              indexReasonText={indexReasonText}
+              generating={generate.isPending}
+              onGenerate={() => generate.mutate()}
+            />
+            <div className={cx.sections}>
+              {SECTION_ORDER.map((s, i) => (
+                <TourSection key={s.id} id={s.id} title={sections[i]!.title} icon={s.icon}>
+                  {body[s.key]}
+                </TourSection>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </AppShell>

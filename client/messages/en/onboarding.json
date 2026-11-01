@@ -102,6 +102,6 @@
   "diagramLabel": "Architecture diagram with {count} components",
   "diagramEdges": "Connections",
   "diagramEdge": "{from} → {to}",
-  "listNumber": "{n}.",
+  "listNumber": "{n}",
   "rowReason": "— {reason}"
 }

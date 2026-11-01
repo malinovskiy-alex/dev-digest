@@ -6,7 +6,7 @@
 import React from "react";
 import Link from "next/link";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import { Badge, Button } from "@devdigest/ui";
+import { Badge, Button, Icon } from "@devdigest/ui";
 import type { OnboardingTour, TourFailureCode } from "@devdigest/shared";
 import { CopyControl } from "../CopyControl";
 import { API_KEYS_HREF, NOW_TICK_MS } from "./constants";
@@ -69,7 +69,7 @@ export function TourHeader({
         <div className={cx.actions}>
           {meta?.outdated && <Badge color="var(--warn)" bg="var(--warn-bg)">{t("outdated")}</Badge>}
           <span title={buttonTitle}>
-            <Button kind="primary" disabled={disabled} onClick={onGenerate}>
+            <Button kind="secondary" size="lg" icon="RefreshCw" loading={running} disabled={disabled} onClick={onGenerate}>
               {running
                 ? t("actions.generating")
                 : tour.status === "generated"
@@ -81,6 +81,7 @@ export function TourHeader({
             text={shareUrl(origin, tour.repo_id)}
             label={t("actions.share")}
             ariaLabel={t("actions.shareLabel")}
+            icon="Link"
           />
         </div>
       </div>
@@ -118,6 +119,7 @@ export function TourHeader({
         <ul className={cx.lines}>
           {lines.map((line) => (
             <li key={line.kind} className={cx.line}>
+              <Icon.AlertTriangle size={14} aria-hidden="true" className={cx.lineIcon} />
               {line.kind === "not_cloned" && t("status.notCloned")}
               {line.kind === "index_not_ready" &&
                 t("status.indexNotReady", { reason: indexReasonText ?? "" })}
