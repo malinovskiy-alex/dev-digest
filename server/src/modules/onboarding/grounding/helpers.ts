@@ -252,17 +252,35 @@ const CODE = /(```[\s\S]*?```|`[^`\n]+`)/g;
 const LINK = /(!?)\[([^\]\n]*)\]\(\s*([^)\s]*)(?:\s+"[^"\n]*")?\s*\)/g;
 /**
  * Anything GFM would turn into a link on its own (F-17): an angle-bracket
- * autolink of any scheme (`<mailto:…>`), a bare or angle-bracketed web URL, a
- * `www.` autolink, and an email autolink.
+ * autolink of any scheme (`<mailto:…>`), a bare web URL, a `www.` autolink,
+ * and an email autolink. Best effort only: the client renders every href of
+ * the tour prose as inert text (F-29).
  */
 const BARE_URL =
-  /<[a-z][a-z0-9+.-]{1,31}:[^\s<>]*>|<?\b(?:https?:\/\/|www\.)[^\s<>()`]+>?|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/gi;
+  /<[a-z][a-z0-9+.-]{1,31}:[^\s<>]*>|\b(?:https?:\/\/|www\.)[^\s<>()`]+|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/gi;
+/** An angle-bracket autolink: both brackets belong to the one match (F-31). */
+const ANGLE_AUTOLINK = /^<[\s\S]*>$/;
 /**
- * A link reference definition (`[a]: https://…`, destination possibly on the
- * next line). It is dropped, so a reference-style link `[t][a]` / `[a]` has no
- * target and renders as its literal text (F-17). Footnotes (`[^1]:`) are kept.
+ * GFM's trailing-punctuation rule for an autolink literal: these characters at
+ * the end are not part of the link, so they stay outside the code span (F-31).
  */
-const LINK_DEFINITION = /^ {0,3}\[(?!\^)[^\]\n]+\]:[ \t]*(?:\n[ \t]*)?\S[^\n]*(?:\n|$)/gm;
+const URL_TRAILING_PUNCTUATION = /[!"'),.:;?\]}*_~]+$/;
+/** A link title — `"…"`, `'…'` or `(…)` — which may span lines but not a blank one. */
+const LINK_TITLE =
+  /(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))/.source;
+/**
+ * A link reference definition as CommonMark parses it (`[a]: https://…`): at
+ * most 3 spaces of indent, a non-blank label, `:`, a destination (possibly on
+ * the next line), an optional title, then the end of the line. A footnote
+ * (`[^1]:`) is not one. Group 1 is the indent, so the `[` after it can be
+ * escaped. `[TODO]: fix this later` is not a definition (text after the
+ * destination that is not a title) and is left alone.
+ */
+const LINK_DEFINITION = new RegExp(
+  /^( {0,3})\[(?!\^)(?=[^\]\n]*\S)[^[\]\n]+\]:[ \t]*\n?[ \t]*(?:<[^<>\n]*>|[^\s<]\S*)/.source +
+    `(?:(?:[ \\t]+|[ \\t]*\\n[ \\t]*)${LINK_TITLE})?[ \\t]*$`,
+  'gm',
+);
 /** A run of path characters, preceded by a boundary. */
 const PATH_TOKEN = /(^|[\s(\[{"'])([A-Za-z0-9_.\-/]+)/g;
 
@@ -281,9 +299,26 @@ function wrapKnownPaths(text: string, known: ReadonlySet<string>): string {
   });
 }
 
+function isLineStart(text: string, offset: number): boolean {
+  return offset === 0 || text[offset - 1] === '\n';
+}
+
+/**
+ * Neutralises each link reference definition by inserting `\` before its `[`
+ * (F-30). Insertion only, never a deletion: the line renders as its own text,
+ * and a reference-style link `[t][a]` / `[a]` has no target, so it renders as
+ * literal text too (F-17). `atLineStart` says whether offset 0 of `text` is a
+ * real line start of the prose — it is not right after an inline code span.
+ */
+function escapeLinkDefinitions(text: string, atLineStart: boolean): string {
+  return text.replace(LINK_DEFINITION, (def: string, indent: string, offset: number) =>
+    offset === 0 && !atLineStart ? def : `${indent}\\${def.slice(indent.length)}`,
+  );
+}
+
 /** Text outside code: links first (kept only when relative and known), then URLs and paths. */
-function scrubText(raw: string, known: ReadonlySet<string>): string {
-  const text = raw.replace(LINK_DEFINITION, '');
+function scrubText(raw: string, known: ReadonlySet<string>, atLineStart: boolean): string {
+  const text = escapeLinkDefinitions(raw, atLineStart);
   let out = '';
   let at = 0;
   for (const m of text.matchAll(LINK)) {
@@ -311,10 +346,14 @@ function scrubPlain(text: string, known: ReadonlySet<string>): string {
   let out = '';
   parts.forEach((p, i) => {
     out += wrapKnownPaths(p, known);
-    const url = urls[i]?.replace(/^<|>$/g, '');
-    if (url) {
-      const core = url.replace(/[.,:;!?]+$/, '');
-      out += `\`${core}\`${url.slice(core.length)}`;
+    const url = urls[i];
+    if (!url) return;
+    if (ANGLE_AUTOLINK.test(url)) {
+      // `<scheme:…>` — both brackets were matched together, so both go (F-31)
+      out += `\`${url.slice(1, -1)}\``;
+    } else {
+      const core = url.replace(URL_TRAILING_PUNCTUATION, '');
+      out += core ? `\`${core}\`${url.slice(core.length)}` : url;
     }
   });
   return out;
@@ -323,17 +362,18 @@ function scrubPlain(text: string, known: ReadonlySet<string>): string {
 /**
  * Scrub model prose (D-26): a path-like code span not in K is removed; a link
  * whose href is external or unknown becomes its text; a link reference
- * definition is dropped; a bare URL, `www.`, email or `<scheme:…>` autolink
- * becomes code;
+ * definition is escaped (`\[`, insertion only); a bare URL, `www.`, email or
+ * `<scheme:…>` autolink becomes code;
  * a known path outside code is wrapped in backticks. It never strips `_` and
- * never parses or emits HTML.
+ * never parses or emits HTML. Best effort: the client is what guarantees no
+ * tour href is clickable (F-29).
  */
 export function scrubProse(prose: string, known: ReadonlySet<string>): string {
   let out = '';
   let at = 0;
   for (const m of prose.matchAll(CODE)) {
     const start = m.index ?? 0;
-    out += scrubText(prose.slice(at, start), known);
+    out += scrubText(prose.slice(at, start), known, isLineStart(prose, at));
     const span = m[0];
     if (span.startsWith('```')) {
       out += span;
@@ -347,7 +387,7 @@ export function scrubProse(prose: string, known: ReadonlySet<string>): string {
     }
     at = start + span.length;
   }
-  out += scrubText(prose.slice(at), known);
+  out += scrubText(prose.slice(at), known, isLineStart(prose, at));
   return out.trim();
 }
 

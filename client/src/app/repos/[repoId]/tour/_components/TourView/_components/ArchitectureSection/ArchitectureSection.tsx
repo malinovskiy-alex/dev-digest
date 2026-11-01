@@ -1,5 +1,6 @@
 /* ArchitectureSection — the model's prose (rendered as untrusted markdown:
-   no raw HTML, no images, inert relative links, AC-62) and the diagram when
+   no raw HTML, no images, and every link inert — web links included, F-29 —
+   AC-62) and the diagram when
    at least two grounded components and one connection survived (AC-85).
    Without prose (a skeleton) it lists the stack and the top-level folders
    (AC-34). */
@@ -19,7 +20,7 @@ export function ArchitectureSection({ architecture }: { architecture: TourArchit
   if (a.prose) {
     return (
       <>
-        <UntrustedMarkdown>{a.prose}</UntrustedMarkdown>
+        <UntrustedMarkdown inertLinks>{a.prose}</UntrustedMarkdown>
         {a.components.length >= 2 && a.connections.length >= 1 && (
           <ArchitectureDiagram components={a.components} connections={a.connections} />
         )}

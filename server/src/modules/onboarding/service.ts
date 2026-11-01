@@ -330,9 +330,16 @@ export class OnboardingService {
       this.pending.set(repoId, started);
       const payload: TourJobPayload = { workspaceId, repoId, generationId };
       const job = await this.deps.jobs.enqueue(workspaceId, TOUR_JOB_KIND, payload);
-      // The handler never throws, so this only fires if the runner's own
-      // timeout gave up waiting; the handler still settles the lock itself.
-      job.done.catch(() => undefined);
+      // The handler never throws, so this fires when the runner's own timeout
+      // gave up waiting (the handler still settles the lock itself) or when
+      // the runner failed before calling the handler at all — its `running`
+      // status update threw. Only in the second case is the generation still
+      // pending, and nobody else would ever release its lock (F-33).
+      job.done.catch(() => {
+        if (this.pending.get(repoId)?.generationId !== generationId) return;
+        this.pending.delete(repoId);
+        this.release(repoId, generationId);
+      });
     } catch (err) {
       if (this.pending.get(repoId)?.generationId === generationId) this.pending.delete(repoId);
       this.release(repoId, generationId);
@@ -516,7 +523,7 @@ export class OnboardingService {
     /** The whole blob, at most `READ_MAX_BYTES`; each use site cuts its own excerpt. */
     const read = async (path: string): Promise<string | null> => {
       const size = sizes.get(path);
-      if (!revision || size === undefined || size > READ_MAX_BYTES) return null;
+      if (!revision || size === undefined || !Number.isFinite(size) || size > READ_MAX_BYTES) return null;
       try {
         return await this.deps.git.readFileAt(ref, revision, path);
       } catch {
