@@ -238,6 +238,14 @@ export class OnboardingService {
     const repo = await this.deps.repos.getById(workspaceId, repoId);
     if (!repo) throw new NotFoundError(`Repo ${repoId} not found`);
 
+    // Read the generation state BEFORE the stored row (F-50). A generation
+    // writes its row and only then releases its lock, so "not running" seen
+    // here means the row read below already includes its outcome. Read after
+    // the awaits, a generation that ended in between showed up as `ready` +
+    // not running with no tour, and a polling client stopped there.
+    const running = this.running.has(repo.id);
+    const failure = this.failures.get(repo.id) ?? null;
+
     const [indexState, storedRow, pulls, choice] = await Promise.all([
       this.deps.repoIntel.getIndexState(repo.id),
       this.store.getStored(repo.id),
@@ -264,7 +272,6 @@ export class OnboardingService {
       indexedCount = facts.indexed.length;
     }
 
-    const running = this.running.has(repo.id);
     return toTourDto({
       repo,
       status: deriveStatus({
@@ -280,7 +287,7 @@ export class OnboardingService {
       revision,
       currentIndexSha: indexState.lastIndexedSha,
       apiKey: { provider: choice.provider, model: choice.model, missing: keyMissing },
-      generation: { running, failure: this.failures.get(repo.id) ?? null },
+      generation: { running, failure },
     });
   }
 
