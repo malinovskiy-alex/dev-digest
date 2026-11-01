@@ -11,7 +11,7 @@
 import React from "react";
 import { useIsFetching } from "@tanstack/react-query";
 import { RESTORE_MAX_WAIT_MS } from "./constants";
-import { sessionStore, takeOverviewScroll } from "./helpers";
+import { disarmOverviewBack, sessionStore, takeOverviewScroll } from "./helpers";
 
 export function useOverviewScrollRestore(prId: string): void {
   const fetching = useIsFetching();
@@ -20,6 +20,9 @@ export function useOverviewScrollRestore(prId: string): void {
 
   React.useEffect(() => {
     const y = takeOverviewScroll(sessionStore(), prId);
+    // The saved position is consumed or forgotten now, so a Back listener
+    // still pending (a tab-click return) has nothing left to do (F-22).
+    disarmOverviewBack(prId);
     if (y == null) return;
     setTarget(y);
     setTimedOut(false);

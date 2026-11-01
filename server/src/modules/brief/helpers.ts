@@ -100,13 +100,13 @@ export function noKeyMessage(provider: string): string {
 // ---------------------------------------------------------------- call limits
 
 /**
- * R-73, D-38: lower-case the id, strip ONE leading `<vendor>/` prefix, then a
- * reasoning model starts with `o1`/`o3`/`o4` or contains one of the markers.
+ * R-73, D-38 (F-23): lower-case the id and keep only the segment after the
+ * LAST `/` (`a/b/o3` → `o3`); a reasoning model's stripped id starts with
+ * `o1`/`o3`/`o4` or contains one of the markers.
  */
 export function isReasoningModel(model: string): boolean {
   const lower = model.toLowerCase();
-  const slash = lower.indexOf('/');
-  const id = slash >= 0 ? lower.slice(slash + 1) : lower;
+  const id = lower.slice(lower.lastIndexOf('/') + 1);
   return (
     REASONING_MODEL_PREFIXES.some((p) => id.startsWith(p)) || REASONING_MODEL_MARKERS.some((m) => id.includes(m))
   );

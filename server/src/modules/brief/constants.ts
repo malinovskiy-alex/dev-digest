@@ -17,9 +17,9 @@ export const GENERATION_TIMEOUT_MS = 60_000;
 export const REASONING_OUTPUT_MAX_TOKENS = 10_000;
 /** R-73, D-38: wall around the one call for a reasoning model. */
 export const REASONING_TIMEOUT_MS = 120_000;
-/** R-73, D-38: a model id (after one `<vendor>/` prefix) starting with one of these is a reasoning model. */
+/** R-73, D-38: a model id (its segment after the last `/`) starting with one of these is a reasoning model. */
 export const REASONING_MODEL_PREFIXES = ['o1', 'o3', 'o4'] as const;
-/** R-73, D-38: a model id containing one of these is a reasoning model. */
+/** R-73, D-38: a model id (its segment after the last `/`) containing one of these is a reasoning model. */
 export const REASONING_MODEL_MARKERS = ['gpt-5', 'deepseek-r1', 'deepseek-v4', 'qwq', 'reasoning', 'thinking'] as const;
 
 /** R-12: the adapter must never re-ask the model — one call per generation. */

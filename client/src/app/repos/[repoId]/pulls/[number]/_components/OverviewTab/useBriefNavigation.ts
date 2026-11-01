@@ -8,7 +8,7 @@
 import React from "react";
 import type { BriefNavigation } from "@/lib/hooks/brief";
 import { NOT_IN_DIFF_MS } from "./constants";
-import { markOverviewBack, saveOverviewScroll, sessionStore } from "./helpers";
+import { armOverviewBack, saveOverviewScroll, sessionStore } from "./helpers";
 
 export function useBriefNavigation({
   prId,
@@ -41,9 +41,9 @@ export function useBriefNavigation({
       setNoticeKey(null);
       saveOverviewScroll(sessionStore(), prId, window.scrollY);
       // The navigation pushes a history entry; Back fires `popstate`, which
-      // marks the saved position as restorable. The listener lives on
-      // `window`, so it outlives this (soon unmounted) tab (R-77, F-14).
-      window.addEventListener("popstate", () => markOverviewBack(sessionStore(), prId), { once: true });
+      // marks the saved position as restorable (R-77, F-14). One listener per
+      // PR, replacing any earlier one (F-22).
+      armOverviewBack(prId);
       onOpenInDiff(path, line);
       return;
     }

@@ -166,13 +166,17 @@ describe('call limits (R-73, D-38)', () => {
     'x/some-thinking-model',
     'vendor/my-reasoning-v2',
     'foo/o1x',
+    'a/b/o3',
+    'x/y/deepseek-r1',
   ])('%s → 10,000 tokens / 120 s', (model) => {
     expect(isReasoningModel(model)).toBe(true);
     expect(callLimits(model)).toEqual({ maxTokens: 10_000, timeoutMs: 120_000, reasoning: true });
   });
 
-  it('the o-prefix counts only at the start of the id after ONE vendor prefix', () => {
+  it('F-23 — the o-prefix counts only at the start of the id segment after the LAST "/"', () => {
     expect(isReasoningModel('gpt-4o1')).toBe(false);
     expect(isReasoningModel('foo/o1x')).toBe(true);
+    expect(isReasoningModel('a/b/o3')).toBe(true);
+    expect(isReasoningModel('o3/b/gpt-4.1')).toBe(false);
   });
 });
