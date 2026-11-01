@@ -14,7 +14,7 @@ Plan `specs/L05-onboarding-generator.md` (revision 3) · Requirements `specs/L05
 | pre-PR rounds 2–4 | `8f3a4c6` + `992d05e` · `ed61200` + `9ca3c38` · `7393492` + `93b8f88` (each: fix, then its regression tests) |
 
 ### Findings
-48 total · fixed 41 · accepted 2 · wontfix 1 · open 4 (F-40, F-41, F-47, F-48 — all SUGGESTION, not taken) — full ledger below.
+65 total · fixed 56 · accepted 2 · wontfix 1 · open 6 (F-40, F-41, F-47, F-48, F-63, F-65 — SUGGESTION; F-59 deferred to a separate change) — full ledger below.
 
 Accepted (go into the PR description):
 - **F-07** — `server/test/repo-intel-facade-degraded.test.ts:118,123,128` fail a scratch typecheck of `server/test` (`RepoBasics.defaultBranch`). Pre-existing (`git blame` → starter snapshot `587c46a`); `pnpm typecheck` does not cover `server/test`. Separate change.
@@ -45,6 +45,10 @@ verify client · baseline L05-onboarding-generator @ 993081a
 ## After this record: UI check and design pass (2026-11-01)
 
 A manual check on the open-source repo `sindresorhus/ky` found that generation on the default model failed (reasoning tokens exhausted the 4,000 cap → AC-83 amended to 10,000, F-37), two jsdom-only passes that broke in a real browser (F-38 scroll container, F-39 coverage heuristic) and a UI that did not match the mockups (F-42…F-45). Fixed in `a533e8b` with tests in `fd9fc5f`; spec/plan updated in `9c8428e`. Last runs: server 528 (6 baseline) + 125 integration, client 329, 0 new failures; architecture approve 0/0/0; security 0 CRITICAL / 0 WARNING (440 renders through `inertLinks`, 0 links). ky now generates a full tour (one model call, ~30 s).
+
+## Full PR review (pre-merge)
+
+After PR #31 CI went green: plan-verifier final pass — 88/88 AC (now 89 with AC-89) and 16/16 UI-D done, merge-ready; `/code-review high` — 6 WARNING + 4 SUGGESTION (F-52…F-61), fixed in `fd9abc9` with tests in `3a40dcc`; the security re-check of that round found a regression (F-64, a refused path blocking generation), fixed in the same commits; architecture 0/0/1. Spec/plan: `5596b96` (AC-89, plan rev 5). Last runs: server 581 + 131 integration, client 334, 0 failures.
 
 ## Final plan-verifier report (verbatim summary of the AC → task → test → commit matrix)
 
@@ -199,6 +203,23 @@ Rows not closed before merge:
 | F-46 | 12 | implementer | test | client tests | 3 NEW FAIL by design: ReadingPath (no dot, reason on own line), RunLocally (no dot), ArchitectureDiagram AC-32 (edges are `<path marker-end>`, not `<line>`); server AC-83 test still expects 4,000 | fixed | tests updated part-by-part + new tests F-37..F-45; server 528+125, client 329 |
 | F-47 | 13 | security re-check | SUGGESTION | `server/src/modules/onboarding/grounding/helpers.ts:258-259` | email part of BARE_URL is quadratic on long `a.a.a.` runs (2.2 s at 40k chars) — prose can now be ~10k tokens; anchor the local part at a boundary or cap prose before scrubbing | open | |
 | F-48 | 13 | security re-check | SUGGESTION | `grounding/helpers.ts:455` | `generationFailureLog` reads `e.raw` but adapters attach `details.raw` — dead field today; document it as model/repo text if wired later | open | |
+| F-49 | 14 | CI (PR #31, server unit, Linux) | test | `server/test/indexer-pipeline.test.ts` › runIncremental › "reparses changed slice and bumps counters" | NEW FAIL on Linux: `expected 1 to be 6` — this file is baseline-red on Windows (ENOENT), so the regression from F-09/F-10 (`filesIndexed = rankWritten ?? state.filesIndexed`, coverage stats in `incremental.ts`) was hidden locally | open | product correct: old assertion encodes the prior+slice formula AC-87 removed → test-writer: toBe(1) + comment; dirname in writeFileAt |
+| F-50 | 14 | CI (PR #31, server integration) | test | `server/test/onboarding.it.test.ts` › "AC-27, AC-24, AC-12, AC-84, AC-25 — POST → 202 …" | `expected 'ready' to be 'generated'` — generation not finished (or failed) when the test GETs; passes locally; race/timing or a real failure path (F-37/F-39 added work: importer read, log) | fixed | real race: getTour read running after its awaits → stale ready/not-running; now reads running+failure first (service.ts) — reproduced with a gated scratch test |
+| F-51 | 14 | CI (PR #31, e2e flow 09) | test | `e2e/specs/09-onboarding-tour.flow.json` | `agent-browser find role link click --name "Onboarding Tour"` failed on the PR list page although the sidebar link is visible (artifact screenshot); other flows click by `find role button` / `find text` | fixed | step now `find text "Onboarding Tour" click` (not run locally) |
+| F-52 | 15 | /code-review high (PR #31) | WARNING | `server/src/modules/onboarding/service.ts:631` (collectFacts) | facts built after a transient git failure (empty tree / null texts) are memoised under the same key → every GET and Regenerate reuses them; a generation stores a tour with empty Run locally and no README, no failure reported | fixed | pre-merge round |
+| F-53 | 15 | /code-review high | WARNING | `client/.../TourView/TourView.tsx:62` | `isError` checked before `data`: one failed background poll replaces a loaded tour with ErrorState (React Query keeps data) | fixed | pre-merge round |
+| F-54 | 15 | /code-review high | WARNING | `server/src/modules/repo-intel/pipeline/incremental.ts:295` | after incremental, filesIndexed = all walked files incl. earlier parse failures; filesSkipped drops them; indexed+skipped can exceed totalCandidates | fixed | pre-merge round |
+| F-55 | 15 | /code-review high | WARNING | `server/src/modules/onboarding/facts/helpers.ts:496` | testedStems by basename across the whole tree: any `index.test.ts` marks every `index.ts` as tested (also helpers/service/routes) | fixed | pre-merge round |
+| F-56 | 15 | /code-review high | WARNING | `client/.../ArchitectureSection/ArchitectureSection.tsx:20` | grounded diagram renders only when prose is non-empty; prose scrubbed to empty hides a valid diagram and shows the skeleton | fixed | pre-merge round |
+| F-57 | 15 | /code-review high | SUGGESTION | `server/src/modules/onboarding/helpers.ts:151` | skeleton critical_paths gap is 'no_edges' ("import graph is empty") when the repo is simply not indexed — should be needs_index | fixed | pre-merge round user: fix (pre-merge round) |
+| F-58 | 15 | /code-review high | SUGGESTION | `server/src/modules/onboarding/service.ts:333` | a no_api_key failure from POST stays in `failures` after the key is added → stale "no API key" line while Generate is enabled | fixed | pre-merge round user: fix (pre-merge round) |
+| F-59 | 15 | /code-review high | SUGGESTION | `server/src/modules/onboarding/service.ts:525` | facts LRU keyed by index updatedAt → up to 20 copies of one repo's facts in memory; key per repo, replace on new key | open | user: separate change |
+| F-60 | 15 | /code-review high | WARNING | `server/src/modules/repo-intel/service.ts:693` | getCriticalPaths tie-break uses locale-dependent `localeCompare` (AC-23 determinism); same file has a code-unit `cmp` | fixed | pre-merge round |
+| F-61 | 15 | /code-review high | SUGGESTION | `server/src/modules/onboarding/facts/helpers.ts:522` | openPrCandidates re-implements the SQL filter/sort/limit of listOpenPulls — drift risk | fixed | pre-merge round user: fix (pre-merge round) |
+| F-62 | 16 | implementer | test | `server/test/onboarding-facts.test.ts` (~271, ~292, ~341, ~425), `server/test/onboarding-service.test.ts` (~438) | 5 NEW FAIL by design: open-PR filter now SQL-only (F-61), F-55 same-stem rule, AC-70 test setup inconsistent (`keyPresent` true while llm() throws) | fixed | 5 tests updated + new F-52..F-61 tests; server 555+131, client 334 |
+| F-63 | 16 | architecture-reviewer | SUGGESTION | `server/src/modules/repo-intel/pipeline/incremental.ts:52-121` | `refreshCounts` is pure but exported from a Ring-2 pipeline file; could move to a repo-intel helpers file (no rule broken) | open | |
+| F-64 | 16 | security re-check | WARNING | `server/src/modules/onboarding/service.ts:614-618` + `:436-441` | regression from F-52: `readFileAt` refuses paths with `:`/`\`/leading `-` by design (`simple-git.ts:139-148`); one such top-ranked file or manifest makes every generation `source_unreadable` and facts never cached — treat adapter-refused paths as skipped reads, keep gitFailed for revision/tree/I/O failures; test with `a:b.ts` | fixed | isReadablePath skips adapter-refused paths before any read (AC-89); parity test against the real adapter guard |
+| F-65 | 16 | security re-check | SUGGESTION | `service.ts:666` | degraded facts never cached → a persistently failing read recomputes on every skeleton GET; optional short negative cache | open | |
 
 ## Run log
 - 2026-10-31 · preflight · main · ok (plan rev 2, 88 ACs, branch lesson/L05-onboarding-generator; commits c35c6d7 spec, 3bf8350 spec amend, 993081a plan)
@@ -225,3 +246,10 @@ Rows not closed before merge:
 - 2026-11-01 · polish · implementer · F-43 (AC-61 kept), F-44 fixed; F-45 diagram routing
 - 2026-11-01 · tests 5 · test-writer · F-46 + F-37..F-45 tests; server 528+125, client 329 green
 - 2026-11-01 · review 13 · arch approve 0/0/0 ∥ security 0 CRIT/0 WARN (440 renders, 0 <a>/<img>); F-47, F-48 SUGG
+- 2026-11-01 · PR #31 CI · 3 red: F-49 indexer-pipeline (Linux-only), F-50 onboarding.it timing, F-51 e2e flow 09 sidebar click
+- 2026-11-01 · CI fix · implementer · F-50 product race fixed, F-51 flow step; F-49 = outdated assertion → test-writer
+- 2026-11-01 · full PR review · plan-verifier merge-ready (88/88 AC, 16/16 UI-D) ∥ /code-review high: 6 WARNING (F-52..56, F-60), 4 SUGG
+- 2026-11-01 · pre-merge fix · implementer (fresh) · F-52..F-58, F-60, F-61 fixed; new TourFailureCode 'source_unreadable'; F-62 tests
+- 2026-11-01 · review pre-merge · arch comment 0/0/1 (F-63)
+- 2026-11-01 · security pre-merge · 0 CRIT, 1 WARN (F-64 regression of F-52), 1 SUGG (F-65)
+- 2026-11-01 · pre-merge · F-64 fixed + tests; server 581+131, client 334
