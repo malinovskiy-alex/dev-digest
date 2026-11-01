@@ -148,7 +148,8 @@ export function skeletonSections(facts: TourFacts, candidates: TaskCandidate[]):
       folders: facts.folders,
       gap: ranked ? null : 'needs_index',
     },
-    critical_paths: { rows: critical, gap: critical.length === 0 ? 'no_edges' : null },
+    // Not indexed → there is no import graph to be empty yet (F-57).
+    critical_paths: { rows: critical, gap: critical.length > 0 ? null : ranked ? 'no_edges' : 'needs_index' },
     run_locally: { commands, gap: commands.length === 0 ? 'no_manifest' : null },
     reading_path: { rows: reading, gap: ranked && reading.length > 0 ? null : 'not_ranked' },
     first_tasks: { tasks, gap: tasks.length === 0 ? 'no_candidates' : null },

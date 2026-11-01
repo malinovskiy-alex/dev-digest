@@ -76,6 +76,8 @@ export const MAX_CONNECTIONS = 24;
 export const MAX_ENV_NAMES = 50;
 /** Open PRs read as candidates (D-17). */
 export const OPEN_PR_LIMIT = 50;
+/** PR statuses that are not open — excluded from the candidates (D-17). */
+export const CLOSED_PR_STATUSES = ['merged', 'closed'] as const;
 /** Memoised fact sets, LRU (D-33). */
 export const FACTS_CACHE_ENTRIES = 20;
 /** A provider error message kept in a failure (D-20). */

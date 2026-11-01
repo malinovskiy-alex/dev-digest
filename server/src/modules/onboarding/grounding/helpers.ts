@@ -407,8 +407,23 @@ export function scrubProse(prose: string, known: ReadonlySet<string>): string {
 // Failure classification (AC-72, D-20)
 // ---------------------------------------------------------------------------
 
+const SOURCE_UNREADABLE = 'source_unreadable';
+
 /**
- * `ConfigError` → `no_api_key`; `TimeoutError` → `timeout`; a schema
+ * Thrown before the model call when git could not read the revision the facts
+ * describe (F-52): a tour built from them would silently lose its README, its
+ * commands and its tasks. No model call is made and nothing is stored.
+ */
+export class SourceUnreadableError extends Error {
+  readonly code = SOURCE_UNREADABLE;
+  constructor(message: string) {
+    super(message);
+    this.name = 'SourceUnreadableError';
+  }
+}
+
+/**
+ * `ConfigError` → `no_api_key`; `SourceUnreadableError` → `source_unreadable`; `TimeoutError` → `timeout`; a schema
  * validation failure → `invalid_output` with the fixed message; anything else
  * → `provider_error` with the error message, ≤ 300 chars.
  */
@@ -416,6 +431,7 @@ export function classifyGenerationError(err: unknown): { code: TourFailureCode; 
   const e = err as { name?: unknown; code?: unknown; message?: unknown } | null;
   const message = typeof e?.message === 'string' ? e.message : String(err);
   if (e?.code === 'config_error') return { code: 'no_api_key', message: oneLine(message, FAILURE_MESSAGE_MAX) };
+  if (e?.code === SOURCE_UNREADABLE) return { code: 'source_unreadable', message: oneLine(message, FAILURE_MESSAGE_MAX) };
   if (e?.name === 'TimeoutError') return { code: 'timeout', message: oneLine(message, FAILURE_MESSAGE_MAX) };
   if (/failed schema|schema validation/i.test(message)) {
     return { code: 'invalid_output', message: INVALID_OUTPUT_MESSAGE };

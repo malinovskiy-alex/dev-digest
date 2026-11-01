@@ -19,7 +19,13 @@ export function CriticalPathsSection({
 }): React.JSX.Element {
   const t = useTranslations("onboarding");
   if (list.rows.length === 0) {
-    return <p className={cx.gap}>{list.gap === "needs_clone" ? t("gaps.needsClone") : t("gaps.noEdges")}</p>;
+    const text =
+      list.gap === "needs_clone"
+        ? t("gaps.needsClone")
+        : list.gap === "needs_index"
+          ? t("gaps.criticalNeedsIndex") // not indexed yet: no graph to be empty (F-57)
+          : t("gaps.noEdges");
+    return <p className={cx.gap}>{text}</p>;
   }
   return (
     <ul className={cx.list}>

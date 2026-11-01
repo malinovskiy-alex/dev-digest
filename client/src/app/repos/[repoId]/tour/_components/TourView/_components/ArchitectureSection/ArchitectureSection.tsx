@@ -2,8 +2,9 @@
    no raw HTML, no images, and every link inert — web links included, F-29 —
    AC-62) and the diagram when
    at least two grounded components and one connection survived (AC-85).
-   Without prose (a skeleton) it lists the stack and the top-level folders
-   (AC-34). Inline code in the prose is an accent mono chip (design D-9). */
+   Without prose (a skeleton, or prose scrubbed to nothing) it lists the stack
+   and the top-level folders (AC-34), and still the diagram if one survived
+   (F-56). Inline code in the prose is an accent mono chip (design D-9). */
 "use client";
 
 import React from "react";
@@ -16,6 +17,12 @@ import { cx } from "./styles";
 export function ArchitectureSection({ architecture }: { architecture: TourArchitecture }): React.JSX.Element {
   const t = useTranslations("onboarding");
   const a = architecture;
+  // The diagram does not depend on the prose: prose scrubbed to nothing still
+  // leaves a grounded diagram worth showing (F-56).
+  const diagram =
+    a.components.length >= 2 && a.connections.length >= 1 ? (
+      <ArchitectureDiagram components={a.components} connections={a.connections} />
+    ) : null;
 
   if (a.prose) {
     return (
@@ -23,9 +30,7 @@ export function ArchitectureSection({ architecture }: { architecture: TourArchit
         <div className={cx.prose}>
           <UntrustedMarkdown inertLinks>{a.prose}</UntrustedMarkdown>
         </div>
-        {a.components.length >= 2 && a.connections.length >= 1 && (
-          <ArchitectureDiagram components={a.components} connections={a.connections} />
-        )}
+        {diagram}
       </>
     );
   }
@@ -67,6 +72,7 @@ export function ArchitectureSection({ architecture }: { architecture: TourArchit
           </div>
         )}
       </div>
+      {diagram}
     </>
   );
 }

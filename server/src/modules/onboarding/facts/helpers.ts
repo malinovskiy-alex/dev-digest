@@ -27,7 +27,6 @@ import {
   MAX_ENV_NAMES,
   MAX_FOLDERS,
   MAX_SUB_MANIFESTS,
-  OPEN_PR_LIMIT,
   README_PATTERN,
   SAFE_DIR_SEGMENT,
   SCRIPT_ALLOW_LIST,
@@ -479,11 +478,60 @@ export function isTestPath(path: string): boolean {
 }
 
 /**
+ * Whether the git port's `readFileAt` accepts `path` (AC-89, F-64). It mirrors
+ * the git adapter's own `readFileAt` guard (kept in step by hand): git allows
+ * such names in a tree, but the adapter refuses them by design. A refused path
+ * is a skipped file — never read, never a `source_unreadable` failure.
+ */
+export function isReadablePath(path: string): boolean {
+  return !(
+    path.length === 0 ||
+    path.startsWith('-') ||
+    path.startsWith('/') ||
+    path.includes('\\') ||
+    path.includes(':') ||
+    path.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')
+  );
+}
+
+/** `dir/stem` of a path — `''` dir at the root, the stem without its last extension. */
+function dirStem(path: string): string {
+  const slash = path.lastIndexOf('/');
+  const dir = slash >= 0 ? path.slice(0, slash) : '';
+  const name = path.slice(slash + 1);
+  const dot = name.lastIndexOf('.');
+  return `${dir}/${dot > 0 ? name.slice(0, dot) : name}`;
+}
+
+/**
+ * The source `dir/stem` keys one same-stem test covers (F-55): its own
+ * directory (`src/a.test.ts` → `src/a`); the directory a test directory sits
+ * in (`src/__tests__/a.test.ts` → `src/a`); and the `src` mirror of a test
+ * tree (`test/x/a.test.ts` → `src/x/a`, `pkg/tests/a.spec.ts` → `pkg/src/a`).
+ */
+function coveredBySameStem(testPath: string): string[] {
+  const segments = testPath.split('/');
+  const name = segments.pop() ?? '';
+  const stem = name.replace(TEST_FILE_PATTERN, '');
+  const dirs = new Set<string>([segments.join('/')]);
+  if (segments.length > 0 && TEST_DIR_SEGMENTS.has(segments[segments.length - 1]!)) {
+    dirs.add(segments.slice(0, -1).join('/'));
+  }
+  segments.forEach((seg, i) => {
+    if (TEST_DIR_SEGMENTS.has(seg)) dirs.add([...segments.slice(0, i), 'src', ...segments.slice(i + 1)].join('/'));
+  });
+  return [...dirs].map((dir) => `${dir}/${stem}`);
+}
+
+/**
  * Scanned files that are not tests themselves and that no test covers (D-16,
  * F-39). A file is covered when a test file imports it directly — the index's
  * import edges (`importers`, "who imports these files") — or, for a test the
- * import graph missed, when a test file anywhere in the tree has its stem
- * (`<stem>.(test|spec).<ext>`). The order of `scanPaths` is kept.
+ * import graph missed, when a `<stem>.(test|spec).<ext>` test sits next to it,
+ * in a test directory beside it, or in the `src` mirror of a test tree
+ * (`coveredBySameStem`). A same-named test elsewhere in the tree does not
+ * count: one `index.test.ts` must not cover every `index.ts` (F-55). The
+ * order of `scanPaths` is kept.
  */
 export function missingTestCandidates(
   scanPaths: string[],
@@ -492,17 +540,13 @@ export function missingTestCandidates(
 ): TaskCandidate[] {
   const testedStems = new Set<string>();
   for (const p of treePaths) {
-    const name = basename(p);
-    if (TEST_FILE_PATTERN.test(name)) testedStems.add(name.replace(TEST_FILE_PATTERN, ''));
+    if (TEST_FILE_PATTERN.test(basename(p))) for (const key of coveredBySameStem(p)) testedStems.add(key);
   }
   const importedByTest = new Set(importers.filter((e) => isTestPath(e.from)).map((e) => e.to));
   const out: TaskCandidate[] = [];
   for (const path of scanPaths) {
     if (isTestPath(path) || importedByTest.has(path)) continue;
-    const name = basename(path);
-    const dot = name.lastIndexOf('.');
-    const stem = dot > 0 ? name.slice(0, dot) : name;
-    if (testedStems.has(stem)) continue;
+    if (testedStems.has(dirStem(path))) continue;
     out.push({
       id: `missing-tests:${path}`,
       kind: 'missing-tests',
@@ -518,32 +562,23 @@ export function missingTestCandidates(
   return out;
 }
 
-/** Open PRs (not merged/closed), `updated_at` desc nulls last, number desc, ≤ 50 (D-17). */
+/**
+ * Open-PR task candidates, in the order given (D-17). The filter, the order
+ * and the limit are `OnboardingRepository.listOpenPulls`'s alone — the one
+ * source of truth (F-61); this only maps its rows.
+ */
 export function openPrCandidates(pulls: OpenPull[]): TaskCandidate[] {
-  return pulls
-    .filter((p) => p.status !== 'merged' && p.status !== 'closed')
-    .sort((a, b) => {
-      const ta = a.updatedAt?.getTime() ?? null;
-      const tb = b.updatedAt?.getTime() ?? null;
-      if (ta !== tb) {
-        if (ta === null) return 1;
-        if (tb === null) return -1;
-        return tb - ta;
-      }
-      return b.number - a.number;
-    })
-    .slice(0, OPEN_PR_LIMIT)
-    .map((p) => ({
-      id: `open-pr:${p.number}`,
-      kind: 'open-pr' as const,
-      path: null,
-      line: null,
-      pr_number: p.number,
-      pr_title: p.title,
-      detail: p.author,
-      importers: null,
-      top_percent: null,
-    }));
+  return pulls.map((p) => ({
+    id: `open-pr:${p.number}`,
+    kind: 'open-pr' as const,
+    path: null,
+    line: null,
+    pr_number: p.number,
+    pr_title: p.title,
+    detail: p.author,
+    importers: null,
+    top_percent: null,
+  }));
 }
 
 const KIND_ORDER: Record<TourTaskKind, number> = { todo: 0, 'missing-tests': 1, 'open-pr': 2 };

@@ -191,7 +191,12 @@ export class RepoIntelService implements RepoIntel {
    */
   async getIndexState(repoId: string): Promise<IndexState> {
     const persisted = await this.repo.tryGetIndexState(repoId);
-    if (persisted) return persisted;
+    if (persisted) {
+      // The last pass's parse record is the incremental pass's input only; it
+      // is not part of the facade (or of the HTTP response) (F-54).
+      const { lastPass: _lastPass, ...state } = persisted;
+      return state;
+    }
     return {
       repoId,
       status: 'degraded',
@@ -689,8 +694,8 @@ export class RepoIntelService implements RepoIntel {
       for (let depth = 0; depth < BFS_DEPTH; depth += 1) {
         const next = (adj.get(cur) ?? [])
           .filter((t) => !inChain.has(t))
-          // rank DESC, ties by path ASC — the same chain on every call (AC-23)
-          .sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0) || a.localeCompare(b))[0];
+          // rank DESC, ties by path ASC in code-unit order, not locale (F-60) — the same chain on every call (AC-23)
+          .sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0) || cmp(a, b))[0];
         if (!next) break;
         chain.push(next);
         inChain.add(next);

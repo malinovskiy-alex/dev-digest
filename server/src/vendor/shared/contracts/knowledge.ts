@@ -115,7 +115,7 @@ export type TourSections = z.infer<typeof TourSections>;
 
 export const TourStatus = z.enum(['generated', 'ready', 'not_cloned', 'index_not_ready']); // which sections are shown; blockers say why Generate is off
 export type TourStatus = z.infer<typeof TourStatus>;
-export const TourFailureCode = z.enum(['no_api_key', 'timeout', 'provider_error', 'invalid_output']);
+export const TourFailureCode = z.enum(['no_api_key', 'timeout', 'provider_error', 'invalid_output', 'source_unreadable']); // source_unreadable: git could not read the revision, nothing was generated (F-52)
 export type TourFailureCode = z.infer<typeof TourFailureCode>;
 export const TourGeneration = z.object({
   running: z.boolean(),

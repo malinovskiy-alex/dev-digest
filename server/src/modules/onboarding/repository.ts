@@ -10,6 +10,7 @@
 import { and, desc, eq, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
+import { CLOSED_PR_STATUSES } from './constants.js';
 import type { OpenPull } from './facts/helpers.js';
 
 export class OnboardingRepository {
@@ -35,7 +36,12 @@ export class OnboardingRepository {
       .onConflictDoUpdate({ target: t.onboarding.repoId, set: { json, generatedAt } });
   }
 
-  /** Open PRs of the repo in this workspace, newest first (D-17). */
+  /**
+   * Open PRs of the repo in this workspace (D-17) — the ONE place the open-PR
+   * rule lives (F-61): not merged/closed, `updated_at` desc nulls last, then
+   * number desc (unique per repo, so the order is total — AC-23), at most
+   * `limit`. `openPrCandidates` only maps these rows.
+   */
   async listOpenPulls(workspaceId: string, repoId: string, limit: number): Promise<OpenPull[]> {
     return this.db
       .select({
@@ -50,7 +56,7 @@ export class OnboardingRepository {
         and(
           eq(t.pullRequests.workspaceId, workspaceId),
           eq(t.pullRequests.repoId, repoId),
-          notInArray(t.pullRequests.status, ['merged', 'closed']),
+          notInArray(t.pullRequests.status, [...CLOSED_PR_STATUSES]),
         ),
       )
       .orderBy(sql`${t.pullRequests.updatedAt} desc nulls last`, desc(t.pullRequests.number))

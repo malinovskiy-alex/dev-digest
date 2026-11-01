@@ -57,6 +57,25 @@ export interface IndexState extends IndexResult {
   coverage?: { totalSourceFiles: number | null; bounded: number; softBudgetReached: boolean };
 }
 
+/**
+ * What the last pass recorded about its own parse, read back only by the
+ * incremental pass so its counters stay consistent with the full pass (F-54).
+ * Never part of the facade's `IndexState`: the service strips it.
+ */
+export interface LastPassStats {
+  /** `stats.parseDegraded` — files of the walk that were not parsed (capped). */
+  parseDegraded: Array<{ file: string; reason: string }>;
+  /** `stats.skippedTooLarge`, 0 when absent. */
+  skippedTooLarge: number;
+  /** `stats.filesSeen` — the walk's file count, null when absent. */
+  filesSeen: number | null;
+}
+
+/** A persisted `repo_index_state` row as the repository reads it. */
+export interface StoredIndexState extends IndexState {
+  lastPass: LastPassStats;
+}
+
 // ---------------------------------------------------------------------------
 // Blast radius (facade method `getBlastRadius`). Adopted by blast/service.ts in
 // T2; in T1 the facade returns a degraded best-effort over container.codeIndex.

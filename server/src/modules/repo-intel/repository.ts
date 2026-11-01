@@ -21,8 +21,8 @@ import type {
   DegradedReason,
   FileRankRow,
   IndexedFileRow,
-  IndexState,
   IndexStatus,
+  StoredIndexState,
 } from './types.js';
 
 /** Chunk size for batched inserts — same value blast already uses. */
@@ -208,7 +208,7 @@ export class RepoIntelRepository {
    * updated_at) — we project them out here so the IndexState shape stays
    * stable for callers.
    */
-  async tryGetIndexState(repoId: string): Promise<IndexState | null> {
+  async tryGetIndexState(repoId: string): Promise<StoredIndexState | null> {
     try {
       const [row] = await this.db
         .select()
@@ -243,6 +243,18 @@ export class RepoIntelRepository {
             typeof stats.totalCandidates === 'number' ? stats.totalCandidates : null,
           bounded: typeof stats.bounded === 'number' ? stats.bounded : 0,
           softBudgetReached: stats.softBudgetReached === true,
+        },
+        lastPass: {
+          parseDegraded: Array.isArray(stats.parseDegraded)
+            ? (stats.parseDegraded as unknown[]).flatMap((e) => {
+                const entry = (e ?? {}) as { file?: unknown; reason?: unknown };
+                return typeof entry.file === 'string'
+                  ? [{ file: entry.file, reason: typeof entry.reason === 'string' ? entry.reason : '' }]
+                  : [];
+              })
+            : [],
+          skippedTooLarge: typeof stats.skippedTooLarge === 'number' ? stats.skippedTooLarge : 0,
+          filesSeen: typeof stats.filesSeen === 'number' ? stats.filesSeen : null,
         },
       };
     } catch {

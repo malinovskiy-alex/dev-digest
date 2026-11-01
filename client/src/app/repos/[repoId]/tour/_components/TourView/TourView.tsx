@@ -7,7 +7,7 @@
    generation, and the query polls until it ends.
 
    States, in order: no such repo → RepoNotFound, loading → section skeletons,
-   error → ErrorState with Retry, data → "On this page" on the left, then the
+   error with nothing loaded → ErrorState with Retry, data → "On this page" on the left, then the
    header and the five sections, whatever the status (AC-07). */
 "use client";
 
@@ -59,7 +59,9 @@ export function TourView(): React.JSX.Element {
     );
   }
 
-  if (query.isError) {
+  // Only when nothing has loaded: a failed background poll keeps the tour on
+  // screen — React Query keeps `data` and retries on the next interval (F-53).
+  if (query.isError && !tour) {
     return (
       <AppShell crumb={crumb}>
         <ErrorState

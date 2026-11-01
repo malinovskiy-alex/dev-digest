@@ -65,6 +65,7 @@ import {
   excerpt,
   findEnvExample,
   findReadme,
+  isReadablePath,
   manifestPaths,
   missingTestCandidates,
   openPrCandidates,
@@ -77,7 +78,7 @@ import {
   type TaskCandidate,
   type TourFacts,
 } from './facts/helpers.js';
-import { classifyGenerationError, generationFailureLog } from './grounding/helpers.js';
+import { classifyGenerationError, generationFailureLog, SourceUnreadableError } from './grounding/helpers.js';
 import {
   coveragePartial,
   deriveStatus,
@@ -244,7 +245,7 @@ export class OnboardingService {
     // the awaits, a generation that ended in between showed up as `ready` +
     // not running with no tour, and a polling client stopped there.
     const running = this.running.has(repo.id);
-    const failure = this.failures.get(repo.id) ?? null;
+    const failureSeen = this.failures.get(repo.id) ?? null;
 
     const [indexState, storedRow, pulls, choice] = await Promise.all([
       this.deps.repoIntel.getIndexState(repo.id),
@@ -253,6 +254,14 @@ export class OnboardingService {
       this.deps.featureModel(workspaceId),
     ]);
     const keyMissing = !(await this.deps.hasLlmKey(choice.provider));
+    // A "no API key" failure is stale once the selected provider has a key:
+    // Generate is enabled again, so the line would contradict it (F-58). It is
+    // dropped only if it is still the failure read above, never a newer one.
+    let failure = failureSeen;
+    if (failure?.code === 'no_api_key' && !keyMissing) {
+      if (this.failures.get(repo.id) === failure) this.failures.delete(repo.id);
+      failure = null;
+    }
     const stored = parseStored(storedRow);
     const prCandidates = openPrCandidates(pulls);
 
@@ -266,7 +275,8 @@ export class OnboardingService {
       sections = noCloneSections(prCandidates);
       indexedCount = 0;
     } else {
-      const facts = await this.collectFacts(repo, indexState);
+      // A skeleton from degraded facts is still shown; it is just not cached (F-52).
+      const { facts } = await this.collectFacts(repo, indexState);
       sections = skeletonSections(facts, this.candidates(facts, prCandidates));
       revision = facts.revision || null;
       indexedCount = facts.indexed.length;
@@ -424,7 +434,13 @@ export class OnboardingService {
       // while the index refreshed, and the revision, rows and coverage stored
       // below must all describe the same index (F-11).
       const indexState = await this.deps.repoIntel.getIndexState(repo.id);
-      const facts = await this.collectFacts(repo, indexState);
+      const { facts, gitFailed } = await this.collectFacts(repo, indexState);
+      // Facts read past a git failure have lost their README, commands or
+      // tasks without saying so; the generation stops here, before the model
+      // call, and records why instead of storing a hollow tour (F-52).
+      if (gitFailed) {
+        throw new SourceUnreadableError(`git could not read ${repo.fullName} at ${facts.revision || 'HEAD'}`);
+      }
       const pulls = await this.store.listOpenPulls(workspaceId, repo.id, OPEN_PR_LIMIT);
       const candidates = this.candidates(facts, openPrCandidates(pulls));
       const { text, trimmed } = fitBudget(renderFactBlocks(facts, candidates));
@@ -510,13 +526,25 @@ export class OnboardingService {
    * it never throws. `readFileAt` is called only on `package.json` paths, the
    * README, the env example and the top-30 ranked files; lockfiles and compose
    * files are recognised by name (AC-68, AC-64).
+   *
+   * `gitFailed` is set when a git call threw — no revision, no tree, or a
+   * listed blob that could not be read (a blob skipped for its size, or a
+   * path the adapter refuses by design, is not a failure — AC-89). Facts built past any failed read, git or index, are NOT
+   * memoised, so the next GET or generation reads again instead of reusing a
+   * transient failure until the index moves (F-52).
    */
-  private async collectFacts(repo: RepoLocator, indexState: TourIndexState): Promise<TourFacts> {
+  private async collectFacts(
+    repo: RepoLocator,
+    indexState: TourIndexState,
+  ): Promise<{ facts: TourFacts; gitFailed: boolean }> {
     const ref: RepoRef = { owner: repo.owner, name: repo.name };
+    let gitFailed = false;
+    let indexReadFailed = false;
     const head = async () => {
       try {
         return await this.deps.git.currentHead(ref);
       } catch {
+        gitFailed = true;
         return '';
       }
     };
@@ -527,7 +555,7 @@ export class OnboardingService {
     if (cached) {
       this.factsCache.delete(key);
       this.factsCache.set(key, cached);
-      return cached;
+      return { facts: cached, gitFailed: false };
     }
 
     // Blob sizes from `ls-tree -l`, so an oversized blob is refused before it
@@ -541,14 +569,20 @@ export class OnboardingService {
       } catch {
         const current = indexState.lastIndexedSha ? await head() : '';
         if (current && current !== revision) {
+          // D-5: the tree at the index sha is gone; HEAD stands in for it.
           revision = current;
           try {
             sizes = await list(revision);
           } catch {
             sizes = new Map();
+            gitFailed = true;
           }
+        } else {
+          gitFailed = true;
         }
       }
+    } else {
+      gitFailed = true;
     }
     const treePaths = [...sizes.keys()];
 
@@ -569,6 +603,7 @@ export class OnboardingService {
       try {
         return await this.deps.repoIntel.getImporters(repo.id, scanPaths);
       } catch {
+        indexReadFailed = true;
         return [];
       }
     })();
@@ -577,9 +612,13 @@ export class OnboardingService {
     const read = async (path: string): Promise<string | null> => {
       const size = sizes.get(path);
       if (!revision || size === undefined || !Number.isFinite(size) || size > READ_MAX_BYTES) return null;
+      // A path the adapter refuses by design is a skipped file, not a git
+      // failure (AC-89, F-64): it is never sent to `readFileAt`.
+      if (!isReadablePath(path)) return null;
       try {
         return await this.deps.git.readFileAt(ref, revision, path);
       } catch {
+        gitFailed = true;
         return null;
       }
     };
@@ -628,13 +667,14 @@ export class OnboardingService {
       folders: topLevelFolders(indexedPaths),
     };
 
+    if (gitFailed || indexReadFailed) return { facts, gitFailed };
     this.factsCache.set(key, facts);
     while (this.factsCache.size > FACTS_CACHE_ENTRIES) {
       const oldest = this.factsCache.keys().next().value;
       if (oldest === undefined) break;
       this.factsCache.delete(oldest);
     }
-    return facts;
+    return { facts, gitFailed };
   }
 }
 

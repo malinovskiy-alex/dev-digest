@@ -34,7 +34,7 @@ import type {
   IndexerSymbolRow,
   RepoIntelRepository,
 } from '../repository.js';
-import type { IndexResult, IndexStatus } from '../types.js';
+import type { IndexResult, IndexStatus, LastPassStats } from '../types.js';
 import { runFullIndex, type IndexPayload } from './full.js';
 import { walkClone, type WalkResult } from './walk.js';
 import { computeFileRank } from './rank.js';
@@ -48,6 +48,77 @@ import { renderRepoMap } from './repo-map.js';
 const INCREMENTAL_FULL_THRESHOLD = 300;
 
 const SUPPORTED_SET: ReadonlySet<string> = new Set(SUPPORTED_EXT);
+
+/** Same cap as the full pass's `stats.parseDegraded` (`full.ts`). */
+const PARSE_DEGRADED_CAP = 50;
+
+const NO_LAST_PASS: LastPassStats = { parseDegraded: [], skippedTooLarge: 0, filesSeen: null };
+
+export interface RefreshCountsInput {
+  /** The prior row's counters and the record of its own parse. */
+  prior: { filesIndexed: number; filesSkipped: number; softBudgetReached: boolean; lastPass: LastPassStats };
+  /** This pass's walk; `undefined` when it threw. */
+  walk: WalkResult | undefined;
+  /** The changed slice this pass re-parsed. */
+  changed: readonly string[];
+  /** Slice files this pass could not read or parse. */
+  sliceFailed: ReadonlyArray<{ file: string; reason: string }>;
+  /** Whether this pass rewrote `file_rank` (the walk, graph and resolve all succeeded). */
+  rankWritten: boolean;
+}
+
+/**
+ * `filesIndexed` / `filesSkipped` of the refreshed index, on the full pass's
+ * terms (F-54, AC-87): indexed = walked files that are parsed, skipped =
+ * too large + walked files that failed to read or parse — so
+ * indexed + skipped <= totalCandidates, and a parse failure stays skipped
+ * until a pass parses that file again.
+ *
+ * Unparsed after this pass = the prior failures still on disk and not in the
+ * slice (from `stats.parseDegraded`), the prior failures the capped list could
+ * not name (assumed still unparsed), and this slice's failures still on disk
+ * (a deleted file is in no count). Files a soft-budgeted full pass never
+ * reached stay out of `filesIndexed` while that flag is carried (F-09).
+ * Graph or resolve failed → the prior N stays (F-10), capped by what is parsed.
+ * Walk failed → the file set is unknown, so both prior counters stay.
+ *
+ * Also returns the `parseDegraded` list to persist: exactly the walk files
+ * counted as unparsed (capped), so the next refresh can carry it.
+ */
+export function refreshCounts(input: RefreshCountsInput): {
+  filesIndexed: number;
+  filesSkipped: number;
+  parseDegraded: Array<{ file: string; reason: string }>;
+} {
+  const { prior, walk, changed, sliceFailed, rankWritten } = input;
+  const changedSet = new Set(changed);
+  const priorFailed = prior.lastPass.parseDegraded;
+  if (!walk) {
+    const kept = priorFailed.filter((e) => !changedSet.has(e.file));
+    return {
+      filesIndexed: prior.filesIndexed,
+      filesSkipped: prior.filesSkipped,
+      parseDegraded: [...kept, ...sliceFailed].slice(0, PARSE_DEGRADED_CAP),
+    };
+  }
+  const onDisk = new Set(walk.files);
+  const kept = priorFailed.filter((e) => onDisk.has(e.file) && !changedSet.has(e.file));
+  const freshFailed = sliceFailed.filter((e) => onDisk.has(e.file));
+  const priorUnparsed = Math.max(0, prior.filesSkipped - prior.lastPass.skippedTooLarge);
+  const unlisted = Math.max(0, priorUnparsed - priorFailed.length);
+  const unparsed = Math.min(walk.files.length, kept.length + unlisted + freshFailed.length);
+  // A soft-budgeted full pass counted neither the files it never reached.
+  const neverParsed =
+    prior.softBudgetReached && prior.lastPass.filesSeen != null
+      ? Math.max(0, prior.lastPass.filesSeen - prior.filesIndexed - priorUnparsed)
+      : 0;
+  const parsed = Math.max(0, walk.files.length - unparsed - neverParsed);
+  return {
+    filesIndexed: rankWritten ? parsed : Math.min(prior.filesIndexed, parsed),
+    filesSkipped: walk.stats.skippedTooLarge + unparsed,
+    parseDegraded: [...kept, ...freshFailed].slice(0, PARSE_DEGRADED_CAP),
+  };
+}
 
 export async function runIncremental(
   container: Container,
@@ -267,7 +338,28 @@ export async function runIncremental(
           ? { totalCandidates: state.coverage.totalSourceFiles }
           : {}),
         bounded: state.coverage?.bounded ?? 0,
+        // Carried with the counters they explain, so the next refresh's
+        // `refreshCounts` still tells too-large files from parse failures.
+        skippedTooLarge: state.lastPass?.skippedTooLarge ?? 0,
+        ...(state.lastPass?.filesSeen != null ? { filesSeen: state.lastPass.filesSeen } : {}),
       };
+
+  // The counters on the full pass's terms (F-54, AC-87) — see `refreshCounts`.
+  // They used to be `file_rank` rows + this slice's skips: a file that failed
+  // to parse earlier counted as indexed, and indexed + skipped could exceed
+  // the walk's candidates.
+  const counts = refreshCounts({
+    prior: {
+      filesIndexed: state.filesIndexed,
+      filesSkipped: state.filesSkipped,
+      softBudgetReached: state.coverage?.softBudgetReached === true,
+      lastPass: state.lastPass ?? NO_LAST_PASS,
+    },
+    walk,
+    changed,
+    sliceFailed: parseDegraded,
+    rankWritten: rankWritten !== undefined,
+  });
 
   const stats: Record<string, unknown> = {
     incremental: true,
@@ -283,19 +375,11 @@ export async function runIncremental(
     // full index clears it (AC-13, AC-87, F-09).
     softBudgetReached: state.coverage?.softBudgetReached === true,
     ...(graphFailed ? { graphFailed } : {}),
-    parseDegraded,
+    parseDegraded: counts.parseDegraded,
     durationMs: Date.now() - startedAt,
   };
-
-  // `filesIndexed` is the number of files the refreshed index holds — the
-  // `file_rank` rows written above. It used to be `prior + this slice`, which
-  // re-added every re-parsed file on each refresh and drifted upward (AC-87).
-  // When the rank was not rewritten (walk, graph or resolve failed), the prior
-  // count still describes the index (F-10).
-  const newFilesIndexed = rankWritten ?? state.filesIndexed;
-  const newFilesSkipped = walk
-    ? walk.stats.skippedTooLarge + filesSkipped
-    : state.filesSkipped + filesSkipped;
+  const newFilesIndexed = counts.filesIndexed;
+  const newFilesSkipped = counts.filesSkipped;
 
   await repository.upsertIndexState({
     repoId,

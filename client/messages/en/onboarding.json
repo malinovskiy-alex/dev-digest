@@ -37,7 +37,8 @@
     "no_api_key": "no API key for the selected provider",
     "timeout": "the model did not answer within 120 seconds",
     "provider_error": "the provider returned an error: {message}",
-    "invalid_output": "the model returned invalid output"
+    "invalid_output": "the model returned invalid output",
+    "source_unreadable": "the repository files could not be read from git, so nothing was generated — try again"
   },
   "indexReason": {
     "no_data": "the repository has not been indexed yet",
@@ -62,6 +63,7 @@
     "needsClone": "Needs a clone and an index",
     "needsIndex": "Needs an index — the folder list appears once the repository is indexed",
     "noEdges": "No critical paths — the import graph is empty",
+    "criticalNeedsIndex": "No critical paths yet — the repository has not been indexed",
     "notRanked": "No reading path — the repository has not been ranked yet",
     "notRankedReason": "No reading path — the repository has not been ranked yet ({reason})",
     "noManifest": "No run commands found in the repository's manifests",
