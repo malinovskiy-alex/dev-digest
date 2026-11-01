@@ -28,13 +28,16 @@ export interface NavGroup {
  * them reachable only from the command palette was the alternative. If this
  * library is ever re-vendored, re-apply the SKILLS LAB group and the `g s` /
  * `g c` shortcuts below, and the WORKSPACE "Project Context" item (L05,
- * `/repos/:repoId/context`, no shortcut).
+ * `/repos/:repoId/context`, no shortcut) and the WORKSPACE "Onboarding Tour"
+ * item between Pull Requests and Project Context (L05,
+ * `/repos/:repoId/tour`, no shortcut).
  */
 export const NAV: NavGroup[] = [
   {
     section: "WORKSPACE",
     items: [
       { key: "pulls", label: "Pull Requests", icon: "GitPullRequest", href: "/repos/:repoId/pulls", gKey: "p" },
+      { key: "onboarding-tour", label: "Onboarding Tour", icon: "Workflow", href: "/repos/:repoId/tour" },
       { key: "context", label: "Project Context", icon: "FileText", href: "/repos/:repoId/context" },
     ],
   },

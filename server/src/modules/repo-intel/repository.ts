@@ -17,7 +17,13 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import { clampIndexedName } from '../../db/schema/context.js';
-import type { DegradedReason, FileRankRow, IndexState, IndexStatus } from './types.js';
+import type {
+  DegradedReason,
+  FileRankRow,
+  IndexedFileRow,
+  IndexState,
+  IndexStatus,
+} from './types.js';
 
 /** Chunk size for batched inserts — same value blast already uses. */
 const INSERT_CHUNK_SIZE = 500;
@@ -230,6 +236,14 @@ export class RepoIntelRepository {
         degradedReason: isDegraded
           ? ((stats.degradedReason as DegradedReason | undefined) ?? 'index_failed')
           : undefined,
+        // What the latest walk saw (AC-13/AC-87). Full and incremental passes
+        // both write these keys; a row from before they did reads as unknown.
+        coverage: {
+          totalSourceFiles:
+            typeof stats.totalCandidates === 'number' ? stats.totalCandidates : null,
+          bounded: typeof stats.bounded === 'number' ? stats.bounded : 0,
+          softBudgetReached: stats.softBudgetReached === true,
+        },
       };
     } catch {
       // Table missing / schema drift / connection blip — degrade silently. The
@@ -445,7 +459,11 @@ export class RepoIntelRepository {
       .where(and(eq(t.fileRank.repoId, repoId), inArray(t.fileRank.filePath, paths)));
   }
 
-  /** Top `limit` paths by rank DESC (caller filters tests/configs in JS). */
+  /**
+   * Top `limit` paths by rank DESC (caller filters tests/configs in JS). Ties
+   * break by path ASC so equal-rank files come back in the same order on every
+   * call — Postgres gives no order of its own (AC-23, AC-46).
+   */
   async getRankedPaths(
     repoId: string,
     limit: number,
@@ -454,8 +472,60 @@ export class RepoIntelRepository {
       .select({ path: t.fileRank.filePath, rank: t.fileRank.rank })
       .from(t.fileRank)
       .where(eq(t.fileRank.repoId, repoId))
-      .orderBy(desc(t.fileRank.rank))
+      .orderBy(desc(t.fileRank.rank), asc(t.fileRank.filePath))
       .limit(limit);
+  }
+
+  /**
+   * Every `file_rank` row of the repo with its distinct-importer count, in ONE
+   * query: `file_rank` LEFT JOIN a per-target aggregate over `file_edges`.
+   * Ordered rank DESC, path ASC (onboarding, AC-36/AC-46).
+   */
+  async getIndexedFiles(repoId: string): Promise<IndexedFileRow[]> {
+    const importers = this.db
+      .select({
+        toFile: t.fileEdges.toFile,
+        importers: sql<number>`count(distinct ${t.fileEdges.fromFile})::int`.as('importers'),
+      })
+      .from(t.fileEdges)
+      .where(eq(t.fileEdges.repoId, repoId))
+      .groupBy(t.fileEdges.toFile)
+      .as('importers');
+    const rows = await this.db
+      .select({
+        path: t.fileRank.filePath,
+        rank: t.fileRank.rank,
+        percentile: t.fileRank.percentile,
+        importers: importers.importers,
+      })
+      .from(t.fileRank)
+      .leftJoin(importers, eq(importers.toFile, t.fileRank.filePath))
+      .where(eq(t.fileRank.repoId, repoId))
+      .orderBy(desc(t.fileRank.rank), asc(t.fileRank.filePath));
+    return rows.map((r) => ({
+      path: r.path,
+      rank: r.rank,
+      percentile: r.percentile,
+      importers: Number(r.importers ?? 0),
+    }));
+  }
+
+  /** Every `file_facts` row of the repo, path ASC (onboarding routes, AC-20). */
+  async getAllFileFacts(repoId: string): Promise<IndexerFileFactsRow[]> {
+    const rows = await this.db
+      .select({
+        filePath: t.fileFacts.filePath,
+        endpoints: t.fileFacts.endpoints,
+        crons: t.fileFacts.crons,
+      })
+      .from(t.fileFacts)
+      .where(eq(t.fileFacts.repoId, repoId))
+      .orderBy(asc(t.fileFacts.filePath));
+    return rows.map((r) => ({
+      filePath: r.filePath,
+      endpoints: (r.endpoints as string[]) ?? [],
+      crons: (r.crons as string[]) ?? [],
+    }));
   }
 
   /** Repo-map candidates: symbols with a signature, joined to rank, ordered. */

@@ -47,6 +47,14 @@ export interface IndexState extends IndexResult {
   /** True when the layer is running on the ripgrep fallback. */
   degraded?: boolean;
   degradedReason?: DegradedReason;
+  /**
+   * What the latest walk saw, projected from `repo_index_state.stats` (L05
+   * onboarding header, AC-13/AC-87). `totalSourceFiles` is the walk's
+   * `totalCandidates` (null when an older row never recorded it); `bounded` and
+   * `softBudgetReached` say whether the index holds fewer files than the walk saw.
+   * Absent on the synthesised "no data" state.
+   */
+  coverage?: { totalSourceFiles: number | null; bounded: number; softBudgetReached: boolean };
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +129,21 @@ export interface FileRankRow {
   percentile: number;
 }
 
+/** One ranked file with its import fan-in (onboarding reading path / rows). */
+export interface IndexedFileRow {
+  path: string;
+  rank: number;
+  percentile: number;
+  /** Distinct files importing this one (`file_edges.from_file`). */
+  importers: number;
+}
+
+/** One HTTP endpoint the indexer found in a file (`file_facts.endpoints`). */
+export interface EndpointRow {
+  file: string;
+  endpoint: string;
+}
+
 export interface RepoMapResult {
   text: string;
   tokens: number;
@@ -169,4 +192,8 @@ export interface RepoIntel {
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+  /** Every ranked file (= every file the index holds), rank DESC then path ASC. */
+  getIndexedFiles(repoId: string): Promise<IndexedFileRow[]>;
+  /** Every `(file, endpoint)` from `file_facts`, file ASC then endpoint ASC, de-duplicated. */
+  getEndpoints(repoId: string): Promise<EndpointRow[]>;
 }

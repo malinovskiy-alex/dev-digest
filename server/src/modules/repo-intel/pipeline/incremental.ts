@@ -36,7 +36,7 @@ import type {
 } from '../repository.js';
 import type { IndexResult, IndexStatus } from '../types.js';
 import { runFullIndex, type IndexPayload } from './full.js';
-import { walkClone } from './walk.js';
+import { walkClone, type WalkResult } from './walk.js';
 import { computeFileRank } from './rank.js';
 import { renderRepoMap } from './repo-map.js';
 
@@ -214,8 +214,13 @@ export async function runIncremental(
   // v1 favours simple correctness.
   let graphFailed: string | undefined;
   let edgeRows: IndexerEdgeRow[] = [];
+  // Kept outside the `try`: its stats are what this refresh writes as the
+  // coverage of the index (AC-87) — never the prior row's, which go stale as
+  // soon as a file is added.
+  let walk: WalkResult | undefined;
   try {
-    const allFiles = (await walkClone(repo.clonePath)).files;
+    walk = await walkClone(repo.clonePath);
+    const allFiles = walk.files;
     const edges = await container.depgraph.buildEdges(repo.clonePath, allFiles);
     edgeRows = edges.map((e) => ({ fromFile: e.from, toFile: e.to }));
     await repository.replaceEdges(repoId, edgeRows);
@@ -242,6 +247,23 @@ export async function runIncremental(
   const clean = parseDegraded.length === 0 && !graphFailed;
   const status: IndexStatus = clean && state.status === 'full' ? 'full' : 'partial';
 
+  // Coverage of the refreshed index (AC-87): from this pass's own walk. If the
+  // walk itself threw, the file set did not change on disk as far as we know,
+  // so the prior row's coverage is carried forward instead.
+  const coverage = walk
+    ? {
+        totalCandidates: walk.stats.totalCandidates,
+        bounded: walk.stats.bounded,
+        skippedTooLarge: walk.stats.skippedTooLarge,
+        filesSeen: walk.files.length,
+      }
+    : {
+        ...(state.coverage?.totalSourceFiles != null
+          ? { totalCandidates: state.coverage.totalSourceFiles }
+          : {}),
+        bounded: state.coverage?.bounded ?? 0,
+      };
+
   const stats: Record<string, unknown> = {
     incremental: true,
     changedFiles: changed.length,
@@ -249,16 +271,23 @@ export async function runIncremental(
     referencesWritten: refsBuf.length,
     edgesWritten: edgeRows.length,
     hotnessAvailable: false,
+    ...coverage,
+    // The incremental pass has no soft budget.
+    softBudgetReached: false,
     ...(graphFailed ? { graphFailed } : {}),
     parseDegraded,
     durationMs: Date.now() - startedAt,
   };
 
-  // The aggregate filesIndexed counter on `repo_index_state` is the prior
-  // count + this slice. Symbols/references for unchanged files are still in
-  // the table, so the counter must reflect total coverage.
-  const newFilesIndexed = state.filesIndexed + filesIndexed;
-  const newFilesSkipped = state.filesSkipped + filesSkipped;
+  // `filesIndexed` is the number of files the refreshed index holds — the
+  // walk's file set, which is exactly the `file_rank` rows written above. It
+  // used to be `prior + this slice`, which re-added every re-parsed file on
+  // each refresh and drifted upward (AC-87). Without a walk the rank was not
+  // rewritten, so the prior count still describes the index.
+  const newFilesIndexed = walk ? walk.files.length : state.filesIndexed;
+  const newFilesSkipped = walk
+    ? walk.stats.skippedTooLarge + filesSkipped
+    : state.filesSkipped + filesSkipped;
 
   await repository.upsertIndexState({
     repoId,

@@ -1,0 +1,65 @@
+/* ArchitectureDiagram — a hand-drawn box-and-arrow SVG of the grounded
+   components, coloured by kind (AC-32). Labels are plain SVG text: no links,
+   no handlers, no raw HTML (AC-63). A visually hidden list repeats the
+   connections for screen readers. */
+"use client";
+
+import React from "react";
+import { useTranslations } from "next-intl";
+import type { TourComponent, TourConnection } from "@devdigest/shared";
+import { KIND_COLORS, KIND_STROKES } from "./constants";
+import { boxLabel, layoutDiagram } from "./helpers";
+import { cx } from "./styles";
+
+export function ArchitectureDiagram({
+  components,
+  connections,
+}: {
+  components: TourComponent[];
+  connections: TourConnection[];
+}): React.JSX.Element {
+  const t = useTranslations("onboarding");
+  const markerId = `tour-arrow-${React.useId().replace(/:/g, "")}`;
+  const layout = layoutDiagram(components, connections);
+  const byId = new Map(components.map((c) => [c.id, c]));
+
+  return (
+    <div className={cx.wrap}>
+      <svg
+        role="img"
+        aria-label={t("diagramLabel", { count: components.length })}
+        width={layout.width}
+        height={layout.height}
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+      >
+        <defs>
+          <marker id={markerId} viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" className={cx.arrow} />
+          </marker>
+        </defs>
+        {layout.edges.map((e) => (
+          <line key={e.key} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} className={cx.edge} strokeWidth={1.25} markerEnd={`url(#${markerId})`} />
+        ))}
+        {layout.nodes.map((n) => {
+          const c = byId.get(n.id)!;
+          return (
+            <g key={n.id}>
+              <title>{c.label}</title>
+              <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={6} fill={KIND_COLORS[c.kind]} stroke={KIND_STROKES[c.kind]} />
+              <text x={n.x + n.w / 2} y={n.y + n.h / 2} textAnchor="middle" dominantBaseline="central" className={cx.label}>
+                {boxLabel(c.label)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <ul className={cx.srOnly} aria-label={t("diagramEdges")}>
+        {connections.map((e) => (
+          <li key={`${e.from}>${e.to}`}>
+            {`${byId.get(e.from)?.label ?? e.from} → ${byId.get(e.to)?.label ?? e.to}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

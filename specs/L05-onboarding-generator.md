@@ -3,7 +3,7 @@
 **Requirements:** `specs/L05-onboarding-generator.requirements.md` (Status: Approved, 2026-10-31, **AC-01 … AC-88**, as amended on 2026-10-31: AC-21, AC-33, AC-40 and AC-72 changed; AC-86, AC-87 and AC-88 added)
 **Execution:** multi-agent, given by the caller on 2026-10-31 (D-36). Same shape as `specs/L05-project-context.md` `## Execution`, with the e2e step routed to `implementer` (`INSIGHTS.md:48-52`)
 **Branch:** `lesson/L05-onboarding-generator` (never `main`)
-**Plan status:** complete and executable, revision 2 (2026-10-31).
+**Plan status:** complete and executable, revision 3 (2026-11-01). Revision 3 changes wording only, to match fix round 1 (`findings.md` F-01, F-02, F-03, F-05): the generation is a JobRunner job (D-3), `statusLines` lives in `TourHeader/helpers.ts`, there is an `EXCLUDED_DIRS` parity test, and R-10 is new. Revision 2:
 - The user decided REC-1 (a), REC-2 (a), REC-3 accepted (→ AC-86) and REC-4 accepted (→ AC-87).
 - The cross-model (Sonnet) review `.devdigest/cache/sdd/L05-onboarding-generator/plan-review.md` ("approve with changes") is addressed. Every BLOCKER and MAJOR is fixed. The MINORs are handled in D-43 … D-50, and the ones rejected say why there.
 - No open question remains.
@@ -50,7 +50,7 @@ Every ID from the requirements file. "already holds" means nothing is built, onl
 | AC-26 | ok | | steps 7, 10, 14, 15 |
 | AC-27 | ok | `POST …/tour/generate` → 202, then the client polls (D-2, D-39) | steps 10, 11, 13, 15 |
 | AC-28 | ok | an in-process per-repo registry gives 409 `tour_generation_running` with the exact message (D-3) | steps 10, 11, 13, 15 |
-| AC-29 | ok | the generation is a detached promise in the service and outlives the request (D-3) | steps 10, 13 |
+| AC-29 | ok | the generation is a JobRunner job, so it outlives the request (D-3) | steps 10, 13 |
 | AC-30 | ok | | steps 9, 18 |
 | AC-31 | planner detail | the server wraps known bare paths in backticks (D-26). The client renders code spans verbatim | steps 6, 18 |
 | AC-32 | ok | hand-drawn SVG, no dependency (INV-5) | step 18 |
@@ -120,7 +120,7 @@ D-1 … D-35 are routine calls by the planner. Each says what the implementation
 |---|---|---|---|
 | D-1 | Module and file layout | New server module `server/src/modules/onboarding/`. Pure code is split **by subject** into `helpers.ts` files, because the arch `DOMAIN` regex classifies only `…/helpers.ts` as Ring 1 (`.dependency-cruiser.cjs:55`), so `core-no-io` checks those files only: `facts/helpers.ts`, `prompt/helpers.ts`, `grounding/helpers.ts`, `helpers.ts` (tour assembly). Plus `constants.ts`, `schema.ts`, `repository.ts`, `service.ts`, `routes.ts`. Precedent: `reviews/smart-diff/helpers.ts` | planner |
 | D-2 | API shape | `GET /repos/:id/tour` → `OnboardingTour` (never calls a model). `POST /repos/:id/tour/generate` → **202** `{ running: true }` once the pre-checks pass and the generation has started. 404 for an unknown or foreign repo. 409 `tour_generation_running` "A tour is already being generated". 422 `tour_not_cloned`, `tour_index_not_ready`, `tour_no_api_key`. No other endpoints | planner |
-| D-3 | Where the generation runs | In the service, as a **detached promise** held in a `Map<repoId, Promise<void>>`. **Not** `JobRunner`: it wraps a handler in `withRetry(retries: 2)` + `withTimeout(120 s)` (`platform/jobs.ts:40-42,65-82`). Those retries would re-call the model (AC-21), and the job timeout would cut a 120 s model call plus fact collection. One API per database is already assumed (`server/INSIGHTS.md:99-106`). A restart mid-generation loses it, and nothing is stored (R-3) | planner |
+| D-3 | Where the generation runs (rev. 3, findings F-03) | As a **`JobRunner` job** of kind `TOUR_JOB_KIND = 'onboarding-tour-generate'` (`onboarding/constants.ts`). The service registers the handler in its constructor through the `jobs: JobQueue` dep and enqueues one job per accepted `POST`. **The handler never throws**: it records any failure in `failures` itself and resolves. JobRunner retries a handler only when it rejects (`withRetry(retries: 2)`, `platform/jobs.ts:65-82`), so a retry never re-calls the model (AC-21). The synchronous per-repo lock (`running` map, D-43, INV-17) stays, and it is what gives the 409. One API per database is already assumed (`server/INSIGHTS.md:99-106`). JobRunner's 120 s wall covers the whole handler (R-10), and a restart mid-generation loses the run (R-3) | user, 2026-11-01 (F-03) |
 | D-4 | Storage | Reuse the empty `onboarding` table (`context.ts:120-126`). **No migration.** `json` holds a versioned envelope `StoredTour = { v: 1, revision, index_files, source_files, coverage_partial, index_partial, trimmed, provider, model, cost_usd, sections }`. `generated_at` is set explicitly on every upsert, because `defaultNow()` fires only on insert. On read the envelope is `safeParse`d. A row that does not parse is treated as "no stored tour". Scoping goes through `repos` (the table has no `workspace_id`), and the route checks the workspace first | planner (`AGENTS.md`: an empty table is intentional) |
 | D-5 | Which revision | `revision = indexState.lastIndexedSha`, falling back to `git.currentHead()` when that is empty. Every git read for one generation (`listFilesAt`, `readFileAt`) uses that one sha, so facts and index agree. If `readFileAt` at that sha fails because the object is gone, the whole fact set is read at `currentHead()` instead. `outdated = stored.revision !== current indexState.lastIndexedSha` | planner |
 | D-6 | Manifests and folders | The only manifest type is `package.json`. Root `package.json` if present, plus at most **4** first-level `<dir>/package.json` files. The 4 are picked by the number of indexed files under `<dir>/` (desc), ties by `<dir>` asc. `EXCLUDED_DIRS` dirs are never picked. Top-level folders = the first path segment of indexed files, with counts, ordered by count desc then name asc, at most 30. Root-level files are not a folder | planner |
@@ -345,7 +345,7 @@ Each invariant is checkable on its own. `architecture-reviewer` runs `pnpm arch`
 | INV-6 | **Vendored `@devdigest/shared` is mirrored.** The two `contracts/knowledge.ts` are byte-identical, and `adapters.ts` is unchanged. The client imports `@devdigest/shared` **type-only** | `diff server/src/vendor/shared client/src/vendor/shared -r` → nothing. `grep -rn "from \"@devdigest/shared\"" client/src/app/repos/\[repoId\]/tour client/src/lib/hooks/onboarding.ts` → every hit is `import type` |
 | INV-7 | **No I/O but the git port.** `onboarding/**` imports no `node:fs`, `node:child_process`, `execa` or `simple-git`. File content comes only from `GitClient.listFilesAt`/`readFileAt` at **one** sha per generation (D-5). Nothing is executed (AC-44), and no `.env` other than the example is read (AC-64) | `grep -rn "node:fs\|child_process\|execa\|simple-git" server/src/modules/onboarding` → nothing |
 | INV-8 | **Ring-1 helpers are pure.** `onboarding/**/helpers.ts` import only `zod`, `@devdigest/shared` (types/enums), `@devdigest/reviewer-core` (`wrapUntrusted` only), sibling `constants.ts`/`schema.ts`/`helpers.ts`. No `async` I/O | `core-no-io` in `pnpm arch` (`.dependency-cruiser.cjs:64-73`) |
-| INV-9 | **Explicit deps, no cycle.** `OnboardingService` takes `{ db, repos, repoIntel, git, featureModel, llm, hasLlmKey, now?, generationTimeoutMs? }`. It never imports `Container` (not even `import type`: `tsPreCompilationDeps`, `server/INSIGHTS.md:121-123`). It `new`s only its own `OnboardingRepository` | `no-circular` in `pnpm arch`; read the constructor |
+| INV-9 | **Explicit deps, no cycle.** `OnboardingService` takes `{ db, repos, repoIntel, git, featureModel, llm, hasLlmKey, jobs: JobQueue, now?, generationTimeoutMs? }`. `JobQueue` is a local structural interface (`register`, `enqueue`), satisfied by `container.jobs`. It never imports `Container` (not even `import type`: `tsPreCompilationDeps`, `server/INSIGHTS.md:121-123`). It `new`s only its own `OnboardingRepository` | `no-circular` in `pnpm arch`; read the constructor |
 | INV-10 | **Routes are transport only.** zod `params` (`IdParams`), `requireRepoInWorkspace` before the id reaches the service, errors thrown as `AppError` subclasses (never `reply.send({ error })`), no `db/schema` import | `routes-no-db`, `app-no-fastify` in `pnpm arch`; read `routes.ts` |
 | INV-11 | **No schema change.** The empty `onboarding` table is reused. No new table, no migration, `db/schema/*` unchanged | `git diff --stat -- server/src/db` → empty |
 | INV-12 | **Client structure.** `page.tsx` is thin. Feature code lives in `tour/_components/` (route-private). No `fetch` in a component: data comes through `lib/hooks/onboarding.ts` → `lib/api.ts`. The only `src/vendor/` edits are `ui/nav.ts` and `shared/contracts/knowledge.ts`. No hardcoded user-facing string in JSX | read the tree; `frontend-ui-architecture` red flags |
@@ -412,7 +412,7 @@ Derived from `.claude/skills/pr-self-review/references/routing.md` (first match 
 | registration is static: one import plus one entry in `modules/index.ts` | `server/AGENTS.md` Conventions; `modules/index.ts:20-23` |
 | a DB test is named `*.it.test.ts`. Run it with `--no-file-parallelism` and **read the skipped count** | `server/INSIGHTS.md:72-97`, `:271-293` |
 | `pnpm typecheck` does not cover `server/test/`, so typecheck test files with a scratch tsconfig | `server/INSIGHTS.md:128-139` |
-| JobRunner retries and times out handlers, so it is not used for the generation (D-3) | `server/src/platform/jobs.ts:40-42,65-82` |
+| JobRunner retries a handler that rejects, and times it out at 120 s. The tour handler therefore never rejects (it records its own failure), so a retry never re-calls the model (D-3) | `server/src/platform/jobs.ts:40-42,65-82` |
 | do not commit, check out or reformat `server/src` while anything is running under `pnpm dev` (tsx watch restarts kill in-flight work, including a tour generation) | `server/INSIGHTS.md:14-31` |
 | one API process per database (the in-memory running-registry relies on it) | `server/INSIGHTS.md:99-106` |
 | an empty table is intentional. `onboarding` is the table to use, and `code_chunks` is not touched | `AGENTS.md` hard rules |
@@ -611,7 +611,8 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
       3. `{ provider, model } = await deps.featureModel(ws)` (AC-22).
       4. `llm = await deps.llm(provider)`. On `ConfigError` → record the failure `no_api_key` and throw 422 `tour_no_api_key` "No API key for <provider>" (AC-70, D-22).
       5. `} catch (e) { running.delete(repoId); lock.resolve(); throw e; }`
-      6. Clear the previous failure. `done = this.run(…).finally(() => { running.delete(repoId); lock.resolve(); })`. Return `{ done }` without awaiting it (AC-29).
+      6. Clear the previous failure. `const job = await deps.jobs.enqueue(ws, TOUR_JOB_KIND, { workspaceId, repoId, provider, model })` (D-3). `done = job.done.finally(() => { running.delete(repoId); lock.resolve(); })`. Return `{ done }` without awaiting it (AC-29). A rejected `enqueue` is a pre-check failure: the lock is released as in 5.
+    - The job handler, registered in the constructor with `deps.jobs.register(TOUR_JOB_KIND, (p) => this.handleJob(p))`, calls `run(…)` inside a `try/catch` that records the failure and **never rethrows** (D-3).
     - `private async run(…)`:
       - `facts = collectFacts` → `fitBudget(renderFactBlocks(facts))` → `system = renderPrompt(TOUR_PROMPT_FILE, { language: TOUR_LANGUAGE })` (from `platform/prompts.ts`);
       - **exactly one** call, `withTimeout(llm.completeStructured({ model, schema: TourNarrative, schemaName: TOUR_SCHEMA_NAME, temperature: 0, maxTokens: 4000, timeoutMs, maxRetries: 0, messages: [system, user] }), timeoutMs)` (AC-21, AC-71, AC-83, INV-4);
@@ -645,7 +646,7 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
       - data → the `TourHeader`, the `OnThisPage` aside, and the five `TourSection`s in `SECTION_ORDER` (AC-07), whatever the status.
     - The crumb is `[{ label: full_name, mono: true }, { label: t("title") }]` (AC-06).
     - `constants.ts`: `SECTION_ORDER = ["architecture", "critical-paths", "run-locally", "reading-path", "first-tasks"]`, with the title keys and DOM ids `tour-<key>`.
-    - `helpers.ts`: `statusLines(tour)` → an ordered list (D-41):
+    - `TourHeader/helpers.ts` (step 15's folder, F-01; not `TourView/helpers.ts`): the `StatusLine` type and `statusLines(tour)` → an ordered list (D-41):
       - one line per entry of `tour.blockers`, in order: `not_cloned` → "Not cloned — clone to generate"; `index_not_ready` → "Index not ready — {reason}"; `no_api_key` → "No API key for {api_key.provider}" with a Settings link (AC-14, AC-15, AC-86);
       - then the failure line "Generation failed — {reason}" when `generation.failure` is set and `status !== 'generated'` (AC-71). For `failure.code === 'no_api_key'`, this line is skipped when the `no_api_key` blocker already shows (AC-70), so there is no duplicate.
       - The notice rule: a failure **with** `status === 'generated'` → the dismissible notice (AC-73).
@@ -659,7 +660,7 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
       - disabled with "Generating…" while `generation.running` or the mutation is pending (AC-28);
       - disabled when `!can_generate`, i.e. any blocker. With `not_cloned` the wrapping `<span title>` reads "A clone and an index are required" (AC-14). With only `no_api_key` the title reads "No API key for {provider}" (AC-86).
     - Next to the button, the badge "Outdated — the repository has changed since this tour was generated" when `meta.outdated` (AC-74).
-    - The status lines from step 14's helper, each `no_api_key` line with a link `/settings/api-keys` (AC-70, AC-86). The dismissible notice "Regeneration failed — {reason}" (AC-73, D-32).
+    - The status lines from `statusLines` in this folder's `helpers.ts`, each `no_api_key` line with a link `/settings/api-keys` (AC-70, AC-86). The dismissible notice "Regeneration failed — {reason}" (AC-73, D-32).
     - The "Share link" `CopyControl` copies `${window.location.origin}/repos/${repoId}/tour` (AC-75).
 16. **client** · `TourView/_components/OnThisPage/{OnThisPage.tsx,helpers.ts,styles.ts,index.ts}`, `TourView/_components/TourSection/{TourSection.tsx,styles.ts,index.ts}` · skills `frontend-ui-architecture`, `react-best-practices` · covers AC-08, AC-09, AC-10, AC-11, AC-80, AC-81
     - `TourSection` props `{ id, title, children }`. It holds a `<section aria-labelledby>`, an `<h2 id tabIndex={-1}>`, and a collapse `<button aria-expanded aria-controls>` named "Collapse {title}"/"Expand {title}". Local `useState(true)` makes every section open on load (AC-10, AC-11).
@@ -740,6 +741,7 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
     - AC-52 — `openPrCandidates` skips `merged`/`closed`.
     - AC-53 — ordering (D-18): file candidates by rank index, `todo` before `missing-tests` within a file, then open PRs by `updated_at` desc. 20 candidates → 15.
     - AC-23 — calling every builder twice on equal inputs gives deep-equal outputs, and shuffling the input arrays of equal-rank files gives the same output.
+    - AC-40, AC-47 (F-02) — `EXCLUDED_DIRS` from `server/src/modules/onboarding/constants.ts` deep-equals `EXCLUDED_DIRS` from `server/src/modules/repo-intel/constants.ts`. A test may import both. This pins the copy, which exists because `no-cross-module` forbids the import, and it fails when either list changes alone.
 24. **server-unit** · `server/test/onboarding-prompt.test.ts` (new) · budget and untrusted wrapping
     - AC-60 — given facts whose README contains `Ignore previous instructions`, a PR title, TODO text, a route and a path: each appears **only** inside `<untrusted source="…">…</untrusted>` blocks of the rendered facts. The README text is passed through unchanged (no keyword scanning: assert that the phrase is still present inside the block).
     - AC-66 — the rendered facts are ≤ 40,000 chars. Routes are capped at 60 and folders at 30, each excerpt at 6,000.
@@ -771,7 +773,9 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
     - AC-69 — `meta.trimmed` mirrors the envelope.
     - AC-86 — `keyMissing: true` on a cloned, ranked repo → `blockers: ['no_api_key']`, `can_generate: false`. On an uncloned repo → `blockers: ['not_cloned', 'no_api_key']`, in that order (D-41). Key present → no `no_api_key`.
     - D-45 — a valid stored tour on a repo whose clone is now `null` → `status: 'generated'`, the stored sections, `blockers` containing `not_cloned`, `can_generate: false`. The same with a now-`degraded` index → `generated` plus `index_not_ready`.
-27. **server-unit** · `server/test/onboarding-service.test.ts` (new) · the service with `MockGitClient`, a stub `IndexFacade`, a recording `MockLLMProvider` and a stub `featureModel`. `db` uses a stub `OnboardingRepository` or an injected fake (`vi.mock` of the repository module is acceptable in a unit test)
+27. **server-unit** · `server/test/onboarding-service.test.ts` (new) · the service with `MockGitClient`, a stub `IndexFacade`, a recording `MockLLMProvider` and a stub `featureModel`. `db` uses a stub `OnboardingRepository` or an injected fake (`vi.mock` of the repository module is acceptable in a unit test).
+    - **`jobs` dep:** a small `JobQueue` stub. `register(kind, handler)` stores the handler; `enqueue(ws, kind, payload)` runs it and returns `{ id, done }`, where `done` is the handler's promise. A test that wants the generation held open uses an LLM promise held open, not a deferred `enqueue`.
+    - Add one case for D-3: when the LLM rejects, the stored handler's promise **resolves** (never rejects), so a JobRunner retry could never re-call the model, and exactly one `completeStructured` call is recorded.
     - AC-21 — one `startGeneration` + `await done` → the LLM's `calls` holds **exactly one** `completeStructured` entry, with `maxRetries: 0` (D-50: no assertion on prompt content here).
     - AC-83 — that call has `maxTokens: 4000`.
     - AC-22 — the `featureModel` stub returns `{ provider: 'anthropic', model: 'm-x' }` → the `anthropic` provider is resolved and the call uses `model: 'm-x'`.
@@ -810,7 +814,7 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
       Use `ContainerOverrides.depgraph` with a stub if building edges is slow.
     - The two new methods return `[]` with `repoIntelEnabled: false` (append to `repo-intel-facade-degraded.test.ts`).
     - Run it with `--no-file-parallelism` and report the passed/skipped counts.
-29. **server-integration** · `server/test/onboarding.it.test.ts` (new) · real Postgres, the built app, `MockGitClient({ files })` and recording `MockLLMProvider`s through `ContainerOverrides.llm`, with index rows inserted directly
+29. **server-integration** · `server/test/onboarding.it.test.ts` (new) · real Postgres, the built app (which wires the real `container.jobs`, so no `JobQueue` stub is needed here), `MockGitClient({ files })` and recording `MockLLMProvider`s through `ContainerOverrides.llm`, with index rows inserted directly
     - AC-19, AC-65 — `GET /repos/<foreign or unknown id>/tour` → 404, and so does `POST …/generate`.
     - AC-25 — `GET` with and without a stored tour → the LLM mock records 0 calls.
     - AC-26 — a cloned + indexed repo, nothing stored → `status: 'ready'`, deterministic sections, 0 LLM calls.
@@ -967,7 +971,7 @@ Each step names its files, its skill(s) (see the Skill map), and the ACs it cove
 | AC-44 | 10 (structural: no exec capability, INV-7, INV-15) | 27 (behavioural `GitClient` spy + source guard) | 2 / 3 |
 | AC-45 | 4, 7, 20 | 23; 26; 30 `RunLocallySection` | 2 / 3 |
 | AC-46 | 2, 4 | 28 | 2 / 3 |
-| AC-47 | 2 | 28 | 2 / 3 |
+| AC-47 | 2 | 28; 23 (`EXCLUDED_DIRS` parity, F-02) | 2 / 3 |
 | AC-48 | 1, 4, 19 | 23; 30 `ReadingPathSection` | 2 / 3 |
 | AC-49 | 4, 6, 19 | 23; 25; 30 `FileRow` | 2 / 3 |
 | AC-50 | 6, 9 | 25 | 2 / 3 |
@@ -1108,7 +1112,7 @@ Every line traces to AC IDs. `plan-verifier` checks these together with `## AC c
   - `Container.hasLlmKey` sharing `KEY_FOR` with `buildLlm` (D-42);
   - onboarding's local structural `IndexFacade` instead of importing repo-intel types;
   - the service built in `routes.ts` with explicit deps (D-38) rather than a container getter;
-  - the in-process running-registry instead of `JobRunner` (D-3);
+  - the generation as a `JobRunner` job with a never-throwing handler, plus the in-process 409 lock (D-3, D-43);
   - the four `helpers.ts` subject folders (D-1);
   - D-25 changing the conventions sample through the shared junk filter and tie-break.
 - **security**:
@@ -1134,7 +1138,8 @@ Every line traces to AC IDs. `plan-verifier` checks these together with `## AC c
 |---|---|---|---|
 | R-1 | **A timeout does not cancel the request.** `withTimeout` only stops waiting. The port has no `AbortSignal`, so the in-flight HTTP request continues, and the OpenRouter SDK may still retry after the 120 s wall: client timeout 90 s, `maxRetries: 2` (`openrouter.ts:54-55`). A "timed out" generation can still be billed for 1–3 background requests, or up to 4 via `withRetry` on OpenAI/Anthropic. The "one call" guarantee (AC-21) is about the module's calls, not about requests on the timeout path. Nothing is stored either way. Adding cancellation would change the port and reviewer-core, which is excluded by AC-21 as amended | 10c | — (accepted, documented) |
 | R-2 | **Phishing link through prompt injection.** A README could instruct the model to emit a link. Mitigated: D-26 (3) strips every external link from model prose, and `UntrustedMarkdown` still opens any remaining URL text only as plain text | 6 | — |
-| R-3 | A `tsx watch` restart or an API restart mid-generation loses the in-flight generation and its failure state. Nothing is stored. The client stops polling once `running` reads false, and the button is enabled again (D-48) | 10 | — (documented, `server/INSIGHTS.md:14-31`) |
+| R-3 | A `tsx watch` restart or an API restart mid-generation loses the in-flight generation and its failure state. Nothing is stored. Its `jobs` row may stay `queued` or `running`, because nothing re-runs or reaps tour jobs. The client stops polling once `running` reads false, and the button is enabled again (D-48) | 10 | — (documented, `server/INSIGHTS.md:14-31`) |
+| R-10 | JobRunner's 120 s wall (`jobs.ts:41,67`) wraps the **whole** handler: fact collection plus the model call. A generation that finishes late can still store its tour (the handler keeps running after the wall) while its `jobs` row reads `failed` with a timeout error. The tour shown is correct; only the `jobs` row is misleading | 10c | — (accepted, documented, F-05) |
 | R-4 | Changing `files_indexed` semantics in incremental refresh (now "files the index holds" = `walk.files.length`, D-23) also changes the Indexed badge's number after a refresh, for the better. Full index keeps "files parsed", so a full index and a refresh can differ by the parse-failure count | 2 | — (left to reviewers) |
 | R-5 | `readFileAt` at `lastIndexedSha` can fail if that commit was dropped by a later `sync()` on a shallow clone. D-5 falls back to `currentHead()`, so the facts may then be one revision ahead of the index | 10 | — |
 | R-6 | If the never-dropped blocks alone exceed 40,000 chars (e.g. 15 long TODO lines + 37 reasons), `fitBudget` returns over budget with `trimmed: true`. The per-item caps (200 chars) make this unlikely (~15k chars worst case) | 5 | — |
