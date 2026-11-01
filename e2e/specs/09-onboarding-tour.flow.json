@@ -1,0 +1,18 @@
+{
+  "name": "Onboarding Tour opens from the sidebar and shows the five-section skeleton",
+  "description": "From the PR list, open the WORKSPACE sidebar's 'Onboarding Tour' entry, land on /repos/<active>/tour, and confirm the heading and the five section titles render. The seeded demo repo (acme/payments-api) has no clone (server/src/db/seed.ts), so the server answers with the deterministic no-clone skeleton and the 'Not cloned — clone to generate' status line: no model call is possible, and no step presses 'Generate tour'. The 'No API key …' line may also show below it depending on the environment's secrets; the flow does not assert on it. Covers AC-01, AC-02, AC-07, AC-82 (L05 Onboarding Generator). Assumes a freshly-seeded DB where acme/payments-api is the first repo — guaranteed by e2e-web.yml; run locally via the hermetic stack (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["set", "viewport", "1280", "2000"], "label": "tall viewport: agent-browser does not scroll before a click, and the sections run below the first screen" },
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list of the active repo" },
+    { "cmd": ["find", "role", "link", "click", "--name", "Onboarding Tour"], "label": "open the Onboarding Tour entry in the WORKSPACE sidebar" },
+    { "cmd": ["wait", "--url", "/tour"], "label": "navigate to the repo's tour route" },
+    { "cmd": ["wait", "--text", "Onboarding for payments-api"], "label": "the heading names the active repo" },
+    { "cmd": ["wait", "--text", "Architecture overview"], "label": "section 1 title renders" },
+    { "cmd": ["wait", "--text", "Critical paths"], "label": "section 2 title renders" },
+    { "cmd": ["wait", "--text", "How to run locally"], "label": "section 3 title renders" },
+    { "cmd": ["wait", "--text", "Guided reading path"], "label": "section 4 title renders" },
+    { "cmd": ["wait", "--text", "First tasks"], "label": "section 5 title renders" },
+    { "cmd": ["wait", "--text", "Not cloned — clone to generate"], "label": "the skeleton path was taken: the repo is not cloned, so no generation is possible" }
+  ]
+}

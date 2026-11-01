@@ -1,0 +1,314 @@
+/**
+ * Onboarding Tour (L05) — the gate between the model's answer and the stored
+ * tour (plan step 25).
+ *
+ * Expected values come from AC-31, AC-33, AC-36, AC-41, AC-49, AC-50, AC-54 …
+ * AC-56, AC-61, AC-72, AC-85, AC-88 and D-10, D-11, D-13, D-20, D-26. The code
+ * is only the seam (`grounding/helpers.ts`, plus `generatedSections` for the
+ * end-to-end path check of AC-61).
+ */
+import { describe, it, expect } from 'vitest';
+import {
+  buildKnownSet,
+  buildRefSet,
+  classifyGenerationError,
+  groundComponents,
+  groundTasks,
+  mergeReasons,
+  orderCommands,
+  scrubProse,
+  type ModelComponent,
+} from '../src/modules/onboarding/grounding/helpers.js';
+import { generatedSections } from '../src/modules/onboarding/helpers.js';
+import type { TourNarrative } from '../src/modules/onboarding/schema.js';
+import type { TourFileRow } from '@devdigest/shared';
+import { MockLLMProvider } from '../src/adapters/mocks.js';
+import { TimeoutError } from '../src/platform/resilience.js';
+import { ConfigError, ExternalServiceError } from '../src/platform/errors.js';
+import { z } from 'zod';
+import { makeFacts, prCandidate, todoCandidate } from './helpers/onboarding-facts.js';
+
+const comp = (id: string, ref: string, kind: ModelComponent['kind'] = 'service'): ModelComponent => ({ id, label: id, kind, ref });
+const row = (path: string): TourFileRow => ({ path, reason: null, importers: 1, top_percent: 10 });
+
+describe('diagram grounding (AC-33, AC-85, D-11)', () => {
+  const refs = buildRefSet({
+    indexedPaths: ['src/server.ts', 'web/app.tsx'],
+    folders: ['src', 'web'],
+    deps: ['pg', 'fastify'],
+  });
+
+  it('AC-33 — an unknown ref is dropped with every connection naming it; a dependency ref survives', () => {
+    const out = groundComponents(
+      [comp('api', 'src/server.ts'), comp('db', 'pg', 'data'), comp('ghost', 'src/ghost.ts'), comp('ui', 'web')],
+      [
+        { from: 'api', to: 'db' },
+        { from: 'api', to: 'ghost' },
+        { from: 'ghost', to: 'db' },
+        { from: 'ui', to: 'api' },
+      ],
+      refs,
+    );
+    expect(out.components.map((c) => c.id)).toEqual(['api', 'db', 'ui']);
+    expect(out.connections).toEqual([
+      { from: 'api', to: 'db' },
+      { from: 'ui', to: 'api' },
+    ]);
+  });
+
+  it('AC-33 — tree-only files (Dockerfile, docker-compose.yml) are not references', () => {
+    const out = groundComponents(
+      [comp('api', 'src/server.ts'), comp('docker', 'Dockerfile'), comp('compose', 'docker-compose.yml'), comp('db', 'pg')],
+      [
+        { from: 'api', to: 'docker' },
+        { from: 'compose', to: 'db' },
+        { from: 'api', to: 'db' },
+      ],
+      refs,
+    );
+    expect(out.components.map((c) => c.id)).toEqual(['api', 'db']);
+    expect(out.connections).toEqual([{ from: 'api', to: 'db' }]);
+  });
+
+  it('AC-33 — a `postgres` component with ref `pg` survives; matching is case-insensitive and ignores a trailing /', () => {
+    const out = groundComponents(
+      [comp('postgres', 'pg', 'data'), comp('web', 'WEB/'), comp('api', 'Src/Server.ts')],
+      [
+        { from: 'web', to: 'api' },
+        { from: 'api', to: 'postgres' },
+      ],
+      refs,
+    );
+    expect(out.components.map((c) => c.id)).toEqual(['postgres', 'web', 'api']);
+    expect(out.connections).toHaveLength(2);
+  });
+
+  it('AC-85 — one surviving component → no diagram at all', () => {
+    expect(groundComponents([comp('api', 'src/server.ts'), comp('x', 'nope')], [{ from: 'api', to: 'x' }], refs)).toEqual({
+      components: [],
+      connections: [],
+    });
+  });
+
+  it('AC-85 — components but no surviving connection → no diagram at all', () => {
+    expect(groundComponents([comp('api', 'src/server.ts'), comp('db', 'pg')], [], refs)).toEqual({ components: [], connections: [] });
+  });
+});
+
+describe('row reasons (AC-36, AC-49, AC-50, D-13)', () => {
+  it('AC-36 — a reason for a listed path fills that row; an unlisted path is ignored; others stay null', () => {
+    const rows = mergeReasons(
+      [row('a'), row('b'), row('c')],
+      [
+        { path: 'b', text: 'the router' },
+        { path: 'zzz', text: 'invented' },
+      ],
+      { ordered: false },
+    );
+    expect(rows.map((r) => [r.path, r.reason])).toEqual([
+      ['a', null],
+      ['b', 'the router'],
+      ['c', null],
+    ]);
+  });
+
+  it('AC-49, AC-50 — ranked order and set stay; out-of-order and unknown entries are ignored', () => {
+    const rows = mergeReasons(
+      [row('a'), row('b'), row('c'), row('d')],
+      [
+        { path: 'b', text: 'wb' },
+        { path: 'a', text: 'wa' },
+        { path: 'x', text: 'wx' },
+        { path: 'd', text: 'wd' },
+      ],
+      { ordered: true },
+    );
+    expect(rows.map((r) => [r.path, r.reason])).toEqual([
+      ['a', null],
+      ['b', 'wb'],
+      ['c', null],
+      ['d', 'wd'],
+    ]);
+  });
+});
+
+describe('commands (AC-41, AC-88, D-10)', () => {
+  const derived = [1, 2, 3, 4].map((n) => ({ id: `cmd-${n}`, command: `derived command ${n}` }));
+
+  it('AC-41, AC-88 — unknown ids dropped; omitted commands appended in derivation order with no comment', () => {
+    const out = orderCommands(derived, [
+      { id: 'cmd-3', comment: 'c3' },
+      { id: 'cmd-9', comment: 'zz' },
+      { id: 'cmd-1', comment: 'c1' },
+    ]);
+    expect(out).toEqual([
+      { step: 1, command: 'derived command 3', comment: 'c3' },
+      { step: 2, command: 'derived command 1', comment: 'c1' },
+      { step: 3, command: 'derived command 2', comment: null },
+      { step: 4, command: 'derived command 4', comment: null },
+    ]);
+    // no row's command text is model-written
+    expect(out.every((r) => derived.some((d) => d.command === r.command))).toBe(true);
+    expect(JSON.stringify(out)).not.toContain('zz');
+  });
+
+  it('AC-88 — model [] → every derived command in derivation order, all comments null', () => {
+    expect(orderCommands(derived, [])).toEqual(derived.map((d, i) => ({ step: i + 1, command: d.command, comment: null })));
+  });
+
+  it('AC-41 — a repeated id keeps its first position only', () => {
+    const out = orderCommands(derived, [
+      { id: 'cmd-2', comment: 'first' },
+      { id: 'cmd-2', comment: 'again' },
+    ]);
+    expect(out.map((r) => [r.command, r.comment])).toEqual([
+      ['derived command 2', 'first'],
+      ['derived command 1', null],
+      ['derived command 3', null],
+      ['derived command 4', null],
+    ]);
+  });
+});
+
+describe('tasks (AC-54, AC-55, AC-56, D-19)', () => {
+  const candidates = [
+    todoCandidate('src/a.ts', 1),
+    todoCandidate('src/a.ts', 2),
+    todoCandidate('src/b.ts', 3),
+    todoCandidate('src/c.ts', 4),
+    todoCandidate('src/d.ts', 5),
+    todoCandidate('src/e.ts', 6),
+    prCandidate(7, 'Fix login'),
+  ];
+  const t = (candidate_id: string) => ({ candidate_id, title: `T ${candidate_id}`, reason: 'r' });
+
+  it('AC-54, AC-55 — unknown, missing and reused ids are dropped; 7 valid → 5', () => {
+    const out = groundTasks(candidates, [
+      t('todo:src/a.ts:1'),
+      t('nope'),
+      t(''),
+      t('todo:src/a.ts:1'),
+      t('todo:src/a.ts:2'),
+      t('todo:src/b.ts:3'),
+      t('todo:src/c.ts:4'),
+      t('todo:src/d.ts:5'),
+      t('todo:src/e.ts:6'),
+      t('open-pr:7'),
+    ]);
+    expect(out).toHaveLength(5);
+    expect(out.every((x) => x.source === 'model')).toBe(true);
+    expect(out.map((x) => x.candidate_id)).toEqual([
+      'todo:src/a.ts:1',
+      'todo:src/a.ts:2',
+      'todo:src/b.ts:3',
+      'todo:src/c.ts:4',
+      'todo:src/d.ts:5',
+    ]);
+  });
+
+  it('AC-56 — 2 valid model tasks → the top 5 candidates as fallback tasks', () => {
+    const out = groundTasks(candidates, [t('todo:src/a.ts:1'), t('open-pr:7')]);
+    expect(out.map((x) => [x.candidate_id, x.source, x.title])).toEqual(
+      candidates.slice(0, 5).map((c) => [c.id, 'fallback', null]),
+    );
+  });
+
+  it('AC-56 — 0 candidates → []', () => {
+    expect(groundTasks([], [t('todo:src/a.ts:1')])).toEqual([]);
+  });
+});
+
+describe('prose scrub (AC-31, AC-61, D-26)', () => {
+  const known = buildKnownSet({ treePaths: ['src/my_file.ts', 'src/__init__.py', 'docs/guide.md'], indexedPaths: [] });
+
+  it('AC-61 — an unknown path in code is removed', () => {
+    const out = scrubProse('Start at `src/ghost.ts` today.', known);
+    expect(out).not.toContain('src/ghost.ts');
+  });
+
+  it('AC-61 — a relative link to an unknown file becomes its text', () => {
+    const out = scrubProse('Read [see](docs/ghost.md) first.', known);
+    expect(out).toContain('see');
+    expect(out).not.toContain('docs/ghost.md');
+    expect(out).not.toContain('](');
+  });
+
+  it('AC-31 — a bare known path is wrapped in backticks, underscores intact', () => {
+    expect(scrubProse('Open src/my_file.ts now.', known)).toContain('`src/my_file.ts`');
+  });
+
+  it('AC-31 — a known path in code keeps both underscores', () => {
+    expect(scrubProse('See `src/__init__.py`.', known)).toContain('`src/__init__.py`');
+  });
+
+  it('D-26 (3) — an absolute http(s) link becomes its text, no URL left in a link', () => {
+    const out = scrubProse('Please [login](https://evil.example/x) here.', known);
+    expect(out).toContain('login');
+    expect(out).not.toMatch(/\]\(https?:/);
+  });
+});
+
+describe('structured paths come from the facts (AC-61)', () => {
+  it('AC-61 — a model task naming src/ghost.ts links only to its candidate path; no row path outside the facts', () => {
+    const facts = makeFacts({
+      treePaths: ['src/a.ts', 'src/b.ts'],
+      indexed: [
+        { path: 'src/a.ts', rank: 1, percentile: 99, importers: 2 },
+        { path: 'src/b.ts', rank: 0.5, percentile: 50, importers: 1 },
+      ],
+      readingPaths: ['src/a.ts', 'src/b.ts'],
+      chains: [['src/a.ts', 'src/b.ts']],
+    });
+    const candidates = [todoCandidate('src/a.ts', 1), todoCandidate('src/a.ts', 2), todoCandidate('src/b.ts', 3)];
+    const narrative: TourNarrative = {
+      architecture: { prose: 'See `src/ghost.ts`.', components: [], connections: [] },
+      critical_paths: [{ path: 'src/ghost.ts', reason: 'x' }],
+      commands: [],
+      reading_path: [{ path: 'src/ghost.ts', why: 'x' }],
+      tasks: candidates.map((c) => ({ candidate_id: c.id, title: 'Rewrite src/ghost.ts', reason: 'see src/ghost.ts' })),
+    };
+    const s = generatedSections(facts, candidates, narrative);
+    const allowed = new Set(['src/a.ts', 'src/b.ts']);
+    expect(s.first_tasks.tasks.map((t) => t.path)).toEqual(['src/a.ts', 'src/a.ts', 'src/b.ts']);
+    for (const r of [...s.critical_paths.rows, ...s.reading_path.rows]) expect(allowed.has(r.path)).toBe(true);
+    expect(s.architecture.prose ?? '').not.toContain('src/ghost.ts');
+  });
+});
+
+describe('failure classification (AC-72, D-20)', () => {
+  it('AC-72 — the OpenRouter schema message → invalid_output with the fixed message', () => {
+    expect(classifyGenerationError(new Error('OpenRouter structured output failed schema validation for OnboardingTour'))).toEqual({
+      code: 'invalid_output',
+      message: 'the model returned invalid output',
+    });
+  });
+
+  it('AC-72 — the OpenAI and Anthropic adapter errors → invalid_output', () => {
+    // the errors the adapters throw (`openai.ts:132`, `anthropic.ts:232`)
+    for (const msg of ['OpenAI structured output failed schema validation', 'Anthropic structured output failed schema validation']) {
+      expect(classifyGenerationError(new ExternalServiceError(msg, {}))).toEqual({
+        code: 'invalid_output',
+        message: 'the model returned invalid output',
+      });
+    }
+  });
+
+  it('AC-72 — the MockLLMProvider schema failure → invalid_output', async () => {
+    const err = await new MockLLMProvider('openai', { structured: { nope: 1 } })
+      .completeStructured({ model: 'm', schema: z.object({ a: z.string() }), schemaName: 'X', messages: [] })
+      .catch((e: unknown) => e);
+    expect(classifyGenerationError(err)).toEqual({ code: 'invalid_output', message: 'the model returned invalid output' });
+  });
+
+  it('D-20 — TimeoutError → timeout, ConfigError → no_api_key', () => {
+    expect(classifyGenerationError(new TimeoutError(50)).code).toBe('timeout');
+    expect(classifyGenerationError(new ConfigError('OPENROUTER_API_KEY is not configured')).code).toBe('no_api_key');
+  });
+
+  it('D-20 — anything else → provider_error with the message', () => {
+    const out = classifyGenerationError(new Error('OpenRouter returned no choices for OnboardingTour: quota'));
+    expect(out.code).toBe('provider_error');
+    expect(out.message).toContain('OpenRouter returned no choices');
+    expect(classifyGenerationError('weird').code).toBe('provider_error');
+  });
+});
