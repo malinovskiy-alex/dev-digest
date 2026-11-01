@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { runFullIndex } from '../src/modules/repo-intel/pipeline/full.js';
 import { runIncremental } from '../src/modules/repo-intel/pipeline/incremental.js';
 import type { RepoIntelRepository } from '../src/modules/repo-intel/repository.js';
@@ -139,8 +139,8 @@ function makeContainer(git: MiniGit): Container {
 
 async function writeFileAt(root: string, rel: string, contents: string): Promise<void> {
   const full = join(root, rel);
-  const slash = full.lastIndexOf('/');
-  if (slash > 0) await mkdir(full.slice(0, slash), { recursive: true });
+  // dirname, not lastIndexOf('/'): `join` gives `\` on Windows (F-49).
+  await mkdir(dirname(full), { recursive: true });
   await writeFile(full, contents);
 }
 
@@ -377,8 +377,10 @@ describe('runIncremental', () => {
     expect(result.filesIndexed).toBe(1);
     const names = stub.symbols.map((s) => (s as { name: string }).name);
     expect(names).toContain('fresh');
-    // counter is prior (5) + this slice's filesIndexed (1).
-    expect(stub.getState()!.filesIndexed).toBe(6);
+    // AC-87 (D-23, F-49): the state's filesIndexed is the number of files the
+    // refreshed index holds (= file_rank rows written) — the clone holds one
+    // file — not the old prior (5) + slice (1), which drifted up every refresh.
+    expect(stub.getState()!.filesIndexed).toBe(1);
     expect(stub.getState()!.lastIndexedSha).toBe('sha-new');
   });
 

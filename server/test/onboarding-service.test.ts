@@ -820,3 +820,52 @@ describe('regression F-39 — a scanned file that a test imports is no missing-t
     expect(candidatesBlock(s.lastReq().messages[1]!.content as string)).toContain('missing-tests:src/a.ts');
   });
 });
+
+describe('regression F-50 — a generation that ends during a GET (AC-27, AC-24, D-41)', () => {
+  it('F-50 — the generation finishes while getTour awaits: GET is generated, or still running — never ready + not running', async () => {
+    const llm = new GatedLLM();
+    const s = setup({ llm });
+    const { done } = await s.svc.startGeneration(WS, REPO_ID);
+    expect(s.stored()).toBeUndefined();
+
+    // getTour reads the stored row (none yet), then asks for the key. While it
+    // waits there, the model answers and the generation stores its tour and
+    // releases the lock — the window the old ordering missed.
+    s.hasLlmKey.mockImplementationOnce(async () => {
+      llm.release();
+      await done;
+      expect(s.stored()).toBeDefined(); // the tour is stored, the lock released
+      return true;
+    });
+    const t = await s.svc.getTour(WS, REPO_ID);
+
+    // a client polls while `running`; it stops on anything else, so a GET that
+    // says "not running" must already show the outcome
+    expect(t.status === 'ready' && !t.generation.running, `status=${t.status} running=${t.generation.running}`).toBe(false);
+    // and the next GET shows the tour
+    const next = await s.svc.getTour(WS, REPO_ID);
+    expect(next.status).toBe('generated');
+    expect(next.generation.running).toBe(false);
+  });
+
+  it('F-50 — the same window with a failing model: a not-running GET carries the failure', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => (open = r));
+    class GatedFailingLLM extends FailingLLM {
+      override async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
+        await gate;
+        return super.completeStructured(req);
+      }
+    }
+    const s = setup({ llm: new GatedFailingLLM(new Error('upstream 503')) });
+    const { done } = await s.svc.startGeneration(WS, REPO_ID);
+    s.hasLlmKey.mockImplementationOnce(async () => {
+      open();
+      await done;
+      return true;
+    });
+    const t = await s.svc.getTour(WS, REPO_ID);
+    if (!t.generation.running) expect(t.generation.failure?.code).toBe('provider_error');
+    expect(t.status === 'ready' && !t.generation.running && t.generation.failure === null).toBe(false);
+  });
+});
