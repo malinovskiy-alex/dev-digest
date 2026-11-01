@@ -7,7 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import type { ReviewFocusItem } from "@devdigest/shared";
 import type { BriefNavigation } from "@/lib/hooks/brief";
-import { BriefFileRef } from "../../../BriefFileRef";
+import { BriefFileRef } from "@/app/repos/[repoId]/pulls/[number]/_components/BriefFileRef";
 import { cx } from "./styles";
 
 export function ReviewFocusList({
