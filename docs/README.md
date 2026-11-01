@@ -18,6 +18,9 @@ setup instructions ([`../README.md`](../README.md)).
   [choosing a model](agent-prompts/choosing-a-model.md).
 - [`project-context.md`](project-context.md) — how repo markdown documents are
   listed, attached to agents and skills, and rendered into a review prompt.
+- [`onboarding-tour.md`](onboarding-tour.md) — how the five-section onboarding
+  tour is built from git and the index, the one model call, grounding of its
+  output, budgets, staleness and the API.
 
 ## Writing a doc
 
