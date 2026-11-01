@@ -5,7 +5,7 @@
     { "cmd": ["set", "viewport", "1280", "2000"], "label": "tall viewport: agent-browser does not scroll before a click, and the sections run below the first screen" },
     { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
     { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list of the active repo" },
-    { "cmd": ["find", "role", "link", "click", "--name", "Onboarding Tour"], "label": "open the Onboarding Tour entry in the WORKSPACE sidebar" },
+    { "cmd": ["find", "text", "Onboarding Tour", "click"], "label": "open the Onboarding Tour entry in the WORKSPACE sidebar (by text, the way flows 02/04/05 open the PR row)" },
     { "cmd": ["wait", "--url", "/tour"], "label": "navigate to the repo's tour route" },
     { "cmd": ["wait", "--text", "Onboarding for payments-api"], "label": "the heading names the active repo" },
     { "cmd": ["wait", "--text", "Architecture overview"], "label": "section 1 title renders" },
