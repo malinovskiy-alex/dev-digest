@@ -152,6 +152,23 @@ d('repo-intel facade reads for the onboarding tour (Testcontainers pg)', () => {
     for (let i = 0; i < 3; i += 1) expect(await ri.getCriticalPaths(repoId)).toEqual(first);
   });
 
+  it('F-60, AC-23 — a mixed-case rank tie breaks in code-unit order (Z < a), not by locale', async () => {
+    await rank([
+      ['src/root.ts', 0.9],
+      ['src/alpha.ts', 0.3],
+      ['src/Zeta.ts', 0.3],
+    ]);
+    await edges([
+      ['src/root.ts', 'src/alpha.ts'],
+      ['src/root.ts', 'src/Zeta.ts'],
+    ]);
+    // 'Z' (U+005A) sorts before 'a' (U+0061) by code unit; localeCompare puts alpha first
+    expect('src/Zeta.ts' < 'src/alpha.ts').toBe(true);
+    expect('src/Zeta.ts'.localeCompare('src/alpha.ts', 'en')).toBeGreaterThan(0);
+    const chains = await ri.getCriticalPaths(repoId);
+    expect(chains[0]!.slice(0, 2)).toEqual(['src/root.ts', 'src/Zeta.ts']);
+  });
+
   it('AC-20 — getEndpoints returns every (file, endpoint) from file_facts, file then endpoint ordered', async () => {
     await pg.handle.db.insert(t.fileFacts).values([
       { repoId, filePath: 'src/b.ts', endpoints: ['POST /x', 'GET /a'], crons: [] },

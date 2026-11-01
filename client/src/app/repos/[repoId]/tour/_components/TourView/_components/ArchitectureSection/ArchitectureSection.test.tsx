@@ -64,6 +64,28 @@ describe("ArchitectureSection", () => {
     expect((window as unknown as { __tourPwned?: boolean }).__tourPwned).toBeUndefined();
   });
 
+  it.each([
+    ["null", null],
+    ["empty (scrubbed to nothing)", ""],
+  ])("F-56, AC-85 — prose %s + a grounded diagram → the diagram still renders, with the stack and folders", (_case, prose) => {
+    renderSection({
+      prose,
+      components: [
+        { id: "api", label: "API", kind: "api" },
+        { id: "db", label: "Postgres", kind: "data" },
+      ],
+      connections: [{ from: "api", to: "db" }],
+    });
+    expect(screen.getByRole("img", { name: /2 components/ })).toBeInTheDocument();
+    expect(screen.getByText("Frameworks: React, Fastify")).toBeInTheDocument();
+    expect(screen.getByText("src/ · 100 files")).toBeInTheDocument();
+  });
+
+  it("F-56 — prose null and too few components → no diagram (AC-85 threshold unchanged)", () => {
+    renderSection({ components: [{ id: "api", label: "API", kind: "api" }], connections: [] });
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
   it("AC-85 — no components → no diagram and no error text", () => {
     renderSection({ prose: "Just prose." });
     expect(screen.queryByRole("img")).toBeNull();

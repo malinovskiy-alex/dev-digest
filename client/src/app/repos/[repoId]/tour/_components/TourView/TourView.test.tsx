@@ -163,6 +163,27 @@ describe("TourView", () => {
     expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
   });
 
+  it("F-53 — a failed background poll keeps the loaded tour on screen: no error state", async () => {
+    let calls = 0;
+    fetchMock.mockImplementation(() => {
+      calls += 1;
+      // first load: a generation is running, so the page polls every 2 s
+      return calls === 1
+        ? json(tour({ status: "generated", meta: META, generation: { running: true, failure: null } }))
+        : json({ error: { code: "boom", message: "database exploded" } }, 500);
+    });
+    renderView();
+    await screen.findByRole("heading", { level: 1 });
+    expect(sectionHeadings()).toEqual(TITLES);
+    // the poll fires and fails
+    await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2), { timeout: 4_000 });
+    await new Promise((r) => setTimeout(r, 200)); // let the failed result settle into the query
+    expect(screen.queryByText("database exploded")).toBeNull();
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+    expect(sectionHeadings()).toEqual(TITLES);
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+  });
+
   it("AC-18 — a 500 shows the error state with the reason and Retry; Retry refetches", async () => {
     fetchMock.mockImplementation(() => json({ error: { code: "boom", message: "database exploded" } }, 500));
     renderView();

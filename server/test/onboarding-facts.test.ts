@@ -6,13 +6,15 @@
  * the code is only the seam (`facts/helpers.ts`, Ring 1, pure). Each `it` names
  * the AC it proves.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { SimpleGitClient } from '../src/adapters/git/simple-git.js';
 import {
   deriveCommands,
   detectStack,
   envExampleNames,
   excerpt,
   manifestPaths,
+  isReadablePath,
   isTestPath,
   missingTestCandidates,
   openPrCandidates,
@@ -268,16 +270,19 @@ describe('task candidates (AC-52, AC-53, D-15 … D-18)', () => {
     expect(c.map((x) => [x.id, x.kind, x.path])).toEqual([['missing-tests:src/b.ts', 'missing-tests', 'src/b.ts']]);
   });
 
-  it('AC-52, D-17 — open-PR candidates skip merged and closed PRs', () => {
+  it('AC-52, D-17, F-61 — openPrCandidates only maps listOpenPulls rows, in the given order', () => {
+    // The filter (not merged/closed), the order and the limit live in SQL only
+    // (OnboardingRepository.listOpenPulls, covered by onboarding-pulls.it.test.ts).
     const pulls: OpenPull[] = [
-      { number: 1, title: 'one', author: 'x', status: 'open', updatedAt: new Date('2026-01-01') },
-      { number: 2, title: 'two', author: 'x', status: 'merged', updatedAt: new Date('2026-01-03') },
-      { number: 3, title: 'three', author: 'x', status: 'closed', updatedAt: new Date('2026-01-04') },
       { number: 4, title: 'four', author: 'y', status: 'needs_review', updatedAt: new Date('2026-01-02') },
+      { number: 1, title: 'one', author: 'x', status: 'open', updatedAt: new Date('2026-01-01') },
     ];
     const c = openPrCandidates(pulls);
     expect(c.map((x) => x.id)).toEqual(['open-pr:4', 'open-pr:1']);
-    expect(c[0]).toMatchObject({ kind: 'open-pr', pr_number: 4, pr_title: 'four' });
+    expect(c[0]).toEqual({
+      id: 'open-pr:4', kind: 'open-pr', path: null, line: null, pr_number: 4, pr_title: 'four', detail: 'y', importers: null, top_percent: null,
+    });
+    expect(openPrCandidates([])).toEqual([]);
   });
 
   it('AC-53, D-18 — files by rank, todo before missing-tests in a file, then open PRs; 20 → 15', () => {
@@ -289,9 +294,10 @@ describe('task candidates (AC-52, AC-53, D-15 … D-18)', () => {
     });
     const rankIndex = new Map([['hi.ts', 0], ['mid.ts', 1], ['lo.ts', 2]]);
     const files = [missing('lo.ts'), todo('mid.ts', 9), missing('hi.ts'), todo('hi.ts', 7), todo('hi.ts', 2)];
+    // PRs as listOpenPulls returns them: updated_at desc (F-61)
     const prs = openPrCandidates([
-      { number: 1, title: 'old', author: 'a', status: 'open', updatedAt: new Date('2026-01-01') },
       { number: 2, title: 'new', author: 'a', status: 'open', updatedAt: new Date('2026-02-01') },
+      { number: 1, title: 'old', author: 'a', status: 'open', updatedAt: new Date('2026-01-01') },
     ]);
     expect(orderCandidates(files, prs, rankIndex).map((c) => c.id)).toEqual([
       'todo:hi.ts:2',
@@ -311,9 +317,12 @@ describe('task candidates (AC-52, AC-53, D-15 … D-18)', () => {
 describe('determinism (AC-23)', () => {
   const tree = ['package.json', 'pnpm-lock.yaml', 'web/package.json', 'api/package.json', 'src/a.ts', 'src/a.test.ts', 'src/b.ts', 'lib/c.ts'];
   const indexed = ['src/a.ts', 'src/b.ts', 'lib/c.ts', 'web/x.ts', 'api/y.ts'];
+  // In listOpenPulls order (updated_at desc nulls last, number desc). The PR
+  // order is SQL's alone since F-61 — its determinism is pinned by
+  // onboarding-pulls.it.test.ts; here the pulls stay in that order.
   const pulls: OpenPull[] = [
-    { number: 1, title: 'one', author: 'x', status: 'open', updatedAt: new Date('2026-01-01') },
     { number: 2, title: 'two', author: 'x', status: 'open', updatedAt: new Date('2026-01-01') },
+    { number: 1, title: 'one', author: 'x', status: 'open', updatedAt: new Date('2026-01-01') },
     { number: 3, title: 'three', author: 'x', status: 'open', updatedAt: null },
   ];
   const manifests: ManifestFact[] = [
@@ -338,10 +347,11 @@ describe('determinism (AC-23)', () => {
     expect(build(tree, indexed, pulls)).toEqual(build(tree, indexed, pulls));
   });
 
-  it('AC-23 — shuffled input arrays (equal-rank files, equal-time PRs) give the same output', () => {
+  it('AC-23 — shuffled input arrays (equal-rank files) give the same output; PRs keep the SQL order', () => {
     const base = build(tree, indexed, pulls);
+    expect(base.prs.map((c) => c.id)).toEqual(['open-pr:2', 'open-pr:1', 'open-pr:3']);
     for (const seed of [1, 7, 42]) {
-      expect(build(shuffled(tree, seed), shuffled(indexed, seed + 1), shuffled(pulls, seed + 2), seed)).toEqual(base);
+      expect(build(shuffled(tree, seed), shuffled(indexed, seed + 1), pulls, seed)).toEqual(base);
     }
   });
 });
@@ -419,13 +429,16 @@ describe('regression F-39 — missing-tests uses who imports the file (AC-52, D-
   });
 
   it('F-39 — the name rule still works with no import edges, and a test file is never a candidate', () => {
-    // a: covered by name (a test anywhere in the tree); c: covered by `.spec.`; b: no test
+    // F-55: a same-stem test covers a file only next to it or in a test dir
+    // beside it — a: `src/a.test.ts`; c: `src/__tests__/c.spec.tsx`; b: no test
     // test/helpers.ts and src/d.spec.ts are tests themselves, never candidates
     const scan = ['src/a.ts', 'test/helpers.ts', 'src/b.ts', 'src/c.ts', 'src/d.spec.ts'];
-    const tree = [...scan, 'other/a.test.ts', 'src/c.spec.tsx'];
+    const tree = [...scan, 'src/a.test.ts', 'src/__tests__/c.spec.tsx'];
     expect(missingTestCandidates(scan, tree, []).map((c) => c.id)).toEqual(['missing-tests:src/b.ts']);
     // default argument: the same as no edges
     expect(missingTestCandidates(scan, tree).map((c) => c.id)).toEqual(['missing-tests:src/b.ts']);
+    // F-55: a same-named test in an unrelated dir does NOT cover src/a.ts
+    expect(missingTestCandidates(['src/a.ts'], ['src/a.ts', 'other/a.test.ts']).map((c) => c.id)).toEqual(['missing-tests:src/a.ts']);
   });
 
   it('F-39, AC-52, AC-53 — candidates keep the scan (rank) order, and the 15-cap of orderCandidates still applies', () => {
@@ -438,5 +451,98 @@ describe('regression F-39 — missing-tests uses who imports the file (AC-52, D-
     const ordered = orderCandidates(c, [], rankIndex);
     expect(ordered).toHaveLength(15);
     expect(ordered.map((x) => x.path)).toEqual(scan.filter((p) => !covered.has(p)).slice(0, 15));
+  });
+});
+
+describe('regression F-55 — a same-stem test covers only the file it sits with (AC-52, D-16)', () => {
+  const missing = (scan: string[], tree: string[]) => missingTestCandidates(scan, [...scan, ...tree]).map((c) => c.path);
+
+  it('F-55 — the three covering locations: beside it, in a test dir beside it, in the src mirror of a test tree', () => {
+    expect(missing(['src/a.ts'], ['src/a.test.ts'])).toEqual([]);
+    expect(missing(['src/a.ts'], ['src/__tests__/a.test.ts'])).toEqual([]);
+    expect(missing(['src/a.ts'], ['src/tests/a.spec.tsx'])).toEqual([]);
+    expect(missing(['src/x/a.ts'], ['test/x/a.test.ts'])).toEqual([]);
+    expect(missing(['pkg/src/a.ts'], ['pkg/tests/a.spec.ts'])).toEqual([]);
+  });
+
+  it('F-55 — a same-named test elsewhere covers nothing: one index.test.ts does not cover every index.ts', () => {
+    expect(missing(['src/a.ts'], ['other/a.test.ts'])).toEqual(['src/a.ts']);
+    expect(missing(['src/x/a.ts'], ['test/y/a.test.ts'])).toEqual(['src/x/a.ts']);
+    expect(missing(['src/api/index.ts', 'src/web/index.ts', 'src/db/index.ts'], ['src/api/index.test.ts'])).toEqual([
+      'src/web/index.ts',
+      'src/db/index.ts',
+    ]);
+    // a root-level file and a root-level test
+    expect(missing(['main.ts'], ['main.test.ts'])).toEqual([]);
+    expect(missing(['main.ts'], ['lib/main.test.ts'])).toEqual(['main.ts']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-64 (AC-89): a path the git adapter refuses by design is a skipped file.
+// `isReadablePath` mirrors the guard in `SimpleGitClient.readFileAt`
+// (`src/adapters/git/simple-git.ts`), kept in step by hand — the parity test
+// below runs the adapter's own guard so the two cannot drift silently.
+// ---------------------------------------------------------------------------
+
+const REFUSED = [
+  '', // empty
+  '-rf', // leading `-`: readable as an option
+  '--output=x',
+  '/etc/passwd', // absolute
+  'src\\a.ts', // backslash
+  'src/a:b.ts', // `:` would split `<sha>:<path>`
+  'a:b/package.json',
+  '../secret', // climbs out
+  'src/../../x',
+  './src/a.ts', // `.` segment
+  'src/./a.ts',
+  'src//a.ts', // empty segment
+  'src/', // trailing slash → empty last segment
+];
+const ACCEPTED = [
+  'package.json',
+  'README.md',
+  'src/a.ts',
+  'src/a-b_c.d.ts',
+  'web-app_2/package.json',
+  '.env.example', // a dot-file is not a `.` segment
+  'src/.hidden/x.ts',
+  'src/a-.ts', // `-` only refused at the start of the whole path
+  'deep/nested/dir/with spaces/file.ts',
+  'unicodé/файл.ts',
+  '...ts',
+];
+
+describe('regression F-64 — isReadablePath mirrors the git adapter guard (AC-89)', () => {
+  it.each(REFUSED.map((p) => [p]))('F-64 — refused: %j', (p) => {
+    expect(isReadablePath(p)).toBe(false);
+  });
+
+  it.each(ACCEPTED.map((p) => [p]))('F-64 — accepted: %j', (p) => {
+    expect(isReadablePath(p)).toBe(true);
+  });
+
+  it('F-64 — parity with SimpleGitClient.readFileAt: every path isReadablePath accepts, the adapter accepts too (and the refused ones it refuses)', async () => {
+    // The adapter's guard runs before any git process: `git()` is replaced so
+    // a path that passes the guard resolves without spawning git.
+    const client = new SimpleGitClient('/nonexistent-clone-dir');
+    const raw = vi.fn(async () => 'BLOB');
+    vi.spyOn(SimpleGitClient.prototype as unknown as { git: () => unknown }, 'git').mockReturnValue({ raw });
+    const ref = { owner: 'acme', name: 'app' };
+    const adapterAccepts = (p: string) =>
+      client.readFileAt(ref, 'abcdef1', p).then(
+        () => true,
+        (e: Error) => {
+          expect(e.message).toContain('readFileAt: invalid path'); // refused by the guard, not something else
+          return false;
+        },
+      );
+    for (const p of ACCEPTED) expect(await adapterAccepts(p), `adapter refuses ${JSON.stringify(p)}`).toBe(true);
+    for (const p of REFUSED) expect(await adapterAccepts(p), `adapter accepts ${JSON.stringify(p)}`).toBe(false);
+    // the accepted ones did reach git, with one argv entry `<sha>:<path>`
+    expect(raw).toHaveBeenCalledTimes(ACCEPTED.length);
+    expect(raw).toHaveBeenCalledWith(['show', 'abcdef1:src/a.ts']);
+    vi.restoreAllMocks();
   });
 });

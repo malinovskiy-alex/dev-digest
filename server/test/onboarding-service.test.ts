@@ -436,7 +436,9 @@ describe('outlives the request (AC-29)', () => {
 
 describe('failures (AC-70 … AC-73, AC-14, AC-15)', () => {
   it('AC-70 — no API key → 422 tour_no_api_key, no call, failure no_api_key', async () => {
+    // hasLlmKey and llm() read the same secret: no key for one is no key for both (F-62)
     const s = setup({
+      keyPresent: false,
       llmDep: async () => {
         throw new ConfigError('OPENROUTER_API_KEY is not configured');
       },
@@ -867,5 +869,146 @@ describe('regression F-50 — a generation that ends during a GET (AC-27, AC-24,
     const t = await s.svc.getTour(WS, REPO_ID);
     if (!t.generation.running) expect(t.generation.failure?.code).toBe('provider_error');
     expect(t.status === 'ready' && !t.generation.running && t.generation.failure === null).toBe(false);
+  });
+});
+
+describe('regression F-52 — a git failure is reported, never built into a hollow tour or cached (AC-20, AC-24)', () => {
+  const failureOf = async (s: ReturnType<typeof setup>) => (await s.svc.getTour(WS, REPO_ID)).generation.failure;
+  const realList = MockGitClient.prototype.listFilesAt;
+  const realRead = MockGitClient.prototype.readFileAt;
+
+  it('F-52 — readFileAt throws → source_unreadable, no model call, nothing stored; the next GET and generation read git again', async () => {
+    const s = setup();
+    s.gitSpies.readFileAt.mockImplementation(async (_ref: unknown, _sha: unknown, path: unknown) => {
+      if (path === 'package.json') throw new Error('fatal: unable to read blob');
+      return realRead.call(s.git, _ref as never, _sha as never, path as never);
+    });
+    await generate(s);
+    expect((await failureOf(s))?.code).toBe('source_unreadable');
+    expect(s.structuredCalls()).toHaveLength(0);
+    expect(s.stored()).toBeUndefined();
+
+    // not memoised: a GET reads git again
+    const before = s.gitSpies.readFileAt.mock.calls.length;
+    await s.svc.getTour(WS, REPO_ID);
+    expect(s.gitSpies.readFileAt.mock.calls.length).toBeGreaterThan(before);
+
+    // git recovers → the next generation succeeds with the real facts
+    s.gitSpies.readFileAt.mockImplementation(async (...a: unknown[]) => realRead.apply(s.git, a as never));
+    await generate(s);
+    expect(s.structuredCalls()).toHaveLength(1);
+    expect(s.stored()!.sections.run_locally.commands.map((c) => c.command)).toContain('pnpm run dev');
+    expect((await failureOf(s))).toBeNull();
+  });
+
+  it('F-52 — control: healthy facts ARE memoised — a second GET reads no blob again', async () => {
+    const s = setup();
+    await s.svc.getTour(WS, REPO_ID);
+    const before = s.gitSpies.readFileAt.mock.calls.length;
+    expect(before).toBeGreaterThan(0);
+    await s.svc.getTour(WS, REPO_ID);
+    expect(s.gitSpies.readFileAt.mock.calls.length).toBe(before);
+  });
+
+  it('F-52 — listFilesAt throws and HEAD is the same sha (no D-5 fallback) → source_unreadable, nothing stored', async () => {
+    const s = setup();
+    s.gitSpies.listFilesAt.mockRejectedValue(new Error('fatal: not a tree object'));
+    await generate(s);
+    expect((await failureOf(s))?.code).toBe('source_unreadable');
+    expect(s.structuredCalls()).toHaveLength(0);
+    expect(s.stored()).toBeUndefined();
+  });
+
+  it('F-52 — tree gone and currentHead throws → source_unreadable, nothing stored', async () => {
+    const s = setup();
+    s.gitSpies.listFilesAt.mockImplementation(async (...a: unknown[]) => {
+      if (a[1] === 'sha-1') throw new Error('fatal: not a tree object');
+      return realList.apply(s.git, a as never);
+    });
+    s.gitSpies.currentHead.mockRejectedValue(new Error('fatal: not a git repository'));
+    await generate(s);
+    expect((await failureOf(s))?.code).toBe('source_unreadable');
+    expect(s.structuredCalls()).toHaveLength(0);
+    expect(s.stored()).toBeUndefined();
+  });
+
+  it('F-52 — a failed importer read does not fail the generation, but those facts are not cached', async () => {
+    const s = setup();
+    s.repoIntel.getImporters.mockRejectedValueOnce(new Error('db blip'));
+    await generate(s);
+    expect(s.stored()).toBeDefined();
+    expect((await failureOf(s))).toBeNull();
+    expect(s.repoIntel.getImporters).toHaveBeenCalledTimes(1);
+    // not memoised: the next generation reads the facts (and importers) again
+    await generate(s);
+    expect(s.repoIntel.getImporters).toHaveBeenCalledTimes(2);
+    // healthy now, so cached: a third generation reads nothing again
+    await generate(s);
+    expect(s.repoIntel.getImporters).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('regression F-58 — a stale no_api_key failure goes once the key is there (AC-70, AC-86)', () => {
+  it('F-58 — POST without a key records no_api_key; after the key is added, GET shows no failure and Generate is on', async () => {
+    let keyed = false;
+    const s = setup({
+      llmDep: async () => {
+        if (!keyed) throw new ConfigError('OPENROUTER_API_KEY is not configured');
+        return new MockLLMProvider('openai', { structured: NARRATIVE });
+      },
+    });
+    s.hasLlmKey.mockImplementation(async () => keyed);
+    await rejectionOf(s.svc.startGeneration(WS, REPO_ID));
+    expect((await s.svc.getTour(WS, REPO_ID)).generation.failure?.code).toBe('no_api_key');
+
+    keyed = true; // the user adds the key in settings
+    const t = await s.svc.getTour(WS, REPO_ID);
+    expect(t.generation.failure).toBeNull();
+    expect(t.api_key.missing).toBe(false);
+    expect(t.can_generate).toBe(true);
+    expect(t.blockers).not.toContain('no_api_key');
+  });
+
+  it('F-58 — any other failure stays even with a key present', async () => {
+    const s = setup({ llm: new FailingLLM(new Error('upstream 503')) });
+    await generate(s);
+    expect((await s.svc.getTour(WS, REPO_ID)).generation.failure?.code).toBe('provider_error');
+    expect((await s.svc.getTour(WS, REPO_ID)).generation.failure?.code).toBe('provider_error');
+  });
+});
+
+describe('regression F-64 — a path the git adapter refuses is a skipped file, not source_unreadable (AC-89)', () => {
+  it('F-64, AC-89 — top-ranked src/a:b.ts is never read; the generation succeeds; the facts are cached', async () => {
+    const files = { ...FILES, 'src/a:b.ts': '// TODO: never read\nexport {}\n', 'a:b/package.json': '{"scripts":{"dev":"x"}}' };
+    const indexed: IndexedFile[] = [{ path: 'src/a:b.ts', rank: 2, percentile: 100, importers: 20 }, ...INDEXED];
+    const s = setup({ files, indexed });
+    // Behave like SimpleGitClient.readFileAt: a `:` in the path is refused with a
+    // throw (simple-git.ts guard) — before F-64 that throw became source_unreadable.
+    const realRead = MockGitClient.prototype.readFileAt;
+    s.gitSpies.readFileAt.mockImplementation(async (...a: unknown[]) => {
+      if (String(a[2]).includes(':')) throw new Error(`readFileAt: invalid path "${String(a[2])}"`);
+      return realRead.apply(s.git, a as never);
+    });
+
+    // GET twice: the first builds the skeleton facts, the second is served from the cache
+    await s.svc.getTour(WS, REPO_ID);
+    const afterFirst = s.gitSpies.readFileAt.mock.calls.length;
+    expect(afterFirst).toBeGreaterThan(0);
+    await s.svc.getTour(WS, REPO_ID);
+    expect(s.gitSpies.readFileAt.mock.calls.length).toBe(afterFirst);
+
+    await generate(s);
+    const readPaths = s.gitSpies.readFileAt.mock.calls.map((c) => c[2] as string);
+    expect(readPaths).not.toContain('src/a:b.ts');
+    // a `:` dir is never a manifest dir either (D-44 rejects the segment before any read)
+    expect(readPaths).not.toContain('a:b/package.json');
+    expect(readPaths.some((p) => p.includes(':'))).toBe(false);
+
+    const t = await s.svc.getTour(WS, REPO_ID);
+    expect(t.generation.failure).toBeNull();
+    expect(t.status).toBe('generated');
+    expect(s.structuredCalls()).toHaveLength(1);
+    // the skipped file contributes no TODO candidate (it was never read)
+    expect(s.lastReq().messages[1]!.content as string).not.toContain('todo:src/a:b.ts');
   });
 });

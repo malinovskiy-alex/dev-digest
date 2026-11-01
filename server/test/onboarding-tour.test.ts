@@ -105,6 +105,14 @@ describe('index not ready (AC-15, AC-51)', () => {
     const s = skeletonSections(makeFacts({ indexed: [], readingPaths: [], chains: [] }), []);
     expect(s.reading_path.gap).toBe('not_ranked');
   });
+
+  it('F-57 — not indexed → critical paths gap needs_index (no graph yet), not no_edges', () => {
+    expect(skeletonSections(makeFacts({ indexed: [], readingPaths: [], chains: [] }), []).critical_paths).toEqual({ rows: [], gap: 'needs_index' });
+    // indexed but no chains → the import graph really is empty
+    expect(skeletonSections(makeFacts({ chains: [] }), []).critical_paths).toEqual({ rows: [], gap: 'no_edges' });
+    // indexed with a chain → rows, no gap
+    expect(skeletonSections(makeFacts(), []).critical_paths.gap).toBeNull();
+  });
 });
 
 describe('ready and partial (AC-16, AC-26)', () => {

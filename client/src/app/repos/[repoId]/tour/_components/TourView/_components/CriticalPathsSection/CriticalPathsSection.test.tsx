@@ -38,4 +38,11 @@ describe("CriticalPathsSection", () => {
     expect(screen.getByText("No critical paths — the import graph is empty")).toBeInTheDocument();
     expect(screen.queryByRole("listitem")).toBeNull();
   });
+
+  it("F-57 — needs_index → says the repository is not indexed yet, not that the graph is empty", () => {
+    renderList({ rows: [], gap: "needs_index" });
+    expect(screen.getByText("No critical paths yet — the repository has not been indexed")).toBeInTheDocument();
+    expect(screen.queryByText(/import graph is empty/)).toBeNull();
+    expect(screen.queryByRole("listitem")).toBeNull();
+  });
 });
