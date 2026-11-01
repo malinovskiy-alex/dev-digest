@@ -250,8 +250,19 @@ const PATH_EXTENSIONS =
 const CODE = /(```[\s\S]*?```|`[^`\n]+`)/g;
 /** A markdown link or image: `[text](href "title")` / `![alt](src)`. */
 const LINK = /(!?)\[([^\]\n]*)\]\(\s*([^)\s]*)(?:\s+"[^"\n]*")?\s*\)/g;
-/** A bare or angle-bracketed web URL. */
-const BARE_URL = /<?\bhttps?:\/\/[^\s<>()`]+>?/gi;
+/**
+ * Anything GFM would turn into a link on its own (F-17): an angle-bracket
+ * autolink of any scheme (`<mailto:…>`), a bare or angle-bracketed web URL, a
+ * `www.` autolink, and an email autolink.
+ */
+const BARE_URL =
+  /<[a-z][a-z0-9+.-]{1,31}:[^\s<>]*>|<?\b(?:https?:\/\/|www\.)[^\s<>()`]+>?|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/gi;
+/**
+ * A link reference definition (`[a]: https://…`, destination possibly on the
+ * next line). It is dropped, so a reference-style link `[t][a]` / `[a]` has no
+ * target and renders as its literal text (F-17). Footnotes (`[^1]:`) are kept.
+ */
+const LINK_DEFINITION = /^ {0,3}\[(?!\^)[^\]\n]+\]:[ \t]*(?:\n[ \t]*)?\S[^\n]*(?:\n|$)/gm;
 /** A run of path characters, preceded by a boundary. */
 const PATH_TOKEN = /(^|[\s(\[{"'])([A-Za-z0-9_.\-/]+)/g;
 
@@ -271,7 +282,8 @@ function wrapKnownPaths(text: string, known: ReadonlySet<string>): string {
 }
 
 /** Text outside code: links first (kept only when relative and known), then URLs and paths. */
-function scrubText(text: string, known: ReadonlySet<string>): string {
+function scrubText(raw: string, known: ReadonlySet<string>): string {
+  const text = raw.replace(LINK_DEFINITION, '');
   let out = '';
   let at = 0;
   for (const m of text.matchAll(LINK)) {
@@ -310,7 +322,9 @@ function scrubPlain(text: string, known: ReadonlySet<string>): string {
 
 /**
  * Scrub model prose (D-26): a path-like code span not in K is removed; a link
- * whose href is external or unknown becomes its text; a bare URL becomes code;
+ * whose href is external or unknown becomes its text; a link reference
+ * definition is dropped; a bare URL, `www.`, email or `<scheme:…>` autolink
+ * becomes code;
  * a known path outside code is wrapped in backticks. It never strips `_` and
  * never parses or emits HTML.
  */

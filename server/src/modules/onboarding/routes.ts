@@ -14,9 +14,13 @@ import { OnboardingService } from './service.js';
  *                                    is false. 409 while one runs, 422 when the
  *                                    repo is not cloned / not indexed / has no key
  *
- * Both confirm the repo belongs to the caller's workspace before the id
- * reaches the service: the index and git adapters are tenant-agnostic, and a
- * repo in another workspace is a 404, never a 403 (AC-19, AC-65).
+ * Both confirm the repo belongs to the caller's workspace before the index or
+ * git adapters (tenant-agnostic) see the id, and a repo in another workspace is
+ * a 404, never a 403 (AC-19, AC-65). GET leaves that to `getTour`, whose first
+ * read is the workspace-scoped repo lookup, so the row is fetched once (F-14).
+ * POST keeps the guard here: `startGeneration` takes its lock before its first
+ * `await` (INV-17), so without the guard a foreign id could answer 409 instead
+ * of 404 while that repo generates.
  *
  * The service is built once per app instance (D-38), so there is exactly one
  * running-registry and one registration of its job handler: a second POST for
@@ -38,8 +42,7 @@ export default async function onboardingRoutes(appBase: FastifyInstance) {
 
   app.get('/repos/:id/tour', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(c, req);
-    const repoId = await requireRepoInWorkspace(c, workspaceId, req.params.id);
-    return service.getTour(workspaceId, repoId);
+    return service.getTour(workspaceId, req.params.id);
   });
 
   app.post('/repos/:id/tour/generate', { schema: { params: IdParams } }, async (req, reply) => {

@@ -173,7 +173,7 @@ const ManifestFields = z.object({
   engines: z.record(z.string(), z.unknown()).optional(),
 });
 
-/** Parse a `package.json` excerpt. Invalid JSON or shape → `null`. */
+/** Parse a whole `package.json` — never the excerpt (F-08). Invalid JSON or shape → `null`. */
 export function parseManifest(text: string): ParsedManifest | null {
   let raw: unknown;
   try {
@@ -444,7 +444,10 @@ export function criticalRows(chains: string[][], indexedFiles: IndexedFile[]): T
 // Task candidates (AC-52, AC-53, D-15 … D-18)
 // ---------------------------------------------------------------------------
 
-/** TODO/FIXME/HACK markers inside comments of one excerpt, 1-based lines (D-15). */
+/**
+ * TODO/FIXME/HACK markers inside comments of one file, 1-based lines (D-15).
+ * The file is cut to its excerpt here — the one and only cut (F-15).
+ */
 export function scanTodos(path: string, text: string): TaskCandidate[] {
   const out: TaskCandidate[] = [];
   const lines = excerpt(text).split(/\r?\n/);

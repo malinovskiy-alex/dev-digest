@@ -8,7 +8,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import type { TourFileRow } from "@devdigest/shared";
 import { middleTruncate } from "@/lib/context-docs";
-import { PATH_MAX, fileHref } from "./helpers";
+import { PATH_MAX } from "./constants";
+import { fileHref } from "./helpers";
 import { cx } from "./styles";
 
 export function FileRow({
@@ -26,13 +27,14 @@ export function FileRow({
   const href = fileHref(repoFullName, revision, row.path);
   return (
     <li className={cx.row}>
-      {index !== undefined && <span className={cx.index}>{index}.</span>}
+      {index !== undefined && <span className={cx.index}>{t("listNumber", { n: index })}</span>}
       <code title={row.path} className={cx.path}>
         {middleTruncate(row.path, PATH_MAX)}
       </code>
       <span className={cx.reason}>
-        {"— "}
-        {row.reason ?? t("reason.index", { importers: row.importers, top: row.top_percent })}
+        {t("rowReason", {
+          reason: row.reason ?? t("reason.index", { importers: row.importers, top: row.top_percent }),
+        })}
       </span>
       {href && (
         <a href={href} target="_blank" rel="noopener noreferrer" aria-label={t("open", { path: row.path })} className={cx.open}>

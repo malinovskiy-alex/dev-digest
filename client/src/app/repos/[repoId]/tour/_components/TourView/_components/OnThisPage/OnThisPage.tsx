@@ -24,9 +24,24 @@ export function OnThisPage({ items }: { items: Array<{ id: string; title: string
       const next = activeSection(tops);
       if (next) setActive(next);
     };
+    // At most one measurement per animation frame (F-24): the first scroll
+    // event measures at once, the rest of that frame are dropped, and one
+    // trailing measurement at the next frame catches where the scroll ended.
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      update();
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+    };
     update();
-    window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, [ids]);
 
   const jump = (id: string) => {

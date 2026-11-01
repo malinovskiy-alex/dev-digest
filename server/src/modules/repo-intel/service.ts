@@ -713,6 +713,12 @@ export class RepoIntelService implements RepoIntel {
     return this.repo.getIndexedFiles(repoId);
   }
 
+  /** `getIndexedFiles(repoId).length`, as one `count(*)`. `0` when the flag is off. */
+  async countIndexedFiles(repoId: string): Promise<number> {
+    if (!this.container.config.repoIntelEnabled) return 0;
+    return this.repo.countIndexedFiles(repoId);
+  }
+
   /**
    * Every `(file, endpoint)` pair from `file_facts`, file ASC then endpoint ASC,
    * equal pairs once (onboarding routes fact). `[]` when the flag is off.

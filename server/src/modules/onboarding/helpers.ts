@@ -211,7 +211,7 @@ export function generatedSections(
 
 /**
  * The DTO. `meta` is non-null iff a stored tour is shown, with
- * `outdated = stored.revision !== current index sha` (AC-74).
+ * `outdated = stored index sha (else revision) !== current index sha` (AC-74).
  */
 export function toTourDto(input: {
   repo: TourRepo;
@@ -248,7 +248,10 @@ export function toTourDto(input: {
           provider: s.tour.provider,
           model: s.tour.model,
           cost_usd: s.tour.cost_usd,
-          outdated: s.tour.revision !== input.currentIndexSha,
+          // The index sha the tour was built from, not the read revision: a
+          // tour read at HEAD (index sha unusable) would otherwise stay
+          // outdated forever, and Regenerate could not clear it (F-12).
+          outdated: (s.tour.index_sha ?? s.tour.revision) !== input.currentIndexSha,
         }
       : null,
     sections: input.sections,

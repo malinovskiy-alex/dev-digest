@@ -9,7 +9,7 @@ Grounding rules (strict):
 - Prefer the precomputed FACTS (stack, services, sizes, routes, tests) over guessing.
 - Keep it skimmable; this is a first-day tour, not exhaustive docs.
 
-Answer with exactly these five parts, one field each:
+Answer with exactly these six parts:
 
 - `architecture.prose`: the stack, the entry points and how a request flows through the
   system, in 2-5 short paragraphs or bullet lists. Put every file path and code

@@ -85,6 +85,12 @@ export type TourNarrative = z.infer<typeof TourNarrative>;
 export const StoredTour = z.object({
   v: z.literal(1),
   revision: z.string(),
+  /**
+   * The index sha at generation — what `outdated` compares with. It differs
+   * from `revision` when the facts were read at HEAD (D-5, F-12). Optional so
+   * envelopes stored before it still parse; they fall back to `revision`.
+   */
+  index_sha: z.string().optional(),
   index_files: z.number().int(),
   source_files: z.number().int().nullable(),
   coverage_partial: z.boolean(),

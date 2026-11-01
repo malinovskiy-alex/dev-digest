@@ -8,6 +8,12 @@
 export const FACTS_MAX_CHARS = 40_000;
 /** Every file excerpt (README, manifests, TODO scan) is cut to this (AC-68). */
 export const EXCERPT_MAX_CHARS = 6_000;
+/**
+ * A blob larger than this (bytes, from `ls-tree -l`) is never read — not even
+ * for an excerpt — so a huge README or manifest is not buffered whole (F-18).
+ * The same cap as the project-context viewer's `MAX_CONTEXT_DOC_VIEW_BYTES`.
+ */
+export const READ_MAX_BYTES = 1_048_576;
 /** At most this many route lines reach the prompt (AC-66). */
 export const MAX_ROUTES = 60;
 /** At most this many top-level folders are listed (D-6, AC-34). */
@@ -100,8 +106,11 @@ export const LOCKFILE_INSTALL: ReadonlyArray<{ file: string; pm: string; install
 /** The package manager used for `<pm> run <script>` when a dir has no lockfile (D-9). */
 export const DEFAULT_PM = 'npm';
 
-/** A directory segment that may appear in a command (D-44, INV-15). */
-export const SAFE_DIR_SEGMENT = /^[A-Za-z0-9._-]+$/;
+/**
+ * A directory segment that may appear in a command (D-44, INV-15). It may not
+ * start with `-`, so `cd <dir>` can never read it as an option (`cd -P`, F-20).
+ */
+export const SAFE_DIR_SEGMENT = /^[A-Za-z0-9._][A-Za-z0-9._-]*$/;
 
 /** Env-example file names, first existing wins per dir (D-8). */
 export const ENV_EXAMPLE_NAMES = ['.env.example', '.env.sample', '.env.template', 'example.env'] as const;
@@ -171,8 +180,12 @@ export const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
 /** Test-file basename, for the missing-tests rule (D-16). */
 export const TEST_FILE_PATTERN = /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
-/** A TODO/FIXME/HACK marker inside a comment (D-15). */
-export const TODO_PATTERN = /(?:\/\/|\/\*|^\s*\*|#)\s*.*?\b(TODO|FIXME|HACK)\b[:\s]?(.*)$/;
+/**
+ * A TODO/FIXME/HACK marker inside a comment (D-15). A `#` comment needs a line
+ * start or whitespace before it, so a JS private field (`this.#x`) or a `#` glued
+ * to other text is not read as one (F-15).
+ */
+export const TODO_PATTERN = /(?:\/\/|\/\*|^\s*\*|(?:^|\s)#)\s*.*?\b(TODO|FIXME|HACK)\b[:\s]?(.*)$/;
 
 /** An env-example assignment line; group 1 is the name (D-8). */
 export const ENV_NAME_PATTERN = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;

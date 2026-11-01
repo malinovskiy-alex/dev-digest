@@ -48,6 +48,7 @@ import {
   GENERATION_TIMEOUT_MS,
   OPEN_PR_LIMIT,
   OUTPUT_MAX_TOKENS,
+  READ_MAX_BYTES,
   READING_PATH_SIZE,
   STORED_TOUR_VERSION,
   TODO_SCAN_FILES,
@@ -108,6 +109,8 @@ export interface RepoLocator {
 export interface IndexFacade {
   getIndexState(repoId: string): Promise<TourIndexState>;
   getIndexedFiles(repoId: string): Promise<IndexedFile[]>;
+  /** `getIndexedFiles(repoId).length` as one `count(*)` — status checks only (F-13). */
+  countIndexedFiles(repoId: string): Promise<number>;
   getEndpoints(repoId: string): Promise<Array<{ file: string; endpoint: string }>>;
   getTopFilesByRank(repoId: string, n: number): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
@@ -123,6 +126,8 @@ export interface JobQueue {
 export interface TourJobPayload {
   workspaceId: string;
   repoId: string;
+  /** Which `startGeneration` call this job belongs to (F-19). */
+  generationId: number;
 }
 
 export interface OnboardingServiceDeps {
@@ -145,12 +150,23 @@ export interface OnboardingServiceDeps {
 
 type Failure = NonNullable<TourGeneration['failure']>;
 
-/** What the pre-checks resolved, handed from `startGeneration` to the job handler. */
+/**
+ * What the pre-checks resolved, handed from `startGeneration` to the job
+ * handler. The index state is NOT handed over: the job may wait in the shared
+ * queue while the index refreshes, so the handler re-reads it (F-11).
+ */
 interface StartedGeneration {
+  generationId: number;
   repo: RepoLocator;
-  indexState: TourIndexState;
   choice: FeatureModelChoice;
   llm: LLMProvider;
+}
+
+/** The 409 lock of one repo, owned by one generation (F-19). */
+interface GenerationLock {
+  generationId: number;
+  promise: Promise<void>;
+  resolve: () => void;
 }
 
 /** Concurrent `git show` processes while collecting facts. */
@@ -181,7 +197,9 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 export class OnboardingService {
   private store: OnboardingRepository;
   /** The 409 lock per repo; released only when the job handler ends (INV-17). */
-  private running = new Map<string, { promise: Promise<void>; resolve: () => void }>();
+  private running = new Map<string, GenerationLock>();
+  /** Last generation id handed out; unique within this process. */
+  private generationSeq = 0;
   /** Pre-checked context waiting for its job to start, per repo. */
   private pending = new Map<string, StartedGeneration>();
   private failures = new Map<string, Failure>();
@@ -225,7 +243,7 @@ export class OnboardingService {
     let indexedCount: number;
     if (stored) {
       sections = stored.tour.sections;
-      indexedCount = repo.clonePath ? (await this.deps.repoIntel.getIndexedFiles(repo.id)).length : 0;
+      indexedCount = repo.clonePath ? await this.deps.repoIntel.countIndexedFiles(repo.id) : 0;
     } else if (!repo.clonePath) {
       sections = noCloneSections(prCandidates);
       indexedCount = 0;
@@ -270,7 +288,9 @@ export class OnboardingService {
     if (this.running.has(repoId)) {
       throw new AppError('tour_generation_running', 'A tour is already being generated', 409);
     }
-    const lock = deferred();
+    this.generationSeq += 1;
+    const generationId = this.generationSeq;
+    const lock: GenerationLock = { generationId, ...deferred() };
     this.running.set(repoId, lock);
 
     let started: StartedGeneration;
@@ -281,10 +301,10 @@ export class OnboardingService {
         throw new AppError('tour_not_cloned', 'The repository is not cloned — clone it to generate a tour', 422);
       }
       const indexState = await this.deps.repoIntel.getIndexState(repo.id);
-      const indexed = await this.deps.repoIntel.getIndexedFiles(repo.id);
-      if (!indexReady(indexState, indexed.length)) {
+      const indexedCount = await this.deps.repoIntel.countIndexedFiles(repo.id);
+      if (!indexReady(indexState, indexedCount)) {
         throw new AppError('tour_index_not_ready', 'The repository index is not ready', 422, {
-          reason: indexState.degradedReason ?? indexState.reason ?? (indexed.length === 0 ? 'not_ranked' : indexState.status),
+          reason: indexState.degradedReason ?? indexState.reason ?? (indexedCount === 0 ? 'not_ranked' : indexState.status),
         });
       }
       const choice = await this.deps.featureModel(workspaceId);
@@ -305,60 +325,56 @@ export class OnboardingService {
         }
         throw err;
       }
-      started = { repo, indexState, choice, llm };
+      started = { generationId, repo, choice, llm };
       this.failures.delete(repoId);
       this.pending.set(repoId, started);
-      const payload: TourJobPayload = { workspaceId, repoId };
+      const payload: TourJobPayload = { workspaceId, repoId, generationId };
       const job = await this.deps.jobs.enqueue(workspaceId, TOUR_JOB_KIND, payload);
       // The handler never throws, so this only fires if the runner's own
       // timeout gave up waiting; the handler still settles the lock itself.
       job.done.catch(() => undefined);
     } catch (err) {
-      this.pending.delete(repoId);
-      this.release(repoId);
+      if (this.pending.get(repoId)?.generationId === generationId) this.pending.delete(repoId);
+      this.release(repoId, generationId);
       throw err;
     }
     return { done: lock.promise };
   }
 
-  private release(repoId: string): void {
+  /** Releases the repo's lock only if `generationId` owns it (F-19). */
+  private release(repoId: string, generationId: number): void {
     const lock = this.running.get(repoId);
+    if (!lock || lock.generationId !== generationId) return;
     this.running.delete(repoId);
-    lock?.resolve();
+    lock.resolve();
   }
 
   /**
    * The job handler. It NEVER throws: any error is recorded as the repo's
    * failure here, so `JobRunner`'s retry can never call the model a second
-   * time (AC-21, F-03). It always releases the repo's lock.
+   * time (AC-21, F-03). It releases the lock of its own generation only.
+   *
+   * A call whose generation is not pending is a `JobRunner` re-run of a
+   * handler that already ran (the runner's bookkeeping update threw after the
+   * handler resolved — `JobRunner` never resumes jobs across restarts). It
+   * does nothing: no second model call, no failure written over the stored
+   * outcome, and no release of a newer generation's lock (F-19).
    */
   private async handleJob(payload: TourJobPayload): Promise<void> {
     const repoId = payload?.repoId;
+    const started = repoId ? this.pending.get(repoId) : undefined;
+    if (!repoId || !started || started.generationId !== payload.generationId) return;
+    this.pending.delete(repoId);
     try {
-      const started = repoId ? this.pending.get(repoId) : undefined;
-      if (repoId) this.pending.delete(repoId);
-      if (!started) {
-        if (repoId) {
-          this.failures.set(repoId, {
-            code: 'provider_error',
-            message: 'the generation was not started by this process',
-            provider: null,
-            at: this.now().toISOString(),
-          });
-        }
-        return;
-      }
       await this.run(payload.workspaceId, started);
     } catch (err) {
-      if (repoId) {
-        this.failures.set(repoId, {
-          ...classifyGenerationError(err),
-          provider: null,
-          at: this.now().toISOString(),
-        });
-      }
+      this.failures.set(repoId, {
+        ...classifyGenerationError(err),
+        provider: null,
+        at: this.now().toISOString(),
+      });
     } finally {
-      if (repoId) this.release(repoId);
+      this.release(repoId, started.generationId);
     }
   }
 
@@ -368,8 +384,12 @@ export class OnboardingService {
    * the previous tour is untouched (AC-71, AC-72, AC-73). Never rejects.
    */
   private async run(workspaceId: string, s: StartedGeneration): Promise<void> {
-    const { repo, indexState, choice, llm } = s;
+    const { repo, choice, llm } = s;
     try {
+      // Read now, not at POST: the job may have waited in the shared queue
+      // while the index refreshed, and the revision, rows and coverage stored
+      // below must all describe the same index (F-11).
+      const indexState = await this.deps.repoIntel.getIndexState(repo.id);
       const facts = await this.collectFacts(repo, indexState);
       const pulls = await this.store.listOpenPulls(workspaceId, repo.id, OPEN_PR_LIMIT);
       const candidates = this.candidates(facts, openPrCandidates(pulls));
@@ -399,6 +419,9 @@ export class OnboardingService {
       const envelope: StoredTour = {
         v: STORED_TOUR_VERSION,
         revision: facts.revision,
+        // What `outdated` compares with: the index sha, even when the facts
+        // had to be read at HEAD instead (F-12).
+        index_sha: indexState.lastIndexedSha,
         index_files: facts.indexed.length,
         source_files: indexState.coverage?.totalSourceFiles ?? null,
         coverage_partial: coveragePartial(indexState),
@@ -456,37 +479,46 @@ export class OnboardingService {
       return cached;
     }
 
-    let treePaths: string[] = [];
+    // Blob sizes from `ls-tree -l`, so an oversized blob is refused before it
+    // is read (F-18).
+    let sizes = new Map<string, number>();
+    const list = async (sha: string) =>
+      new Map((await this.deps.git.listFilesAt(ref, sha)).map((f) => [f.path, f.size] as const));
     if (revision) {
       try {
-        treePaths = (await this.deps.git.listFilesAt(ref, revision)).map((f) => f.path);
+        sizes = await list(revision);
       } catch {
         const current = indexState.lastIndexedSha ? await head() : '';
         if (current && current !== revision) {
           revision = current;
           try {
-            treePaths = (await this.deps.git.listFilesAt(ref, revision)).map((f) => f.path);
+            sizes = await list(revision);
           } catch {
-            treePaths = [];
+            sizes = new Map();
           }
         }
       }
     }
+    const treePaths = [...sizes.keys()];
 
-    const [indexed, readingPaths, scanPaths, chains, endpoints] = await Promise.all([
+    // One ranked read: the reading path is the head of the same junk-filtered
+    // top list the TODO scan uses (F-14).
+    const [indexed, topPaths, chains, endpoints] = await Promise.all([
       this.deps.repoIntel.getIndexedFiles(repo.id),
-      this.deps.repoIntel.getTopFilesByRank(repo.id, READING_PATH_SIZE),
-      this.deps.repoIntel.getTopFilesByRank(repo.id, TODO_SCAN_FILES),
+      this.deps.repoIntel.getTopFilesByRank(repo.id, Math.max(READING_PATH_SIZE, TODO_SCAN_FILES)),
       this.deps.repoIntel.getCriticalPaths(repo.id),
       this.deps.repoIntel.getEndpoints(repo.id),
     ]);
+    const readingPaths = topPaths.slice(0, READING_PATH_SIZE);
+    const scanPaths = topPaths.slice(0, TODO_SCAN_FILES);
     const indexedPaths = indexed.map((f) => f.path);
 
-    const tree = new Set(treePaths);
+    /** The whole blob, at most `READ_MAX_BYTES`; each use site cuts its own excerpt. */
     const read = async (path: string): Promise<string | null> => {
-      if (!revision || !tree.has(path)) return null;
+      const size = sizes.get(path);
+      if (!revision || size === undefined || size > READ_MAX_BYTES) return null;
       try {
-        return excerpt(await this.deps.git.readFileAt(ref, revision, path));
+        return await this.deps.git.readFileAt(ref, revision, path);
       } catch {
         return null;
       }
@@ -509,7 +541,9 @@ export class OnboardingService {
     const manifests: ManifestFact[] = [];
     manifestRefs.forEach((m, i) => {
       const text = manifestTexts[i];
-      if (text != null) manifests.push({ dir: m.dir, path: m.path, text, parsed: parseManifest(text) });
+      // Parsed from the whole file: a `package.json` longer than the excerpt
+      // is not valid JSON once cut (F-08). Only the prompt copy is cut.
+      if (text != null) manifests.push({ dir: m.dir, path: m.path, text: excerpt(text), parsed: parseManifest(text) });
     });
 
     const fileCandidates: TaskCandidate[] = [
@@ -527,7 +561,7 @@ export class OnboardingService {
       endpoints,
       manifests,
       readme: readmePath && readmeText != null ? { path: readmePath, text: readmeText.slice(0, EXCERPT_MAX_CHARS) } : null,
-      envExample: envPath && envText != null ? { path: envPath, names: envExampleNames(envText) } : null,
+      envExample: envPath && envText != null ? { path: envPath, names: envExampleNames(excerpt(envText)) } : null,
       fileCandidates,
       commands: deriveCommands({ treePaths, manifests }),
       stack: detectStack({ indexedPaths, manifests, treePaths }),

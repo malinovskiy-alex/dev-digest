@@ -510,6 +510,18 @@ export class RepoIntelRepository {
     }));
   }
 
+  /**
+   * How many `file_rank` rows the repo has — the N of `getIndexedFiles` without
+   * reading the rows or aggregating `file_edges` (onboarding status, F-13).
+   */
+  async countIndexedFiles(repoId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(t.fileRank)
+      .where(eq(t.fileRank.repoId, repoId));
+    return Number(row?.n ?? 0);
+  }
+
   /** Every `file_facts` row of the repo, path ASC (onboarding routes, AC-20). */
   async getAllFileFacts(repoId: string): Promise<IndexerFileFactsRow[]> {
     const rows = await this.db

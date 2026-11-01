@@ -218,6 +218,10 @@ export async function runIncremental(
   // coverage of the index (AC-87) — never the prior row's, which go stale as
   // soon as a file is added.
   let walk: WalkResult | undefined;
+  // How many `file_rank` rows this pass wrote; `undefined` when the rank was
+  // not rewritten (the walk, the graph or the resolve threw first), so the
+  // prior row's count still describes the index (F-10).
+  let rankWritten: number | undefined;
   try {
     walk = await walkClone(repo.clonePath);
     const allFiles = walk.files;
@@ -228,6 +232,7 @@ export async function runIncremental(
     await repository.resolveReferences(repoId, { reset: true });
     const rankRows = computeFileRank(allFiles, edgeRows);
     await repository.replaceFileRank(repoId, rankRows);
+    rankWritten = rankRows.length;
     // The repo-map is keyed per commit_sha → prior entries are now stale.
     const candidates = await repository.getRepoMapCandidates(repoId);
     const map = renderRepoMap(candidates, container.tokenizer, DEFAULT_REPO_MAP_TOKEN_BUDGET);
@@ -272,19 +277,22 @@ export async function runIncremental(
     edgesWritten: edgeRows.length,
     hotnessAvailable: false,
     ...coverage,
-    // The incremental pass has no soft budget.
-    softBudgetReached: false,
+    // The incremental pass has no soft budget of its own, but it re-parses
+    // only the changed slice: files a soft-budgeted full pass never parsed
+    // stay unparsed, so that pass's flag is carried forward until the next
+    // full index clears it (AC-13, AC-87, F-09).
+    softBudgetReached: state.coverage?.softBudgetReached === true,
     ...(graphFailed ? { graphFailed } : {}),
     parseDegraded,
     durationMs: Date.now() - startedAt,
   };
 
   // `filesIndexed` is the number of files the refreshed index holds — the
-  // walk's file set, which is exactly the `file_rank` rows written above. It
-  // used to be `prior + this slice`, which re-added every re-parsed file on
-  // each refresh and drifted upward (AC-87). Without a walk the rank was not
-  // rewritten, so the prior count still describes the index.
-  const newFilesIndexed = walk ? walk.files.length : state.filesIndexed;
+  // `file_rank` rows written above. It used to be `prior + this slice`, which
+  // re-added every re-parsed file on each refresh and drifted upward (AC-87).
+  // When the rank was not rewritten (walk, graph or resolve failed), the prior
+  // count still describes the index (F-10).
+  const newFilesIndexed = rankWritten ?? state.filesIndexed;
   const newFilesSkipped = walk
     ? walk.stats.skippedTooLarge + filesSkipped
     : state.filesSkipped + filesSkipped;

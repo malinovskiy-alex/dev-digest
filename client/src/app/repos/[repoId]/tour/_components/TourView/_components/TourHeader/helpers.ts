@@ -27,6 +27,18 @@ export function disabledReason(tour: OnboardingTour): "notCloned" | "indexNotRea
   return null;
 }
 
+/**
+ * `useSyncExternalStore` source for `window.location.origin`: the origin never
+ * changes during a page's life, so there is nothing to subscribe to. The server
+ * snapshot is "" — reading `window` during render would differ between the
+ * server and the first client render (F-27).
+ */
+export function subscribeNever(): () => void {
+  return () => {};
+}
+export const clientOrigin = (): string => window.location.origin;
+export const serverOrigin = (): string => "";
+
 /** The share link for a tour (AC-75). */
 export function shareUrl(origin: string, repoId: string): string {
   return `${origin}/repos/${repoId}/tour`;

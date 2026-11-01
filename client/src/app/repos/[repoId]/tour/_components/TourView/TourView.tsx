@@ -29,7 +29,6 @@ import { RunLocallySection } from "./_components/RunLocallySection";
 import { TourHeader } from "./_components/TourHeader";
 import { TourSection } from "./_components/TourSection";
 import { SECTION_ORDER, SKELETON_HEIGHT, type SectionKey } from "./constants";
-import { isKnownIndexReason } from "./helpers";
 import { cx } from "./styles";
 
 export function TourView(): React.JSX.Element {
@@ -85,10 +84,12 @@ export function TourView(): React.JSX.Element {
     );
   }
 
+  // A reason code with its own message is translated; any other is shown raw
+  // (D-24). `t.has` reads the catalog itself, so no hand-kept list of codes (F-23).
   const reason = tour.index_reason;
   const indexReasonText = reason
-    ? isKnownIndexReason(reason)
-      ? t(`indexReason.${reason}` as "indexReason.no_data")
+    ? t.has(`indexReason.${reason}`)
+      ? t(`indexReason.${reason}`)
       : reason
     : null;
 

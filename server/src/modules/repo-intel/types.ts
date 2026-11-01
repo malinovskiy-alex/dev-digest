@@ -194,6 +194,8 @@ export interface RepoIntel {
   getCriticalPaths(repoId: string): Promise<string[][]>;
   /** Every ranked file (= every file the index holds), rank DESC then path ASC. */
   getIndexedFiles(repoId: string): Promise<IndexedFileRow[]>;
+  /** `getIndexedFiles(repoId).length` without reading the rows. */
+  countIndexedFiles(repoId: string): Promise<number>;
   /** Every `(file, endpoint)` from `file_facts`, file ASC then endpoint ASC, de-duplicated. */
   getEndpoints(repoId: string): Promise<EndpointRow[]>;
 }

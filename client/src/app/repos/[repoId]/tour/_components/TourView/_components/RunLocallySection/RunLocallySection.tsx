@@ -19,7 +19,7 @@ export function RunLocallySection({ list }: { list: TourCommands }): React.JSX.E
     <ol className={cx.list}>
       {list.commands.map((c) => (
         <li key={c.step} className={cx.row}>
-          <span className={cx.step}>{c.step}.</span>
+          <span className={cx.step}>{t("listNumber", { n: c.step })}</span>
           <code className={cx.command}>{c.command}</code>
           {c.comment && <span className={cx.comment}>{c.comment}</span>}
           <CopyControl text={c.command} ariaLabel={t("copyCommand", { n: c.step })} />

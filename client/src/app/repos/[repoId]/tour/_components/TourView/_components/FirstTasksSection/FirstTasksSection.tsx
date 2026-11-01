@@ -21,7 +21,7 @@ export function FirstTasksSection({
 }): React.JSX.Element {
   const t = useTranslations("onboarding");
   const say = (m: { text: string } | Msg): string =>
-    "text" in m ? m.text : t(m.key as "title", m.values);
+    "text" in m ? m.text : t(m.key, m.values);
 
   if (list.tasks.length === 0) {
     return <p className={cx.gap}>{list.gap === "needs_clone" ? t("gaps.needsClone") : t("gaps.noCandidates")}</p>;

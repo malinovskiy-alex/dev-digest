@@ -5,15 +5,21 @@
 
 import React from "react";
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Badge, Button } from "@devdigest/ui";
 import type { OnboardingTour, TourFailureCode } from "@devdigest/shared";
 import { CopyControl } from "../CopyControl";
-import { disabledReason, regenerationNotice, shareUrl, statusLines } from "./helpers";
+import { API_KEYS_HREF, NOW_TICK_MS } from "./constants";
+import {
+  clientOrigin,
+  disabledReason,
+  regenerationNotice,
+  serverOrigin,
+  shareUrl,
+  statusLines,
+  subscribeNever,
+} from "./helpers";
 import { cx } from "./styles";
-
-/** Settings screen for API keys (AC-70, AC-86). */
-const API_KEYS_HREF = "/settings/api-keys";
 
 export function TourHeader({
   tour,
@@ -28,6 +34,9 @@ export function TourHeader({
 }): React.JSX.Element {
   const t = useTranslations("onboarding");
   const format = useFormatter();
+  // An explicit `now` for relativeTime: without one next-intl falls back to
+  // render time with an ENVIRONMENT_FALLBACK error, and the text never moves (F-21).
+  const now = useNow({ updateInterval: NOW_TICK_MS });
   const [dismissedAt, setDismissedAt] = React.useState<string | null>(null);
 
   const meta = tour.meta;
@@ -46,7 +55,7 @@ export function TourHeader({
     t(`failure.${code}`, { message });
   const notice = regenerationNotice(tour, dismissedAt);
   const lines = statusLines(tour);
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin = React.useSyncExternalStore(subscribeNever, clientOrigin, serverOrigin);
 
   return (
     <header className={cx.header}>
@@ -93,11 +102,11 @@ export function TourHeader({
               ? t("header.generatedPartial", {
                   files: meta.index_files,
                   total: meta.source_files,
-                  when: format.relativeTime(new Date(meta.generated_at)),
+                  when: format.relativeTime(new Date(meta.generated_at), now),
                 })
               : t("header.generated", {
                   files: meta.index_files,
-                  when: format.relativeTime(new Date(meta.generated_at)),
+                  when: format.relativeTime(new Date(meta.generated_at), now),
                 })}
           </span>
           {meta.index_partial && <Badge>{t("header.partialIndex")}</Badge>}

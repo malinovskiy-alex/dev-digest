@@ -56,7 +56,7 @@ export function ArchitectureDiagram({
       <ul className={cx.srOnly} aria-label={t("diagramEdges")}>
         {connections.map((e) => (
           <li key={`${e.from}>${e.to}`}>
-            {`${byId.get(e.from)?.label ?? e.from} → ${byId.get(e.to)?.label ?? e.to}`}
+            {t("diagramEdge", { from: byId.get(e.from)?.label ?? e.from, to: byId.get(e.to)?.label ?? e.to })}
           </li>
         ))}
       </ul>
