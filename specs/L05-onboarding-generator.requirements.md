@@ -78,7 +78,7 @@ resolved; all six are closed.
 | C3 | **What to show without a full clone** | User decision: a deterministic skeleton from what the DB already has, with an honest status; generation needs a clone **and** an index; a `partial` index with a ranking may generate (AC-14…AC-16, AC-58). |
 | C4 | **Staleness and refresh** | The header shows when the tour was generated (AC-12); an "Outdated" badge appears when the index revision moves; regeneration is manual only (Q-07 → AC-74). |
 | C5 | **Security of untrusted repository text in the prompt and on the page** | From the package rules and existing code: all repo-derived text goes to the model inside `<untrusted>` blocks under the existing guard, with no keyword scanning (`reviewer-core/AGENTS.md`, invariant 3); every path, command, diagram component and task the model returns is checked against the facts; model text is rendered without HTML; env-file values never leave the clone (AC-33, AC-60…AC-65). |
-| C6 | **Failure, partial states and LLM cost** | Missing key, timeout, provider error and invalid output all fall back to the deterministic skeleton with the reason (AC-70…AC-72), and a missing key is shown as soon as the page opens (AC-86); exactly one model call per generation, no schema re-ask or repair, adapter transport retries allowed (Q-02, REC-1 → AC-21); no model call on page open (AC-25); one generation per repository at a time, which survives leaving the page (AC-28, AC-29); the model and cost of the last generation are visible (AC-84). |
+| C6 | **Failure, partial states and LLM cost** | Five failure kinds — missing key, timeout, provider error, invalid output and `source_unreadable` (the repository's files cannot be read from git at the tour revision; no model call is made) — all fall back to the deterministic skeleton with the reason and store nothing (AC-70…AC-72, AC-89), and a missing key is shown as soon as the page opens (AC-86); exactly one model call per generation, no schema re-ask or repair, adapter transport retries allowed (Q-02, REC-1 → AC-21); no model call on page open (AC-25); one generation per repository at a time, which survives leaving the page (AC-28, AC-29); the model and cost of the last generation are visible (AC-84). |
 
 ## Out of scope
 
@@ -225,6 +225,7 @@ resolved; all six are closed.
 | AC-86 | Event-driven | [REC-3] WHEN the user opens the tour page and no API key is stored for the provider the generation would use, the system shall show, before any click, the status "No API key for <provider>" with a link to Settings → API Keys, and shall keep "Generate tour" / "Regenerate" disabled. | client + server-integration |
 | AC-70 | Unwanted | IF no API key is stored for the provider of the "Onboarding Tour" model, THEN the system shall not call the model, show the skeleton with the status "No API key for <provider>" and a link to Settings → API Keys. | client + server-integration |
 | AC-71 | Unwanted | [decision Q-03] IF the model call fails or does not answer within 120 seconds, THEN the system shall show the skeleton with the status "Generation failed — <reason>" and store nothing. | server-integration + client |
+| AC-89 | Unwanted | [decision F-52] IF the repository's files cannot be read from git at the tour revision (the revision, tree or blob read fails), THEN the system shall not call the model, store nothing, and show the skeleton with the status "Generation failed — <reason>" under the failure kind `source_unreadable`; a path the git adapter refuses by design (e.g. one containing `:`) counts as a skipped file, not as this failure. | server-unit + server-integration + client |
 | AC-72 | Unwanted | [decision Q-02] IF the model's answer does not match the expected structure, THEN the system shall treat it as the failure of AC-71 with the reason "the model returned invalid output", without a second model call (no schema re-ask or repair, AC-21). | server-unit |
 | AC-73 | Unwanted | [accepted UX-03] IF a regeneration fails while a stored tour exists, THEN the system shall keep showing the stored tour and show a dismissible notice "Regeneration failed — <reason>". | client + server-integration |
 
@@ -301,17 +302,21 @@ sequenceDiagram
     ON-->>UI: 422 + reason (skeleton stays)
   else ready
     ON->>RI: top files by rank, critical paths, file rank, routes
-    ON->>GIT: manifests, lockfile names, README, env-example names, TODO scan
-    ON->>DB: open PRs
-    ON->>ON: facts + candidates, caps (AC-66)
-    ON->>LLM: one structured call, facts in untrusted blocks
-    alt answer valid
-      LLM-->>ON: narrative for five sections
-      ON->>ON: drop unknown paths, commands, candidates
-      ON->>DB: store tour + revision
-      ON-->>UI: tour
-    else error, timeout, invalid, no key
-      ON-->>UI: skeleton + failure reason (stored tour untouched)
+    ON->>GIT: manifests, lockfile names, README, env-example names, TODO scan (at the tour revision)
+    alt revision, tree or blob read fails (source_unreadable)
+      ON-->>UI: skeleton + "Generation failed" (no model call, nothing stored)
+    else source readable (refused paths are skipped files)
+      ON->>DB: open PRs
+      ON->>ON: facts + candidates, caps (AC-66)
+      ON->>LLM: one structured call, facts in untrusted blocks
+      alt answer valid
+        LLM-->>ON: narrative for five sections
+        ON->>ON: drop unknown paths, commands, candidates
+        ON->>DB: store tour + revision
+        ON-->>UI: tour
+      else no key, error, timeout, invalid
+        ON-->>UI: skeleton + failure reason (stored tour untouched)
+      end
     end
   end
 ```
@@ -319,11 +324,11 @@ sequenceDiagram
 | From → to | What is passed | On failure | Requirement |
 |---|---|---|---|
 | client → server/onboarding (get) | repository id | 404 → not-found screen; other → error state with Retry | AC-18, AC-19 |
-| client → server/onboarding (generate) | repository id | 409 already running; 422 no clone / index not ready; model failure → skeleton with reason | AC-14, AC-15, AC-28, AC-70…AC-72 |
+| client → server/onboarding (generate) | repository id | 409 already running; 422 no clone / index not ready; failure (no key, error, timeout, invalid output, source unreadable) → skeleton with reason | AC-14, AC-15, AC-28, AC-70…AC-72, AC-89 |
 | server/onboarding → repo-intel | repository id | facade never throws; empty result → the section's empty state | AC-38, AC-51 |
-| server/onboarding → local clone | repo-relative manifest/README/env-example paths, top-ranked files | file missing → that fact is absent | AC-45, AC-64, AC-68 |
+| server/onboarding → local clone | repo-relative manifest/README/env-example paths, top-ranked files, read at the tour revision | file missing or path refused by the git adapter (e.g. contains `:`) → that file is skipped and the fact is absent; revision, tree or blob read fails → `source_unreadable`: no model call, nothing stored, "Generation failed — <reason>" | AC-45, AC-64, AC-68, AC-89 |
 | server/onboarding → DB | repository id | as today | AC-24, AC-58 |
-| server/onboarding → LLM | facts (untrusted), candidate ids, ranked paths, derived commands | no key / error / timeout / invalid → skeleton, nothing stored | AC-21, AC-60, AC-70…AC-72 |
+| server/onboarding → LLM | facts (untrusted), candidate ids, ranked paths, derived commands | no key / error / timeout / invalid → skeleton, nothing stored (the fifth kind, `source_unreadable`, stops before this call — see the clone row) | AC-21, AC-60, AC-70…AC-72, AC-89 |
 | client → GitHub | file link at the tour revision (new tab) | GitHub's own 404 | AC-37 (Q-05) |
 | client → clipboard | page URL or command text | fallback field | AC-42, AC-75, AC-77 |
 
@@ -377,4 +382,5 @@ None. Q-01…Q-08 are resolved — see `## Decisions`.
 | REC-3 (planner) Missing key on open | The missing-key status with the Settings link is shown when the page opens, before any click, and Generate is disabled | user (via coordinator), 2026-10-31 → AC-86 |
 | REC-4 (planner) Coverage numbers | "N of M source files indexed" stays correct after incremental refreshes (no `filesIndexed` drift) | user (via coordinator), 2026-10-31 → AC-87 |
 | AC-83 output limit | Raised from 4,000 to 10,000 tokens. Measured in a real run: the default onboarding model (OpenRouter `deepseek/deepseek-v4-flash`) is a reasoning model whose hidden reasoning tokens (2,600–4,000+) count against `max_tokens`; at 4,000, 1 of 3 runs ended `finish_reason: length` with truncated JSON (`invalid_output`). The answer itself is ~1,400 tokens; 10,000 at ~110 tok/s stays inside the 120 s timeout (AC-71). Still exactly one model call (AC-21) | user (via coordinator), 2026-11-01 → AC-83 |
+| F-52 Unreadable source (pre-merge) | A generation must not store a tour built from degraded facts without saying so: if the revision, tree or blob read from git fails, no model call is made, nothing is stored, and "Generation failed — <reason>" is shown under a fifth failure kind `source_unreadable`; a path the git adapter refuses by design (e.g. containing `:`) is a skipped file, not this failure. Added as a new AC-89 rather than extending AC-71, because it fires before the model call while AC-71 covers the model call itself | user (via coordinator), 2026-11-01 → AC-89 |
 | Failure diagnostics (deferred) | Logging the raw output, the Zod issues and `finish_reason` when generation fails needs a change to the LLM adapters (reviewer-core + server adapters); deferred to a separate change, not part of this spec | user (via coordinator), 2026-11-01 |
