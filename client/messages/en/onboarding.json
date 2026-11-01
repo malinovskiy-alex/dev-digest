@@ -4,8 +4,8 @@
   "heading": "Onboarding for <accent>{name}</accent>",
   "loadError": "Couldn’t load the onboarding tour",
   "header": {
-    "generated": "Generated from index of {files} files · last refreshed {when}",
-    "generatedPartial": "Generated from index of {files} of {total} source files indexed · last refreshed {when}",
+    "generated": "Generated from index of {files, number} files · last refreshed {when}",
+    "generatedPartial": "Generated from index of {files, number} of {total, number} source files indexed · last refreshed {when}",
     "modelTooltip": "{provider} / {model} · {cost}",
     "costUnknown": "cost unknown",
     "partialIndex": "partial index",
