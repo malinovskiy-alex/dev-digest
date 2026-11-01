@@ -14,7 +14,7 @@ Plan `specs/L05-onboarding-generator.md` (revision 3) · Requirements `specs/L05
 | pre-PR rounds 2–4 | `8f3a4c6` + `992d05e` · `ed61200` + `9ca3c38` · `7393492` + `93b8f88` (each: fix, then its regression tests) |
 
 ### Findings
-36 total · fixed 33 · accepted 2 · wontfix 1 · open 0 — full ledger below.
+48 total · fixed 41 · accepted 2 · wontfix 1 · open 4 (F-40, F-41, F-47, F-48 — all SUGGESTION, not taken) — full ledger below.
 
 Accepted (go into the PR description):
 - **F-07** — `server/test/repo-intel-facade-degraded.test.ts:118,123,128` fail a scratch typecheck of `server/test` (`RepoBasics.defaultBranch`). Pre-existing (`git blame` → starter snapshot `587c46a`); `pnpm typecheck` does not cover `server/test`. Separate change.
@@ -41,6 +41,10 @@ verify client · baseline L05-onboarding-generator @ 993081a
 ### Not verified
 - **AC-03, AC-82** — e2e flows 06 and 09 have not run: `agent-browser` is not installable here. CI (`e2e-web.yml`) runs them on the PR. Flow 09 starts with `set viewport 1280 2000` (`e2e/INSIGHTS.md`).
 - No live model call was made during the run; the generated path is covered by unit and integration tests with a stub LLM. A manual check on an open-source repository follows this record.
+
+## After this record: UI check and design pass (2026-11-01)
+
+A manual check on the open-source repo `sindresorhus/ky` found that generation on the default model failed (reasoning tokens exhausted the 4,000 cap → AC-83 amended to 10,000, F-37), two jsdom-only passes that broke in a real browser (F-38 scroll container, F-39 coverage heuristic) and a UI that did not match the mockups (F-42…F-45). Fixed in `a533e8b` with tests in `fd9fc5f`; spec/plan updated in `9c8428e`. Last runs: server 528 (6 baseline) + 125 integration, client 329, 0 new failures; architecture approve 0/0/0; security 0 CRITICAL / 0 WARNING (440 renders through `inertLinks`, 0 links). ky now generates a full tour (one model call, ~30 s).
 
 ## Final plan-verifier report (verbatim summary of the AC → task → test → commit matrix)
 
@@ -145,7 +149,6 @@ Rows not closed before merge:
 | 88 | 4, 6 | facts; grounding | done |
 
 ## Findings ledger
-
 | ID | Iter | Source | Sev | Where | Finding | Status | Resolution |
 |---|---|---|---|---|---|---|---|
 | F-01 | 1 | architecture-reviewer | SUGGESTION | `client/src/app/repos/[repoId]/tour/_components/TourView/_components/TourHeader/TourHeader.tsx:12` | child imports parent's `../../helpers` (type `StatusLine`) — dependency points up (frontend-ui-architecture) | fixed | StatusLine/statusLines moved to TourHeader/helpers.ts:36,48; no ../../ import left |
@@ -184,9 +187,20 @@ Rows not closed before merge:
 | F-34 | 7 | implementer | test | `server/test/onboarding-grounding.test.ts:350` | NEW FAIL by design: test pinned the old deleting definition scrub (F-30); must assert escaped `\[` + URL in code + byte round-trip | fixed | rewritten + insertion-only round-trip corpus (12) |
 | F-35 | 8 | security re-check | SUGGESTION | `server/src/modules/onboarding/service.ts:338-342` | F-33 release path records no failure → generation silently vanishes; set a provider_error failure before release | fixed | user: fix (round 4) ; round 4 |
 | F-36 | 8 | security re-check | SUGGESTION | `server/src/modules/onboarding/grounding/helpers.ts:258-393` | server scrub still best-effort (9/13 bypass cases); guarantee is client inertLinks — state in the tour DTO contract that prose must be rendered with inertLinks | fixed | user: fix (round 4) ; round 4 |
+| F-37 | 9 | UI check (sindresorhus/ky) | WARNING | `server/src/modules/onboarding/service.ts` (run) + `reviewer-core/src/llm/openrouter.ts:115` | real generation on the default onboarding model (openrouter `deepseek/deepseek-v4-flash`, strict json_schema) fails `invalid_output`; the cause (zod issues / raw output) is never logged, so it cannot be diagnosed | fixed | root cause: reasoning tokens exhaust the 4,000 cap (finish_reason length); OUTPUT_MAX_TOKENS → 10,000 (user: AC-83 amended); failure logged via app.log; raw/issues logging needs adapter change → separate PR (user) |
+| F-38 | 9 | UI check | WARNING | `client/.../OnThisPage/OnThisPage.tsx` | "On this page" stays on "Architecture overview" when scrolled to First tasks in the real app — listener likely on `window` while the app shell scrolls its own container (AC-81 passes in jsdom only) | fixed | round 5 user: fix (round 5) + re-run on ky |
+| F-39 | 9 | UI check | WARNING | `server/src/modules/onboarding/facts/helpers.ts` (`missingTestCandidates`) | ky: "Add tests for source/index.ts" though `test/` has 46 test files — the heuristic only matches same-name test files | fixed | round 5 user: fix (round 5) + re-run on ky |
+| F-40 | 9 | UI check | SUGGESTION | `server/src/modules/onboarding/facts/helpers.ts` (`detectStack`) | ky (an HTTP client) shows "Frameworks: Express" — devDependencies (test server) count as frameworks | open | |
+| F-41 | 9 | UI check | SUGGESTION | `facts/helpers.ts` (`installCommand`, D-7) | repo without a lockfile gets no install step at all (ky: only `npm run build`, `npm run test`) — per D-7 by design, but reads as broken | open | |
+| F-42 | 10 | user | design | `client/src/app/repos/[repoId]/tour/**` | UI does not match the mockups (lab5.5-1/2.png) — 16 gaps in `design-gaps.md` (D-1…D-16) | fixed | D-1..D-16 (2 partial: mono font fallback on Windows; per-kind fill kept for AC-32); visual check vs mockups |
+| F-43 | 11 | UI check | WARNING | `server/src/modules/onboarding/grounding/helpers.ts` (scrubProse, D-26 (1)) | removing an unknown-path code span leaves broken prose: "a local Express server () providing" — keep the text as plain (non-code) text instead of deleting it | fixed | AC-61 kept (unknown path still removed); an emptied `()` is removed too — plain-text alternative would break AC-61 |
+| F-44 | 11 | UI check | SUGGESTION | tour prose / RunLocallySection | no gap between prose paragraphs; run-locally comments show literal backticks (`` `distribution/` ``) | fixed | flex gap on the markdown root (unlayered `p{margin:0}` in vendored ui CSS beat Tailwind); comment backtick spans → <code> |
+| F-45 | 11 | implementer (UI check) | design | `client/.../ArchitectureDiagram/helpers.ts` (`layoutDiagram`) | an edge between non-adjacent layers runs straight through an intermediate box (reads as strikethrough); mockup uses orthogonal (elbow) routing between boxes | fixed | orthogonal routing, gutter lanes for layer-skipping/back edges; 3,000 random graphs: 0 overlaps, 0 box crossings |
+| F-46 | 12 | implementer | test | client tests | 3 NEW FAIL by design: ReadingPath (no dot, reason on own line), RunLocally (no dot), ArchitectureDiagram AC-32 (edges are `<path marker-end>`, not `<line>`); server AC-83 test still expects 4,000 | fixed | tests updated part-by-part + new tests F-37..F-45; server 528+125, client 329 |
+| F-47 | 13 | security re-check | SUGGESTION | `server/src/modules/onboarding/grounding/helpers.ts:258-259` | email part of BARE_URL is quadratic on long `a.a.a.` runs (2.2 s at 40k chars) — prose can now be ~10k tokens; anchor the local part at a boundary or cap prose before scrubbing | open | |
+| F-48 | 13 | security re-check | SUGGESTION | `grounding/helpers.ts:455` | `generationFailureLog` reads `e.raw` but adapters attach `details.raw` — dead field today; document it as model/repo text if wired later | open | |
 
 ## Run log
-
 - 2026-10-31 · preflight · main · ok (plan rev 2, 88 ACs, branch lesson/L05-onboarding-generator; commits c35c6d7 spec, 3bf8350 spec amend, 993081a plan)
 - 2026-10-31 · implement · implementer · done steps 1–22, 0 new failures (phase1-implementer.md)
 - 2026-10-31 · review 1 · architecture-reviewer · INV-1..17 pass (INV-15 not checked: security), 0 CRIT/0 WARN/3 SUGG
@@ -205,3 +219,9 @@ Rows not closed before merge:
 - 2026-11-01 · tests 3 · test-writer · F-34 + round-trip + F-29..F-33 tests; server 505+124, client 321 green
 - 2026-11-01 · re-check 3 · security · 0 CRIT/0 WARN (314 renders, no <a>/<img>); F-35,F-36 SUGG
 - 2026-11-01 · fix 4 · F-35, F-36 fixed + test; ledger: 33 fixed, 2 accepted, 1 wontfix, 0 open
+- 2026-11-01 · UI check · main · sindresorhus/ky imported+indexed; skeleton OK; Generate → invalid_output on default model; F-37..F-41
+- 2026-11-01 · fix 5 · implementer (fresh) · F-37 (cap 10k, user OK), F-38, F-39 fixed; ky generation succeeds; design pass F-42 started
+- 2026-11-01 · design pass · implementer · D-1..D-16 done (2 partial); visual check vs mockups OK; F-43, F-44 polish
+- 2026-11-01 · polish · implementer · F-43 (AC-61 kept), F-44 fixed; F-45 diagram routing
+- 2026-11-01 · tests 5 · test-writer · F-46 + F-37..F-45 tests; server 528+125, client 329 green
+- 2026-11-01 · review 13 · arch approve 0/0/0 ∥ security 0 CRIT/0 WARN (440 renders, 0 <a>/<img>); F-47, F-48 SUGG
