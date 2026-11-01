@@ -196,3 +196,96 @@ describe("DiffTab — no grouping yet", () => {
     expect(screen.queryByText("Hardcoded Stripe secret key")).not.toBeInTheDocument();
   });
 });
+
+// ---- L05 PR Brief: ?file=&line= focus (plan step 25f; R-53, R-54, R-57, R-59, F-07) ----
+
+describe("DiffTab — focus target from the URL", () => {
+  /** A docs file (default-closed group) over 200 changed lines (starts collapsed). */
+  const BIG_DOC: PrFile = {
+    path: "docs/webhooks.md",
+    additions: 210,
+    deletions: 0,
+    patch: ["@@ -0,0 +1,210 @@", ...Array.from({ length: 210 }, (_, i) => `+doc line ${i + 1}`)].join("\n"),
+  };
+  const CORE: PrFile = FILES.find((f) => f.path === "src/config.ts")!;
+  const FOCUS_FILES = [CORE, BIG_DOC];
+  const FOCUS_SMART: SmartDiff = {
+    review_id: "rev-1",
+    groups: [
+      { role: "core", files: [{ path: CORE.path, additions: 1, deletions: 0, finding_lines: [] }] },
+      { role: "docs", files: [{ path: BIG_DOC.path, additions: 210, deletions: 0, finding_lines: [] }] },
+    ],
+    split_suggestion: { too_big: false, total_lines: 211, proposed_splits: [] },
+  };
+
+  let scrollIntoView: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView as unknown as Element["scrollIntoView"];
+    reviews = [];
+  });
+
+  const tree = (focus: { path: string; line: number | null } | null) => (
+    <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
+      <DiffTab prId="pr-1" filesCount={FOCUS_FILES.length} files={FOCUS_FILES} focus={focus} />
+    </NextIntlClientProvider>
+  );
+
+  const targetRow = () => screen.queryByText("doc line 150")?.closest("[aria-current]") ?? null;
+
+  it("R-53, R-54, R-59 — waits for the grouping, then opens the group and the file, highlights, scrolls to and focuses the line", () => {
+    smartDiff = undefined;
+    smartDiffLoading = true;
+    const view = render(tree({ path: BIG_DOC.path, line: 150 }));
+    // still grouping: nothing rendered, nothing scrolled
+    expect(screen.queryByText(BIG_DOC.path)).not.toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    smartDiff = FOCUS_SMART;
+    smartDiffLoading = false;
+    view.rerender(tree({ path: BIG_DOC.path, line: 150 }));
+
+    expect(screen.getByRole("button", { name: /Docs/ })).toHaveAttribute("aria-expanded", "true");
+    const row = targetRow();
+    expect(row).not.toBeNull();
+    expect(row).toHaveAttribute("aria-current", "location");
+    expect(row).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(row);
+  });
+
+  it("R-57 — a line outside the hunks: notice at the top of the file and the header focused", () => {
+    smartDiff = FOCUS_SMART;
+    render(tree({ path: BIG_DOC.path, line: 999 }));
+    expect(screen.getByRole("status")).toHaveTextContent("Line 999 is not in the changed lines of this file");
+    expect(screen.getByText(BIG_DOC.path).closest("[tabindex]")).toHaveFocus();
+    expect(document.querySelectorAll("[aria-current]")).toHaveLength(0);
+  });
+
+  it("F-07 — once handled, collapsing/reopening the group or switching the order neither re-scrolls nor forces the file open", () => {
+    smartDiff = FOCUS_SMART;
+    render(tree({ path: BIG_DOC.path, line: 150 }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    const docs = screen.getByRole("button", { name: /Docs/ });
+    fireEvent.click(docs); // collapse
+    expect(docs).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(docs); // reopen: the card remounts
+    expect(docs).toHaveAttribute("aria-expanded", "true");
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("doc line 150")).not.toBeInTheDocument(); // not forced open again
+
+    fireEvent.click(screen.getByRole("button", { name: "Original order" }));
+    fireEvent.click(screen.getByRole("button", { name: "Smart order" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    // the user's collapse of a default-closed group sticks after a remount
+    expect(screen.getByRole("button", { name: /Docs/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("R-53 — with no grouping available, the flat list still opens and focuses the target", () => {
+    smartDiff = undefined;
+    render(tree({ path: BIG_DOC.path, line: 150 }));
+    expect(targetRow()).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+});
