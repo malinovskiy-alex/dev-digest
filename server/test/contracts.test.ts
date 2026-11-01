@@ -9,7 +9,7 @@ import {
   SmartDiff,
   SmartDiffRole,
   Conformance,
-  Onboarding,
+  TourSections,
   EvalRun,
   MemoryItem,
   RunTrace,
@@ -218,8 +218,19 @@ describe('AI contracts parse fixtures', () => {
       }),
     ).not.toThrow();
     expect(() =>
-      Onboarding.parse({
-        sections: [{ kind: 'architecture', title: 'T', body: 'b', links: [] }],
+      TourSections.parse({
+        architecture: {
+          prose: null,
+          components: [],
+          connections: [],
+          stack: { languages: [], frameworks: [], runtime: [] },
+          folders: [],
+          gap: 'needs_clone',
+        },
+        critical_paths: { rows: [], gap: 'needs_clone' },
+        run_locally: { commands: [], gap: 'needs_clone' },
+        reading_path: { rows: [], gap: 'needs_clone' },
+        first_tasks: { tasks: [], gap: 'no_candidates' },
       }),
     ).not.toThrow();
     expect(() =>

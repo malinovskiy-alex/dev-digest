@@ -9,7 +9,13 @@
      `noopener noreferrer nofollow`; a relative link (`./other.md`, `#x`) is
      repo-relative, would 404 inside the studio, and is shown as inert text.
    Like the primitive, it renders no raw HTML (react-markdown without
-   rehype-raw) and drops `javascript:` URLs (the default urlTransform). */
+   rehype-raw) and drops `javascript:` URLs (the default urlTransform).
+
+   `inertLinks` (the onboarding tour's model prose, F-29): no href is ever
+   followed. The override sits on the rendered `a` / `img` elements, so it
+   covers every way markdown makes a link — inline, reference-style, `<…>`
+   and GFM autolink literals however they were escaped or entity-encoded —
+   and an autolinked URL is shown as its plain text. */
 "use client";
 
 import React from "react";
@@ -20,7 +26,14 @@ import { Icon } from "@devdigest/ui";
 import { isExternalHref } from "./helpers";
 import { cx } from "./styles";
 
-export function UntrustedMarkdown({ children }: { children?: string | null }): React.JSX.Element | null {
+export function UntrustedMarkdown({
+  children,
+  inertLinks = false,
+}: {
+  children?: string | null;
+  /** Render every link and image source as inert text, web links included. */
+  inertLinks?: boolean;
+}): React.JSX.Element | null {
   const t = useTranslations("context");
   if (!children) return null;
 
@@ -29,7 +42,7 @@ export function UntrustedMarkdown({ children }: { children?: string | null }): R
     strong: ({ children }) => <strong className={cx.strong}>{children}</strong>,
     code: ({ children }) => <code className={cx.code}>{children}</code>,
     a: ({ children, href }) =>
-      isExternalHref(href) ? (
+      !inertLinks && isExternalHref(href) ? (
         <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={cx.link}>
           {children}
         </a>
@@ -41,7 +54,7 @@ export function UntrustedMarkdown({ children }: { children?: string | null }): R
     img: ({ src, alt }) => {
       const label = alt ? t("markdown.image", { alt }) : t("markdown.imageNoAlt");
       const source = typeof src === "string" ? src : undefined;
-      return isExternalHref(source) ? (
+      return !inertLinks && isExternalHref(source) ? (
         <a href={source} target="_blank" rel="noopener noreferrer nofollow" className={cx.image}>
           <Icon.File size={12} aria-hidden="true" />
           {label}

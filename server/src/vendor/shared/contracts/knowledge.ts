@@ -26,25 +26,145 @@ export const Conformance = z.object({
 export type Conformance = z.infer<typeof Conformance>;
 
 // ---- Onboarding ----
-export const OnboardingLink = z.object({
-  label: z.string(),
+// The repository tour (L05 Onboarding Generator). Deterministic facts first;
+// model text only where a field says so. Every section key is always present —
+// a skeleton fills it from facts and says what is missing through `gap`.
+export const TourComponentKind = z.enum(['ui', 'api', 'service', 'worker', 'data', 'external', 'library']);
+export type TourComponentKind = z.infer<typeof TourComponentKind>;
+export const TourComponent = z.object({ id: z.string(), label: z.string(), kind: TourComponentKind });
+export type TourComponent = z.infer<typeof TourComponent>;
+export const TourConnection = z.object({ from: z.string(), to: z.string() });
+export type TourConnection = z.infer<typeof TourConnection>;
+
+export const TourSectionGap = z.enum([
+  'needs_clone',    // AC-58 "Needs a clone and an index"
+  'needs_index',    // AC-15 index not ready (architecture folders)
+  'not_ranked',     // AC-51
+  'no_edges',       // AC-38
+  'no_manifest',    // AC-45
+  'no_candidates',  // AC-59
+]);
+export type TourSectionGap = z.infer<typeof TourSectionGap>;
+
+export const TourStack = z.object({
+  languages: z.array(z.object({ name: z.string(), files: z.number().int() })), // by indexed file count desc
+  frameworks: z.array(z.string()),
+  runtime: z.array(z.string()),
+});
+export type TourStack = z.infer<typeof TourStack>;
+export const TourFolder = z.object({ path: z.string(), files: z.number().int() });
+export type TourFolder = z.infer<typeof TourFolder>;
+
+export const TourArchitecture = z.object({
+  // `prose` is UNTRUSTED model output. The server scrub (D-26) is best effort
+  // only: render it with `<UntrustedMarkdown inertLinks>` so no href in it is
+  // ever followable (F-29, F-36). Never render it with a markdown component
+  // that turns links into anchors.
+  prose: z.string().nullable(),          // model markdown (scrubbed, D-26); null in a skeleton
+  components: z.array(TourComponent),     // grounded (AC-33); [] in a skeleton
+  connections: z.array(TourConnection),
+  stack: TourStack,                       // AC-34
+  folders: z.array(TourFolder),           // AC-34, ≤ 30
+  gap: TourSectionGap.nullable(),
+});
+export type TourArchitecture = z.infer<typeof TourArchitecture>;
+
+export const TourFileRow = z.object({
   path: z.string(),
+  reason: z.string().nullable(),          // model's one line, or null → client words the deterministic reason
+  importers: z.number().int(),            // D-14
+  top_percent: z.number().int(),          // D-14
 });
-export type OnboardingLink = z.infer<typeof OnboardingLink>;
+export type TourFileRow = z.infer<typeof TourFileRow>;
+export const TourFileList = z.object({ rows: z.array(TourFileRow), gap: TourSectionGap.nullable() });
+export type TourFileList = z.infer<typeof TourFileList>;
 
-export const OnboardingSection = z.object({
-  kind: z.string(),
-  title: z.string(),
-  body: z.string(), // markdown
-  diagram: z.string().nullish(), // mermaid
-  links: z.array(OnboardingLink),
-});
-export type OnboardingSection = z.infer<typeof OnboardingSection>;
+export const TourCommand = z.object({ step: z.number().int(), command: z.string(), comment: z.string().nullable() });
+export type TourCommand = z.infer<typeof TourCommand>;
+export const TourCommands = z.object({ commands: z.array(TourCommand), gap: TourSectionGap.nullable() });
+export type TourCommands = z.infer<typeof TourCommands>;
 
-export const Onboarding = z.object({
-  sections: z.array(OnboardingSection),
+export const TourTaskKind = z.enum(['todo', 'missing-tests', 'open-pr']);
+export type TourTaskKind = z.infer<typeof TourTaskKind>;
+export const TourTask = z.object({
+  candidate_id: z.string(),
+  kind: TourTaskKind,
+  source: z.enum(['model', 'fallback']),
+  title: z.string().nullable(),           // model title; null for fallback (client words it, D-19)
+  reason: z.string().nullable(),          // model reason; null for fallback
+  path: z.string().nullable(),
+  line: z.number().int().nullable(),
+  pr_number: z.number().int().nullable(),
+  pr_title: z.string().nullable(),
+  detail: z.string().nullable(),          // TODO text | PR author — deterministic context
+  importers: z.number().int().nullable(),
+  top_percent: z.number().int().nullable(),
 });
-export type Onboarding = z.infer<typeof Onboarding>;
+export type TourTask = z.infer<typeof TourTask>;
+export const TourTasks = z.object({ tasks: z.array(TourTask), gap: TourSectionGap.nullable() });
+export type TourTasks = z.infer<typeof TourTasks>;
+
+export const TourSections = z.object({
+  architecture: TourArchitecture,
+  critical_paths: TourFileList,
+  run_locally: TourCommands,
+  reading_path: TourFileList,
+  first_tasks: TourTasks,
+});
+export type TourSections = z.infer<typeof TourSections>;
+
+export const TourStatus = z.enum(['generated', 'ready', 'not_cloned', 'index_not_ready']); // which sections are shown; blockers say why Generate is off
+export type TourStatus = z.infer<typeof TourStatus>;
+export const TourFailureCode = z.enum(['no_api_key', 'timeout', 'provider_error', 'invalid_output', 'source_unreadable']); // source_unreadable: git could not read the revision, nothing was generated (F-52)
+export type TourFailureCode = z.infer<typeof TourFailureCode>;
+export const TourGeneration = z.object({
+  running: z.boolean(),
+  failure: z
+    .object({ code: TourFailureCode, message: z.string(), provider: z.string().nullable(), at: z.string() })
+    .nullable(),
+});
+export type TourGeneration = z.infer<typeof TourGeneration>;
+
+export const TourMeta = z.object({
+  revision: z.string(),
+  generated_at: z.string(),
+  index_files: z.number().int(),          // AC-12 N
+  source_files: z.number().int().nullable(), // AC-13 M
+  coverage_partial: z.boolean(),          // AC-13
+  index_partial: z.boolean(),             // AC-16
+  trimmed: z.boolean(),                   // AC-69
+  provider: z.string(),                   // AC-84
+  model: z.string(),
+  cost_usd: z.number().nullable(),
+  outdated: z.boolean(),                  // AC-74
+});
+export type TourMeta = z.infer<typeof TourMeta>;
+
+// Why generation is not possible right now, in display order (D-41). Several may apply.
+export const TourBlocker = z.enum(['not_cloned', 'index_not_ready', 'no_api_key']);
+export type TourBlocker = z.infer<typeof TourBlocker>;
+export const TourApiKey = z.object({ provider: z.string(), model: z.string(), missing: z.boolean() }); // AC-86
+export type TourApiKey = z.infer<typeof TourApiKey>;
+
+export const OnboardingTour = z.object({
+  repo_id: z.string(),
+  full_name: z.string(),                  // owner/name — breadcrumb (AC-06)
+  name: z.string(),                       // heading accent (AC-06)
+  default_branch: z.string(),
+  status: TourStatus,                     // 'generated' whenever a valid stored tour exists (D-45)
+  index_reason: z.string().nullable(),    // AC-15, AC-51 (D-24)
+  revision: z.string().nullable(),        // sha that GitHub links point at; null without a clone
+  blockers: z.array(TourBlocker),         // AC-14, AC-15, AC-86 — ordered not_cloned, index_not_ready, no_api_key
+  api_key: TourApiKey,                    // AC-86 — checked on GET, no model call (D-42)
+  can_generate: z.boolean(),              // blockers.length === 0 && !generation.running
+  generation: TourGeneration,
+  meta: TourMeta.nullable(),              // non-null iff status === 'generated'
+  sections: TourSections,
+});
+export type OnboardingTour = z.infer<typeof OnboardingTour>;
+
+export const TourGenerateAccepted = z.object({ running: z.literal(true) });
+export type TourGenerateAccepted = z.infer<typeof TourGenerateAccepted>;
 
 // ---- Eval ----
 export const EvalPerTrace = z.object({

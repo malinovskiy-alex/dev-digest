@@ -1,17 +1,109 @@
 {
   "title": "Onboarding Tour",
-  "sections": "Sections",
-  "sectionCount": "{count} sections",
-  "regenerate": "Regenerate",
-  "regenerating": "Regenerating…",
-  "unknownError": "Unknown error",
-  "generate": {
-    "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
-    "cta": "Generate onboarding tour",
-    "generating": "Generating…"
+  "crumbRepoFallback": "Repository",
+  "heading": "Onboarding for <accent>{name}</accent>",
+  "loadError": "Couldn’t load the onboarding tour",
+  "header": {
+    "generated": "Generated from index of {files, number} files · last refreshed {when}",
+    "generatedPartial": "Generated from index of {files, number} of {total, number} source files indexed · last refreshed {when}",
+    "modelTooltip": "{provider} / {model} · {cost}",
+    "costUnknown": "cost unknown",
+    "partialIndex": "partial index",
+    "trimmed": "built from a trimmed fact set"
   },
-  "loadError": {
-    "title": "Couldn’t load the onboarding tour"
-  }
+  "actions": {
+    "generate": "Generate tour",
+    "regenerate": "Regenerate",
+    "generating": "Generating…",
+    "needsCloneTooltip": "A clone and an index are required",
+    "indexNotReadyTooltip": "The index is not ready",
+    "noKeyTooltip": "No API key for {provider}",
+    "share": "Share link",
+    "shareLabel": "Copy a link to this tour"
+  },
+  "status": {
+    "notCloned": "Not cloned — clone to generate",
+    "indexNotReady": "Index not ready — {reason}",
+    "noApiKey": "No API key for {provider}",
+    "apiKeysLink": "Settings → API Keys",
+    "failed": "Generation failed — {reason}"
+  },
+  "notice": {
+    "regenFailed": "Regeneration failed — {reason}",
+    "dismiss": "Dismiss"
+  },
+  "outdated": "Outdated — the repository has changed since this tour was generated",
+  "failure": {
+    "no_api_key": "no API key for the selected provider",
+    "timeout": "the model did not answer within 120 seconds",
+    "provider_error": "the provider returned an error: {message}",
+    "invalid_output": "the model returned invalid output",
+    "source_unreadable": "the repository files could not be read from git, so nothing was generated — try again"
+  },
+  "indexReason": {
+    "no_data": "the repository has not been indexed yet",
+    "no_clone": "the repository has no local clone",
+    "no_files": "the index holds no files",
+    "index_failed": "the last index run failed",
+    "repo_too_large": "the repository is too large to index",
+    "flag_off": "repository indexing is turned off",
+    "not_ranked": "the files have not been ranked yet"
+  },
+  "sections": {
+    "architecture": "Architecture overview",
+    "criticalPaths": "Critical paths",
+    "runLocally": "How to run locally",
+    "readingPath": "Guided reading path",
+    "firstTasks": "First tasks"
+  },
+  "onThisPage": "On this page",
+  "collapse": "Collapse {title}",
+  "expand": "Expand {title}",
+  "gaps": {
+    "needsClone": "Needs a clone and an index",
+    "needsIndex": "Needs an index — the folder list appears once the repository is indexed",
+    "noEdges": "No critical paths — the import graph is empty",
+    "criticalNeedsIndex": "No critical paths yet — the repository has not been indexed",
+    "notRanked": "No reading path — the repository has not been ranked yet",
+    "notRankedReason": "No reading path — the repository has not been ranked yet ({reason})",
+    "noManifest": "No run commands found in the repository's manifests",
+    "noCandidates": "No starter tasks found in this repository"
+  },
+  "reason": {
+    "index": "imported by {importers} files · top {top}% by rank"
+  },
+  "open": "Open {path}",
+  "openShort": "Open",
+  "copyCommand": "Copy command {n}",
+  "copied": "Copied",
+  "copyManually": "Copy it manually",
+  "tasks": {
+    "kind": {
+      "todo": "TODO",
+      "missing-tests": "Missing tests",
+      "open-pr": "Open PR"
+    },
+    "fallback": {
+      "todo": "Resolve the TODO in {path}:{line}",
+      "missingTests": "Add tests for {path}",
+      "openPr": "Review PR #{n}: {title}"
+    },
+    "openedBy": "opened by {author}",
+    "openTask": "Open task: {title}"
+  },
+  "stack": {
+    "title": "Stack",
+    "languages": "Languages: {list}",
+    "languageCount": "{name} · {files} files",
+    "frameworks": "Frameworks: {list}",
+    "runtime": "Runtime: {list}",
+    "none": "none detected",
+    "folders": "Top-level folders",
+    "folderCount": "{path}/ · {files} files"
+  },
+  "diagramLabel": "Architecture diagram with {count} components",
+  "diagramEdges": "Connections",
+  "diagramEdge": "{from} → {to}",
+  "listNumber": "{n}",
+  "rowReason": "— {reason}"
 }

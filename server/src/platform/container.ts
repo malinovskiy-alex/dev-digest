@@ -59,6 +59,16 @@ export interface ContainerOverrides {
   tokenizer?: Tokenizer;
 }
 
+/**
+ * Which secret holds each LLM provider's API key. `buildLlm` and `hasLlmKey`
+ * both read it, so "is there a key?" and "can a client be built?" cannot drift.
+ */
+const KEY_FOR = {
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+} as const satisfies Record<'openai' | 'anthropic' | 'openrouter', string>;
+
 export class Container {
   readonly config: AppConfig;
   readonly db: Db;
@@ -215,25 +225,30 @@ export class Container {
     return provider;
   }
 
+  /**
+   * Whether provider `id` could be resolved by `llm(id)` — an injected
+   * provider, or a stored key. Reads `SecretsProvider` only: it builds no
+   * client, makes no request and never returns the key (L05 onboarding, D-42).
+   */
+  async hasLlmKey(id: 'openai' | 'anthropic' | 'openrouter'): Promise<boolean> {
+    if (this.overrides.llm?.[id]) return true;
+    return !!(await this.secrets.get(KEY_FOR[id]));
+  }
+
   private async buildLlm(id: 'openai' | 'anthropic' | 'openrouter'): Promise<LLMProvider> {
-    if (id === 'openai') {
-      const key = await this.secrets.get('OPENAI_API_KEY');
-      if (!key) throw new ConfigError('OPENAI_API_KEY is not configured');
-      return new OpenAIProvider(key);
-    }
+    const secret = KEY_FOR[id];
+    const key = await this.secrets.get(secret);
+    if (!key) throw new ConfigError(`${secret} is not configured`);
+    if (id === 'openai') return new OpenAIProvider(key);
     if (id === 'openrouter') {
       // Single OpenRouter provider lives in reviewer-core (shared with the CI
       // runner); inject the PriceBook so cost attribution uses LIVE OpenRouter
       // prices (with the static table as a fallback) rather than a hardcoded one.
-      const key = await this.secrets.get('OPENROUTER_API_KEY');
-      if (!key) throw new ConfigError('OPENROUTER_API_KEY is not configured');
       return new OpenRouterProvider(key, {
         estimateCost: (model, tokensIn, tokensOut) =>
           this.priceBook.estimate(model, tokensIn, tokensOut),
       });
     }
-    const key = await this.secrets.get('ANTHROPIC_API_KEY');
-    if (!key) throw new ConfigError('ANTHROPIC_API_KEY is not configured');
     return new AnthropicProvider(key);
   }
 

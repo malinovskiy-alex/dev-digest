@@ -33,7 +33,10 @@ import type {
   BlastCallerRow,
   BlastChangedSymbol,
   BlastResult,
+  EndpointRow,
+  ImportEdgeRow,
   FileRankRow,
+  IndexedFileRow,
   IndexResult,
   IndexState,
   RefRow,
@@ -188,7 +191,12 @@ export class RepoIntelService implements RepoIntel {
    */
   async getIndexState(repoId: string): Promise<IndexState> {
     const persisted = await this.repo.tryGetIndexState(repoId);
-    if (persisted) return persisted;
+    if (persisted) {
+      // The last pass's parse record is the incremental pass's input only; it
+      // is not part of the facade (or of the HTTP response) (F-54).
+      const { lastPass: _lastPass, ...state } = persisted;
+      return state;
+    }
     return {
       repoId,
       status: 'degraded',
@@ -686,7 +694,8 @@ export class RepoIntelService implements RepoIntel {
       for (let depth = 0; depth < BFS_DEPTH; depth += 1) {
         const next = (adj.get(cur) ?? [])
           .filter((t) => !inChain.has(t))
-          .sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0))[0];
+          // rank DESC, ties by path ASC in code-unit order, not locale (F-60) — the same chain on every call (AC-23)
+          .sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0) || cmp(a, b))[0];
         if (!next) break;
         chain.push(next);
         inChain.add(next);
@@ -700,6 +709,58 @@ export class RepoIntelService implements RepoIntel {
     }
     return paths;
   }
+
+  /**
+   * Every file the index holds, with rank, percentile and distinct-importer
+   * count, rank DESC then path ASC (onboarding). `[]` when the flag is off.
+   */
+  async getIndexedFiles(repoId: string): Promise<IndexedFileRow[]> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    return this.repo.getIndexedFiles(repoId);
+  }
+
+  /** `getIndexedFiles(repoId).length`, as one `count(*)`. `0` when the flag is off. */
+  async countIndexedFiles(repoId: string): Promise<number> {
+    if (!this.container.config.repoIntelEnabled) return 0;
+    return this.repo.countIndexedFiles(repoId);
+  }
+
+  /**
+   * The import edges whose target is one of `paths` (onboarding: which test
+   * files import a file, F-39). `[]` when the flag is off or `paths` is empty.
+   */
+  async getImporters(repoId: string, paths: string[]): Promise<ImportEdgeRow[]> {
+    if (!this.container.config.repoIntelEnabled || paths.length === 0) return [];
+    const rows = await this.repo.getEdgesTo(repoId, paths);
+    return rows.map((r) => ({ from: r.fromFile, to: r.toFile }));
+  }
+
+  /**
+   * Every `(file, endpoint)` pair from `file_facts`, file ASC then endpoint ASC,
+   * equal pairs once (onboarding routes fact). `[]` when the flag is off.
+   */
+  async getEndpoints(repoId: string): Promise<EndpointRow[]> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    const facts = await this.repo.getAllFileFacts(repoId);
+    const seen = new Set<string>();
+    const out: EndpointRow[] = [];
+    for (const f of facts) {
+      for (const endpoint of f.endpoints) {
+        const key = JSON.stringify([f.filePath, endpoint]);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ file: f.filePath, endpoint });
+      }
+    }
+    return out.sort((a, b) =>
+      a.file === b.file ? cmp(a.endpoint, b.endpoint) : cmp(a.file, b.file),
+    );
+  }
+}
+
+/** Code-unit string order (stable across locales), for deterministic output. */
+function cmp(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** How many top-ranked files seed `getCriticalPaths` dependency chains. */
@@ -707,8 +768,10 @@ const CRITICAL_PATH_ROOTS = 5;
 
 /**
  * Path kinds excluded from rank-driven file samples (conventions/onboarding):
- * tests, configs, declaration files, migrations, generated dirs. Substring
- * match on the repo-relative path (kept deliberately simple + deterministic).
+ * tests, configs, declaration files, migrations, fixtures, generated dirs.
+ * Substring match on `'/' + path` lower-cased, so a directory pattern such as
+ * `/test/` or `/migrations/` also matches at the repo root (`test/a.ts`) —
+ * kept deliberately simple + deterministic (AC-47).
  */
 const JUNK_PATH_PATTERNS = [
   '.test.',
@@ -720,6 +783,7 @@ const JUNK_PATH_PATTERNS = [
   '/tests/',
   '/migrations/',
   '/__fixtures__/',
+  '/fixtures/',
   '.config.',
   'vitest.',
   'jest.',
@@ -728,7 +792,7 @@ const JUNK_PATH_PATTERNS = [
 ] as const;
 
 function isJunkPath(path: string): boolean {
-  const lower = path.toLowerCase();
+  const lower = '/' + path.toLowerCase();
   return JUNK_PATH_PATTERNS.some((p) => lower.includes(p));
 }
 

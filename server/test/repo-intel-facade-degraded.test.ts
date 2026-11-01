@@ -96,6 +96,12 @@ describe('RepoIntel facade — degraded contract (flag off)', () => {
     await expect(svc.getCriticalPaths('r1')).resolves.toEqual([]);
   });
 
+  it('getIndexedFiles / getEndpoints → [] (L05 onboarding reads, plan step 28)', async () => {
+    const svc = buildDegradedService({ flag: false });
+    await expect(svc.getIndexedFiles('r1')).resolves.toEqual([]);
+    await expect(svc.getEndpoints('r1')).resolves.toEqual([]);
+  });
+
   it('indexRepo / refreshIndex → degraded T1 skeleton (never throws)', async () => {
     const svc = buildDegradedService({ flag: false });
     const a = await svc.indexRepo('r1');

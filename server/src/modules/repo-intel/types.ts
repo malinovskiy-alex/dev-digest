@@ -47,6 +47,33 @@ export interface IndexState extends IndexResult {
   /** True when the layer is running on the ripgrep fallback. */
   degraded?: boolean;
   degradedReason?: DegradedReason;
+  /**
+   * What the latest walk saw, projected from `repo_index_state.stats` (L05
+   * onboarding header, AC-13/AC-87). `totalSourceFiles` is the walk's
+   * `totalCandidates` (null when an older row never recorded it); `bounded` and
+   * `softBudgetReached` say whether the index holds fewer files than the walk saw.
+   * Absent on the synthesised "no data" state.
+   */
+  coverage?: { totalSourceFiles: number | null; bounded: number; softBudgetReached: boolean };
+}
+
+/**
+ * What the last pass recorded about its own parse, read back only by the
+ * incremental pass so its counters stay consistent with the full pass (F-54).
+ * Never part of the facade's `IndexState`: the service strips it.
+ */
+export interface LastPassStats {
+  /** `stats.parseDegraded` — files of the walk that were not parsed (capped). */
+  parseDegraded: Array<{ file: string; reason: string }>;
+  /** `stats.skippedTooLarge`, 0 when absent. */
+  skippedTooLarge: number;
+  /** `stats.filesSeen` — the walk's file count, null when absent. */
+  filesSeen: number | null;
+}
+
+/** A persisted `repo_index_state` row as the repository reads it. */
+export interface StoredIndexState extends IndexState {
+  lastPass: LastPassStats;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +148,27 @@ export interface FileRankRow {
   percentile: number;
 }
 
+/** One ranked file with its import fan-in (onboarding reading path / rows). */
+export interface IndexedFileRow {
+  path: string;
+  rank: number;
+  percentile: number;
+  /** Distinct files importing this one (`file_edges.from_file`). */
+  importers: number;
+}
+
+/** One import edge: `from` imports `to` (`file_edges`). */
+export interface ImportEdgeRow {
+  from: string;
+  to: string;
+}
+
+/** One HTTP endpoint the indexer found in a file (`file_facts.endpoints`). */
+export interface EndpointRow {
+  file: string;
+  endpoint: string;
+}
+
 export interface RepoMapResult {
   text: string;
   tokens: number;
@@ -169,4 +217,12 @@ export interface RepoIntel {
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+  /** Every ranked file (= every file the index holds), rank DESC then path ASC. */
+  getIndexedFiles(repoId: string): Promise<IndexedFileRow[]>;
+  /** `getIndexedFiles(repoId).length` without reading the rows. */
+  countIndexedFiles(repoId: string): Promise<number>;
+  /** Every `(file, endpoint)` from `file_facts`, file ASC then endpoint ASC, de-duplicated. */
+  getEndpoints(repoId: string): Promise<EndpointRow[]>;
+  /** The import edges whose target is one of `paths` — "who imports these files?". */
+  getImporters(repoId: string, paths: string[]): Promise<ImportEdgeRow[]>;
 }

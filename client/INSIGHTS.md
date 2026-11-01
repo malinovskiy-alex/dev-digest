@@ -19,6 +19,12 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-11-01 — Sanitising markdown links with a source regex cannot be made complete
+**Symptom:** after three rounds of `scrubProse` fixes, a security re-check still produced clickable links from `&#104;ttps://x`, `https\://x`, `_https://x_`, `\www.x` and from code spans with escaped or unequal backtick runs.
+**Cause:** remark-gfm finds autolinks in the *decoded* text (after entities and backslash escapes are resolved) and tokenises code spans by CommonMark's backtick-run rules; a regex over the raw source sees neither.
+**Rule:** guarantee "no followable link" at render: pass `inertLinks` to `UntrustedMarkdown`, which turns every `a`/`img` node into inert text whatever markdown produced it. A server-side scrub is defence in depth only, and must be insertion-only (see `../reviewer-core/INSIGHTS.md`).
+**Where:** `client/src/components/untrusted-markdown/UntrustedMarkdown.tsx:31` (`inertLinks`)
+
 ### 2026-10-30 — dropping context-doc rows that the active repo's listing lacks loses other repos' attachments
 **Symptom:** after any check/uncheck/reorder on an agent's or skill's Context tab, parked attachments for documents of another repository disappeared from the DB.
 **Cause:** attachments are stored by relative path with no repo column, so they apply to every repo, while the tab builds rows from the ACTIVE repo's listing (capped at 1,000, possibly not cloned). `toEntries` filtered out stored rows marked `missing`, and the PUT replaces the whole list.
@@ -194,6 +200,12 @@ typecheck both packages.
 
 ## Tool & Library Notes
 
+### 2026-11-01 — next-intl `format.relativeTime(date)` without `now` reports an error on every render
+**Symptom:** the tour header logged an IntlError (`ENVIRONMENT_FALLBACK`, "The `now` parameter wasn't provided") on each 2 s poll, and "last refreshed 2 hours ago" never changed. Component tests did not show it because they pass `now` to the provider.
+**Cause:** the app's `NextIntlClientProvider` sets no global `now`; use-intl 3.26 then falls back to the current time and calls `onError` each time.
+**Rule:** pass an explicit `now` from `useNow({ updateInterval })` to every `relativeTime` call, as `IntentCard` does.
+**Where:** `client/src/app/repos/[repoId]/tour/_components/TourView/_components/TourHeader/TourHeader.tsx:39` (`useNow`)
+
 ### 2026-09-17 — there is no `@testing-library/user-event`; use `fireEvent`
 **Symptom:** `import userEvent from "@testing-library/user-event"` fails the whole
 test file to collect with `Failed to resolve import`.
@@ -228,6 +240,8 @@ the shorthand/longhand mix React warns about — the existing comment claiming
 *(nothing yet)*
 
 ## Session Notes
+
+- 2026-11-01 — L05 Onboarding Tour via spec → plan (+ Sonnet cross-model review) → /run-plan: 4 pre-PR rounds; tour prose links made inert at render after regex scrubbing kept leaking.
 
 - 2026-09-16 — added the Cost column to the PR list, tokens+cost to the
   timeline row and the COST tile back to the run trace (L01). One shared
