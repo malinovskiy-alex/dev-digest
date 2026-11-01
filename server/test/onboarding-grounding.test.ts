@@ -312,3 +312,60 @@ describe('failure classification (AC-72, D-20)', () => {
     expect(classifyGenerationError('weird').code).toBe('provider_error');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression F-17 (D-26 (3), AC-61, AC-62): GFM turns more than `[t](http…)`
+// into a link — `www.` and email autolinks, `<scheme:…>` autolinks, and
+// reference-style links whose definition sits elsewhere in the prose. None of
+// them may survive the scrub as a clickable external link.
+// ---------------------------------------------------------------------------
+
+/** The prose with every code span removed: what GFM could still turn into a link. */
+const outsideCode = (s: string) => s.replace(/```[\s\S]*?```|`[^`\n]+`/g, '');
+
+function expectNoExternalLink(out: string) {
+  const plain = outsideCode(out);
+  expect(plain, out).not.toMatch(/www\./i); // www. autolink
+  expect(plain, out).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]/); // email autolink
+  expect(plain, out).not.toMatch(/<[a-z][a-z0-9+.-]*:/i); // <scheme:…> autolink
+  expect(plain, out).not.toMatch(/https?:/i); // any http(s) URL
+  expect(plain, out).not.toMatch(/\]\(/); // inline link
+  expect(plain, out).not.toMatch(/^ {0,3}\[[^\]^][^\]]*\]:/m); // reference definition
+  expect(plain, out).not.toContain('evil.example');
+}
+
+describe('regression F-17 — no clickable external link of any GFM kind (D-26, AC-61)', () => {
+  const known = buildKnownSet({ treePaths: ['src/my_file.ts', 'docs/guide.md'], indexedPaths: [] });
+
+  it.each([
+    ['www. autolink', 'Log in at www.evil.example/login today.'],
+    ['email autolink', 'Mail admin@evil.example for access.'],
+    ['<mailto:…> autolink', 'Write to <mailto:admin@evil.example> now.'],
+    ['<https://…> autolink', 'See <https://evil.example/x> now.'],
+    ['<javascript:…> autolink', 'Click <javascript:alert(1)> here.'],
+  ])('F-17 — %s', (_kind, prose) => {
+    expectNoExternalLink(scrubProse(prose, known));
+  });
+
+  it('F-17 — a reference-style link and its definition (`https:evil.example`) leave no link and no definition', () => {
+    const prose = ['Please [log in here][a] and read [b].', '', '[a]: https:evil.example', '[b]:', '  https://evil.example/b "t"'].join('\n');
+    const out = scrubProse(prose, known);
+    expectNoExternalLink(out);
+    expect(out).toContain('log in here'); // the visible text is kept
+  });
+
+  it('F-17 — recoverability: ordinary prose with code spans, known paths and no links is unchanged', () => {
+    const prose = [
+      'Run `pnpm test` before you push; the `--watch` flag helps.',
+      'Requests enter at `src/my_file.ts`, then see `docs/guide.md` and/or the `user@example.com` sample.',
+      '',
+      '1. Install with `pnpm install`.',
+      '2. Version 1.2.3 is the minimum, e.g. on Node 22.',
+      '',
+      '```sh',
+      'curl https://example.com/health',
+      '```',
+    ].join('\n');
+    expect(scrubProse(prose, known)).toBe(prose);
+  });
+});

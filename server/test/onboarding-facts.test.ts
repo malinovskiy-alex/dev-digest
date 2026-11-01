@@ -351,3 +351,43 @@ describe('the EXCLUDED_DIRS copy (AC-40, AC-47, findings F-02)', () => {
     expect([...ONBOARDING_EXCLUDED_DIRS]).toEqual([...REPO_INTEL_EXCLUDED_DIRS]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regressions for the round-2 findings. Expected values come from the finding
+// text and D-15 / D-44, not from the fixed code.
+// ---------------------------------------------------------------------------
+
+describe('regression F-15 — a `#` that is not a comment is no TODO (AC-52, D-15)', () => {
+  it('F-15, AC-52 — a JS private field and a quoted "# TODO" are not candidates; real # comments still are', () => {
+    const text = [
+      "const label = this.#prefix + 'TODO';", // 1: private field, TODO in a string
+      "const s = '# TODO later';", // 2: '# TODO' inside a single-quoted string
+      'const d = "#TODO: not a comment";', // 3: same, double-quoted
+      'return this.#cache.get(k); // ok', // 4: private field, a comment without a marker
+      '# TODO real shell comment', // 5: line-start # comment (D-15)
+      'x = 1  # FIXME python comment', // 6: # comment after whitespace (D-15)
+    ].join('\n');
+    expect(scanTodos('src/a.ts', text).map((c) => [c.line, c.detail])).toEqual([
+      [5, 'real shell comment'],
+      [6, 'python comment'],
+    ]);
+  });
+});
+
+describe('regression F-20 — a dir segment starting with `-` gives no command (AC-40, D-44, INV-15)', () => {
+  it('F-20, INV-15 — `-P`, `--help` and `a/-x` are skipped like any unsafe dir: no cd, cp, install or script', () => {
+    const dashed = ['-P', '--help', 'a/-x'];
+    const tree = ['package.json', 'pnpm-lock.yaml'];
+    for (const dir of dashed) tree.push(`${dir}/package.json`, `${dir}/pnpm-lock.yaml`, `${dir}/.env.example`);
+
+    // the pipeline: a first-level `-P/` / `--help/` manifest is never picked
+    const picked = manifestPaths(tree, ['-P/a.ts', '-P/b.ts', '--help/c.ts']);
+    expect(picked.map((m) => m.dir)).toEqual(['']);
+
+    // and directly, even if such a dir reached deriveCommands
+    const manifests = [manifest('', { scripts: { dev: 'x' } }), ...dashed.map((d) => manifest(d, { scripts: { dev: 'x', test: 'y' } }))];
+    const cmds = commandsOf(tree, manifests);
+    expect(cmds).toEqual(['pnpm install', 'pnpm run dev']);
+    for (const c of cmds) expect(c).not.toMatch(/(^|\s|\/)-/);
+  });
+});

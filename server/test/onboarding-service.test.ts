@@ -187,6 +187,8 @@ function setup(opts: Setup = {}) {
   const repoIntel = {
     getIndexState: vi.fn(async () => state.index),
     getIndexedFiles: vi.fn(async () => indexed),
+    // Mirrors the facade (F-28): the N of getIndexedFiles as one count.
+    countIndexedFiles: vi.fn(async () => indexed.length),
     getEndpoints: vi.fn(async () => [{ file: 'src/routes/pay.ts', endpoint: 'POST /pay' }]),
     getTopFilesByRank: vi.fn(async (_id: string, n: number) => ranked.slice(0, n)),
     getCriticalPaths: vi.fn(async () => (ranked.length >= 2 ? [[ranked[0]!, ranked[1]!]] : [])),
@@ -603,5 +605,106 @@ describe('nothing is executed (AC-44) and workspace scoping (AC-65)', () => {
     await expect(s.svc.getTour('other-ws', REPO_ID)).rejects.toBeInstanceOf(NotFoundError);
     await expect(s.svc.startGeneration('other-ws', REPO_ID)).rejects.toBeInstanceOf(NotFoundError);
     expect(s.structuredCalls()).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions for the round-2 findings. Each names the finding and the AC / D-n
+// it protects; expected values come from the finding text and the spec.
+// ---------------------------------------------------------------------------
+
+describe('regression F-08 — a package.json longer than the 6,000-char excerpt (AC-40, AC-66)', () => {
+  it('F-08, AC-40 — scripts and deps of a 7,000+ char package.json still yield commands and the stack', async () => {
+    // The padding comes first, so a cut at 6,000 chars loses scripts and deps.
+    const big = JSON.stringify({
+      description: 'd'.repeat(7_000),
+      scripts: { dev: 'tsx watch', test: 'vitest' },
+      dependencies: { fastify: '5' },
+    });
+    expect(big.length).toBeGreaterThan(6_000);
+    const s = setup({ files: { ...FILES, 'package.json': big } });
+    await generate(s);
+    const commands = s.stored()!.sections.run_locally.commands.map((c) => c.command);
+    expect(commands).toEqual(expect.arrayContaining(['pnpm install', 'pnpm run dev', 'pnpm run test']));
+    expect(s.stored()!.sections.architecture.stack.frameworks).toContain('Fastify');
+    // AC-66: the prompt copy of the manifest is still cut to 6,000 chars.
+    const user = s.lastReq().messages[1]!.content as string;
+    expect(user.match(/d{100,}/)![0].length).toBeLessThanOrEqual(6_000);
+  });
+});
+
+describe('regression F-12 — a tour read at HEAD is not outdated against its own index sha (AC-74, D-5)', () => {
+  it('F-12, AC-74 — tree at the index sha gone → facts read at HEAD; GET is not outdated until the index moves', async () => {
+    const s = setup();
+    // The prototype method, not `s.git.listFilesAt` (that is the spy itself).
+    const realList = MockGitClient.prototype.listFilesAt;
+    s.gitSpies.listFilesAt.mockImplementation(async function (this: unknown, ...args: unknown[]) {
+      if (args[1] === 'sha-1') throw new Error('fatal: not a tree object');
+      return realList.apply(s.git, args as never);
+    });
+    s.gitSpies.currentHead.mockImplementation(async () => 'sha-head');
+    await generate(s);
+    expect(s.stored()!.revision).toBe('sha-head'); // D-5 fallback did happen
+    expect(s.gitSpies.readFileAt.mock.calls.every((c) => c[1] === 'sha-head')).toBe(true); // the tree at HEAD was read
+    expect(s.gitSpies.readFileAt).toHaveBeenCalled();
+
+    const t = await s.svc.getTour(WS, REPO_ID);
+    expect(t.status).toBe('generated');
+    expect(t.meta!.outdated).toBe(false); // the index is still at sha-1, which the tour was built from
+
+    s.state.index = indexState({ lastIndexedSha: 'sha-2' });
+    expect((await s.svc.getTour(WS, REPO_ID)).meta!.outdated).toBe(true); // the index moved
+  });
+});
+
+describe('regression F-18 — a blob over 1 MiB is never read (AC-68)', () => {
+  it('F-18, AC-68 — an oversized README is not read on GET (no stored tour) nor on generate; others still are', async () => {
+    const huge = `HUGE-README${'r'.repeat(1_048_576)}`; // > 1 MiB per ls-tree size
+    const s = setup({ files: { ...FILES, 'README.md': huge } });
+    await s.svc.getTour(WS, REPO_ID);
+    await generate(s);
+    const readPaths = s.gitSpies.readFileAt.mock.calls.map((c) => c[2] as string);
+    expect(readPaths).not.toContain('README.md');
+    expect(readPaths).toContain('package.json');
+    expect(s.lastReq().messages[1]!.content as string).not.toContain('HUGE-README');
+  });
+});
+
+describe('regression F-19 — a re-run handler of a stale generation (D-3, INV-17, AC-28)', () => {
+  it('F-19 — re-running a finished generation records no failure and releases no other generation\'s lock', async () => {
+    const first = new MockLLMProvider('openai', { structured: NARRATIVE });
+    const gated = new GatedLLM(NARRATIVE_B);
+    const llms: LLMProvider[] = [first, gated];
+    const s = setup({ llmDep: async () => llms.shift()! });
+
+    const enqueue = vi.spyOn(s.jobs, 'enqueue');
+    await generate(s); // generation 1 succeeds
+    const firstPayload = enqueue.mock.calls[0]![2]; // replayed verbatim, as JobRunner would
+    expect(s.stored()!.sections.architecture.prose).toContain('Requests enter');
+    expect((await s.svc.getTour(WS, REPO_ID)).generation.failure).toBeNull();
+
+    // JobRunner re-runs generation 1's handler with nothing else running
+    await s.jobs.handler!(firstPayload);
+    let t = await s.svc.getTour(WS, REPO_ID);
+    expect(t.generation.failure).toBeNull();
+    expect(t.status).toBe('generated');
+
+    // generation 2 runs (model gated); a stale re-run of generation 1 arrives
+    const { done } = await s.svc.startGeneration(WS, REPO_ID);
+    await s.jobs.handler!(firstPayload);
+    t = await s.svc.getTour(WS, REPO_ID);
+    expect(t.generation.running).toBe(true); // generation 2 still holds the lock
+    expect(t.generation.failure).toBeNull();
+    const err = await rejectionOf(s.svc.startGeneration(WS, REPO_ID));
+    expect(err!.statusCode).toBe(409);
+
+    gated.release();
+    await done;
+    // one model call per generation, none from the re-runs (AC-21)
+    expect(first.calls.filter((c) => c.method === 'completeStructured')).toHaveLength(1);
+    expect(gated.calls).toHaveLength(1);
+    t = await s.svc.getTour(WS, REPO_ID);
+    expect(t.generation.failure).toBeNull();
+    expect(s.stored()!.sections.architecture.prose).toBe('Something else entirely.');
   });
 });

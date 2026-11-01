@@ -156,8 +156,10 @@ describe("TourView", () => {
 
   it("AC-17 — skeleton placeholders while loading", () => {
     fetchMock.mockImplementation(() => new Promise(() => {}));
-    const { container } = renderView();
-    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    renderView();
+    // F-26: by role, not querySelector. The skeleton has no accessible name to
+    // query by (see the test-writer report), so the busy state is the filter.
+    expect(screen.getByRole("generic", { busy: true })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
   });
 

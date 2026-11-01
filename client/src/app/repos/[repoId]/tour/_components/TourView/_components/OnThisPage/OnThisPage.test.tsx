@@ -3,8 +3,8 @@
  * entry (plan step 30a). Rendered beside real TourSections so the headings it
  * focuses and measures exist. Expected behaviour from AC-08, AC-09, AC-81.
  */
-import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi, onTestFinished } from "vitest";
+import { render, screen, cleanup, fireEvent, act, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import onboarding from "../../../../../../../../../messages/en/onboarding.json";
 import { TourSection } from "../TourSection";
@@ -40,7 +40,8 @@ function renderPage() {
 }
 
 const nav = () => screen.getByRole("navigation", { name: "On this page" });
-const entries = () => Array.from(nav().querySelectorAll("button"));
+// F-26: role queries, scoped to the nav — never querySelector.
+const entries = () => within(nav()).getAllByRole("button");
 
 describe("OnThisPage", () => {
   it("AC-08 — five entries in section order", () => {
@@ -49,8 +50,14 @@ describe("OnThisPage", () => {
   });
 
   it("AC-09 — activating an entry scrolls its section into view and focuses its heading", () => {
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+    // jsdom has no scrollIntoView: define a placeholder only when absent, then
+    // spy on it, so restoreAllMocks puts the prototype back (F-26).
+    const hadScroll = "scrollIntoView" in Element.prototype;
+    if (!hadScroll) Element.prototype.scrollIntoView = function () {};
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+    onTestFinished(() => {
+      if (!hadScroll) delete (Element.prototype as Partial<Element>).scrollIntoView;
+    });
     renderPage();
     fireEvent.click(entries()[3]!);
     expect(scrollIntoView).toHaveBeenCalledTimes(1);

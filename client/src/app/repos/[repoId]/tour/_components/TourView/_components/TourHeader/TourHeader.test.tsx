@@ -4,7 +4,7 @@
  * AC-12, AC-13, AC-14, AC-16, AC-28, AC-69, AC-74, AC-75, AC-84.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { OnboardingTour, TourMeta } from "@devdigest/shared";
 import onboarding from "../../../../../../../../../messages/en/onboarding.json";
@@ -132,5 +132,38 @@ describe("TourHeader", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy a link to this tour" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/repos/r1/tour`));
     expect(screen.getByRole("button", { name: "Copy a link to this tour" })).toHaveTextContent("Share link");
+  });
+});
+
+/*
+ * Regression for finding F-21 (AC-12): the "last refreshed <relative time>" was
+ * formatted without an explicit `now`. With no `now` on the provider — as in
+ * the app — next-intl then reports ENVIRONMENT_FALLBACK through `onError` on
+ * every render and the text never moves. Here the provider gets no `now`, the
+ * clock is faked, and `onError` is recorded.
+ */
+describe("TourHeader — relative time (F-21, AC-12)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("F-21, AC-12 — relative time is measured against a ticking now, and no IntlError is reported", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW); // two hours after META.generated_at
+    const onError = vi.fn();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ onboarding }} timeZone="UTC" onError={onError}>
+        <TourHeader tour={tour()} indexReasonText={null} generating={false} onGenerate={vi.fn()} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("Generated from index of 4,200 files · last refreshed 2 hours ago")).toBeInTheDocument();
+
+    // AC-12: the time is relative to now, so it must move as time passes.
+    act(() => {
+      vi.advanceTimersByTime(60 * 60 * 1000);
+    });
+    expect(screen.getByText("Generated from index of 4,200 files · last refreshed 3 hours ago")).toBeInTheDocument();
+
+    expect(onError).not.toHaveBeenCalled();
   });
 });
