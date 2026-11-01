@@ -347,11 +347,18 @@ describe('regression F-17 — no clickable external link of any GFM kind (D-26, 
     expectNoExternalLink(scrubProse(prose, known));
   });
 
-  it('F-17 — a reference-style link and its definition (`https:evil.example`) leave no link and no definition', () => {
+  it('F-30, F-34 — a reference-style link and its definitions are neutralised by insertion only: `\\[`, URL in code or not an autolink', () => {
     const prose = ['Please [log in here][a] and read [b].', '', '[a]: https:evil.example', '[b]:', '  https://evil.example/b "t"'].join('\n');
     const out = scrubProse(prose, known);
-    expectNoExternalLink(out);
-    expect(out).toContain('log in here'); // the visible text is kept
+    // nothing deleted (F-30): the output is the input plus inserted `\` / backticks
+    expectInsertionsOnly(prose, out);
+    const lines = out.split('\n');
+    // each definition line now starts with `\[`: no definition, so [t][a] / [b] have no target
+    expect(lines[2]).toBe('\\[a]: https:evil.example'); // `https:` without `//` is no GFM autolink: inert plain text
+    expect(lines[3]).toBe('\\[b]:');
+    expect(lines[4]).toBe('  `https://evil.example/b` "t"'); // an autolink literal → code
+    expect(lines[0]).toBe('Please [log in here][a] and read [b].'); // the visible text is kept
+    expect(outsideCode(out)).not.toMatch(/https?:\/\//i);
   });
 
   it('F-17 — recoverability: ordinary prose with code spans, known paths and no links is unchanged', () => {
@@ -367,5 +374,88 @@ describe('regression F-17 — no clickable external link of any GFM kind (D-26, 
       '```',
     ].join('\n');
     expect(scrubProse(prose, known)).toBe(prose);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 3 (F-30, F-31). reviewer-core/INSIGHTS.md: an escape must be
+// insertion-only. The scrub may insert a `\` before a `[` and backticks; on
+// this corpus — which holds no unknown path in code, no inline link and no
+// `<scheme:…>` autolink, the deliberate removals of D-26 (1)/(2) and F-31 — it
+// may do nothing else.
+// ---------------------------------------------------------------------------
+
+/**
+ * `out` is `input` with only `\` (right before a `[`) and backtick characters
+ * inserted, in order: undoing those insertions gives the input byte-for-byte.
+ */
+function expectInsertionsOnly(input: string, out: string) {
+  let i = 0;
+  for (let o = 0; o < out.length; o += 1) {
+    if (i < input.length && out[o] === input[i]) {
+      i += 1;
+    } else if (out[o] !== '`' && !(out[o] === '\\' && out[o + 1] === '[')) {
+      throw new Error(
+        `not insertion-only at output offset ${o}\ninput:  ${JSON.stringify(input)}\noutput: ${JSON.stringify(out)}`,
+      );
+    }
+  }
+  expect(input.slice(i), `input chars lost\noutput: ${JSON.stringify(out)}`).toBe('');
+}
+
+describe('round-trip — scrubProse escapes are insertion-only (F-30, reviewer-core INSIGHTS)', () => {
+  const known = buildKnownSet({ treePaths: ['src/my_file.ts', 'docs/guide.md'], indexedPaths: [] });
+
+  const corpus = [
+    'Requests enter at src/my_file.ts and leave through docs/guide.md.',
+    '[TODO]: fix this later',
+    'Note:\n[TODO]: fix this later\n- and [this] too',
+    'use `x` [a]: https://e',
+    'Run `pnpm test` first; `--watch` helps.\n\n1. one\n2. two\n   - nested `src/my_file.ts`',
+    "[a]: https://evil.example\n[b]: https://evil.example/b \"title\"\n   [c]: www.evil.example 't'\n[^1]: a footnote",
+    'Read [x][a] and [y].\n\n[a]:\n  https://evil.example/a\n(paren title)',
+    'See https://e.example/x). Then (https://e.example/y), "https://e.example/z"* and www.e.example.',
+    '**https://e.example/bold** and ~https://e.example/strike~ and _https://e.example/em_',
+    '<x:https://e>',
+    'Mail admin@e.example, or see e.g. 1.2.3.',
+    '```sh\ncurl https://e.example/health\n[a]: https://e\n```\nafter the fence',
+  ];
+
+  it.each(corpus.map((c) => [c]))('F-30 — insertion-only on %j', (prose) => {
+    expectInsertionsOnly(prose, scrubProse(prose, known));
+  });
+
+  it('F-30 — the definitions of the corpus are escaped; `[^1]:` and fenced code are not', () => {
+    const out = scrubProse(corpus[5]!, known).split('\n');
+    expect(out[0]!.startsWith('\\[a]:')).toBe(true);
+    expect(out[1]!.startsWith('\\[b]:')).toBe(true);
+    expect(out[2]!.startsWith('   \\[c]:')).toBe(true);
+    expect(out[3]).toBe('[^1]: a footnote');
+    expect(scrubProse(corpus[11]!, known)).toBe(corpus[11]);
+  });
+
+  it('F-30 — `[TODO]: fix this later` and a mid-line `[a]:` after a code span are not definitions: no `\\[` inserted', () => {
+    expect(scrubProse('[TODO]: fix this later', known)).toBe('[TODO]: fix this later');
+    expect(scrubProse('Note:\n[TODO]: fix this later', known)).toBe('Note:\n[TODO]: fix this later');
+    // `[a]:` follows a code span on its line, so it is no definition and keeps
+    // its `[`. The bare `https://e` IS a GFM autolink literal (remark-gfm
+    // renders <a href="https://e">), so per F-17 backticks are added around it.
+    expect(scrubProse('use `x` [a]: https://e', known)).toBe('use `x` [a]: `https://e`');
+  });
+
+  it('F-31 — trailing punctuation stays outside the code span; `<x:https://e>` keeps its `>`', () => {
+    expect(scrubProse('See https://e.example/x). Then (https://e.example/y), "https://e.example/z"*', known)).toBe(
+      'See `https://e.example/x`). Then (`https://e.example/y`), "`https://e.example/z`"*',
+    );
+    // `_https://…_` is not here: `\b` sees no boundary after `_`, so the server
+    // leaves it alone — one of the F-29 bypasses the client's inertLinks covers.
+    expect(scrubProse('**https://e.example/b** and ~https://e.example/s~', known)).toBe(
+      '**`https://e.example/b`** and ~`https://e.example/s`~',
+    );
+    expect(scrubProse('Go to www.e.example.', known)).toBe('Go to `www.e.example`.');
+    // a one-letter scheme is no CommonMark autolink (2–32 chars): `<` and `>` stay
+    expect(scrubProse('<x:https://e>', known)).toBe('<x:`https://e`>');
+    // a real angle autolink loses both brackets together, never only one
+    expect(scrubProse('See <https://e.example/x> now.', known)).toBe('See `https://e.example/x` now.');
   });
 });

@@ -49,4 +49,13 @@ describe("UntrustedMarkdown", () => {
     expect(screen.queryByRole("link", { name: "top" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link")).toEqual([web]);
   });
+
+  it("F-29 — without inertLinks (Project Context) a web link is still a normal new-tab link", () => {
+    renderMd("Docs at [the site](https://example.com/docs) and https://example.com/raw.");
+    const named = screen.getByRole("link", { name: "the site" });
+    expect(named).toHaveAttribute("href", "https://example.com/docs");
+    expect(named).toHaveAttribute("target", "_blank");
+    expect(relTokens(named)).toContain("noopener");
+    expect(screen.getByRole("link", { name: "https://example.com/raw" })).toHaveAttribute("href", "https://example.com/raw");
+  });
 });

@@ -708,3 +708,44 @@ describe('regression F-19 — a re-run handler of a stale generation (D-3, INV-1
     expect(s.stored()!.sections.architecture.prose).toBe('Something else entirely.');
   });
 });
+
+describe('regression F-32 — a NaN blob size is not read (AC-68, F-18)', () => {
+  it('F-32, AC-68 — ls-tree reports a NaN size for the README → it is never read; other files still are', async () => {
+    const s = setup();
+    const realList = MockGitClient.prototype.listFilesAt;
+    s.gitSpies.listFilesAt.mockImplementation(async function (...args: unknown[]) {
+      const files = await realList.apply(s.git, args as never);
+      return files.map((f) => (f.path === 'README.md' ? { ...f, size: Number.NaN } : f));
+    });
+    await s.svc.getTour(WS, REPO_ID);
+    await generate(s);
+    const readPaths = s.gitSpies.readFileAt.mock.calls.map((c) => c[2] as string);
+    expect(readPaths).not.toContain('README.md');
+    expect(readPaths).toContain('package.json');
+  });
+});
+
+describe('regression F-33 — the runner fails before the handler runs (INV-17, AC-28, AC-21)', () => {
+  it('F-33 — the status update throws → the lock is released, a second start is accepted (not 409), no model call from the first', async () => {
+    const s = setup();
+    const realEnqueue = s.jobs.enqueue.bind(s.jobs);
+    let failNext = true;
+    s.jobs.enqueue = async (ws: string, kind: string, payload: unknown) => {
+      if (!failNext) return realEnqueue(ws, kind, payload);
+      failNext = false;
+      // what JobRunner does when its `running` update throws: the job row
+      // exists, `done` rejects, and the handler is never called
+      return { id: 'job-x', done: Promise.reject(new Error('db: connection terminated')) };
+    };
+
+    const { done } = await s.svc.startGeneration(WS, REPO_ID);
+    await done; // the lock settles instead of sticking until restart
+    expect(s.structuredCalls()).toHaveLength(0);
+    expect((await s.svc.getTour(WS, REPO_ID)).generation.running).toBe(false);
+
+    const second = await s.svc.startGeneration(WS, REPO_ID); // not a 409
+    await second.done;
+    expect(s.structuredCalls()).toHaveLength(1);
+    expect(s.stored()).toBeDefined();
+  });
+});

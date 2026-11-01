@@ -92,4 +92,38 @@ describe("ArchitectureSection", () => {
     expect(container.querySelector("p code")).toBeNull();
     expect(screen.queryByRole("img")).toBeNull();
   });
+
+  /*
+   * Regression for finding F-29 (D-26 (3), AC-61, AC-62): the server scrub is
+   * best effort, so the tour prose must render no link whatever markdown way
+   * the model (or a prompt-injected README) found to make one — an
+   * entity-encoded or backslash-escaped autolink literal, one inside emphasis,
+   * an inline link, a reference link with its definition, an image.
+   */
+  it("F-29, AC-62 — tour prose renders no <a> and no <img> for any kind of link or image", () => {
+    const prose = [
+      "Entity: &#104;ttps://evil.example/a now.",
+      "",
+      "Escaped: https\\://evil.example/b now.",
+      "",
+      "Emphasis: _https://evil.example/c_ now.",
+      "",
+      "Inline: [t](https://x) now.",
+      "",
+      "Reference: [log in][r] now.",
+      "",
+      "[r]: https://evil.example/r",
+      "",
+      "Image: ![logo](https://evil.example/p.png) now.",
+    ].join("\n");
+    renderSection({ prose });
+    // the text is still there to read
+    expect(screen.getByText(/Inline:/)).toHaveTextContent("Inline: t now.");
+    expect(screen.getByText(/Reference:/)).toHaveTextContent("Reference: log in now.");
+    // no link role at all …
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    // … and no anchor or image element either: an <a> without href has no link
+    // role, so only a DOM query can prove it is absent.
+    expect(document.querySelectorAll("a, img")).toHaveLength(0);
+  });
 });
