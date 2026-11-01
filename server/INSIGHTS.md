@@ -11,6 +11,12 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Doesn't Work
 
+### 2026-11-01 — A JobRunner handler that throws is retried, so a paid model call inside it runs twice
+**Symptom:** moving the onboarding generation onto `JobRunner` would have re-called the model on any failure, breaking "exactly one model call per generation".
+**Cause:** `JobRunner` wraps every handler in `withRetry` with the runner-wide `retries` (default 2) and one shared `withTimeout` (default 120 s over the whole handler, not per kind).
+**Rule:** for a one-shot job (an LLM call that must not repeat), make the handler catch everything, record the failure itself and never reject; release locks in its `finally`, and also in `job.done.catch` for the case where the runner fails before calling the handler. Expect the `jobs` row to read `failed` when the handler outlives the runner's 120 s.
+**Where:** `server/src/platform/jobs.ts:42` (`retries ?? 2`); `server/src/modules/onboarding/service.ts:379` (`handleJob`)
+
 ### 2026-09-21 — committing a `server/src` file kills every review run in flight
 **Symptom:** two review runs that had been `running` for minutes both flipped to
 `failed` with `error` NULL and zero findings, seconds after a `git commit` that
@@ -310,6 +316,8 @@ before anything else. The fix is a fresh token in Settings (written to
 *(nothing yet)*
 
 ## Session Notes
+
+- 2026-11-01 — L05 Onboarding Tour: new `modules/onboarding`, repo-intel facade reads + `countIndexedFiles`, incremental coverage fixes; one-shot LLM job on JobRunner with a never-throwing handler.
 
 - 2026-09-16 — per-run cost (L01): `agent_runs.cost_usd` via migration `0010`,
   served on the runs list, the trace and the PR list. Also priced the current

@@ -182,6 +182,12 @@ check), `.claude/settings.json:1`
 
 ## Recurring Errors & Fixes
 
+### 2026-11-01 — pnpm 10 leaves an untracked `client/pnpm-workspace.yaml` full of placeholders
+**Symptom:** after `node ../scripts/verify.mjs` in `client/`, `git status` shows `?? client/pnpm-workspace.yaml` with `allowBuilds: esbuild: set this to true or false`, and verify's client typecheck line reads ❌ with an `ERR_PNPM_IGNORED_BUILDS` install log although `pnpm exec tsc --noEmit` is clean.
+**Cause:** pnpm 10 refuses unapproved build scripts (esbuild, sharp, unrs-resolver) and writes a workspace file asking you to decide.
+**Rule:** delete the generated file; never commit it (it is not a workspace and the repo has no monorepo). Trust `pnpm exec tsc --noEmit` over verify's typecheck line when the output is an install log.
+**Where:** `scripts/verify.mjs` (client typecheck step); repo-wide tooling, seen in `client/`
+
 ### 2026-09-16 — a shell-scripted edit silently corrupts line endings, both ways
 **Symptom:** two failures in one session. A `perl -0pi` pattern written with a
 bare \n matched nothing in `.ts`/`.json` files, and its replacement left a lone
@@ -209,6 +215,8 @@ whole-file diff means you flipped the endings, not that you edited the file.
   `.claude/skills/engineering-insights/references.md`
 
 ## Session Notes
+
+- 2026-11-01 — L05 Onboarding Generator through the full SDD chain, one commit per stage; pre-PR lenses found 23 issues the in-loop reviewers did not.
 
 - 2026-09-15 — built the `engineering-insights` skill and restructured all five
   `INSIGHTS.md` files onto its seven fixed sections. Existing entries were
