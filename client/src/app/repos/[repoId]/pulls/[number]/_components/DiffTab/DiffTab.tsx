@@ -7,7 +7,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button, Skeleton } from "@devdigest/ui";
-import { DiffViewer, type DiffCommentApi, type DiffFindingApi } from "@/components/diff-viewer";
+import { DiffViewer, focusKey, type DiffCommentApi, type DiffFindingApi, type DiffFocus } from "@/components/diff-viewer";
 import {
   usePrComments,
   useCreatePrComment,
@@ -33,10 +33,13 @@ interface DiffTabProps {
   /** For the finding cards' "open on GitHub" file links. */
   repoFullName?: string | null;
   headSha?: string | null;
+  /** From `?file=&line=`: open, scroll to and focus this file/line once the grouping settles (R-53, R-59). */
+  focus?: DiffFocus | null;
 }
 
-export function DiffTab({ prId, files, canComment, repoFullName, headSha }: DiffTabProps) {
+export function DiffTab({ prId, files, canComment, repoFullName, headSha, focus = null }: DiffTabProps) {
   const t = useTranslations("prReview");
+  const tShell = useTranslations("shell");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   const { data: reviews } = usePrReviews(prId);
@@ -48,6 +51,15 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha }: Diff
   // tab; hiding them keeps the line bars, labels and header badges.
   const [showFindings, setShowFindings] = React.useState(true);
   const [order, setOrder] = React.useState<DiffOrder>(DEFAULT_DIFF_ORDER);
+  // The URL's focus target acts once per visit of the tab: after it was
+  // scrolled to, collapsing a group or switching the order must not pull the
+  // view back (F-07). Lives here because DiffTab outlives those remounts; a
+  // reload starts fresh, so the target acts again (R-59).
+  const [handledFocus, setHandledFocus] = React.useState<string | null>(null);
+  const targetKey = focus ? focusKey(focus) : null;
+  const diffFocus: DiffFocus | null = focus
+    ? { ...focus, handled: handledFocus === targetKey, onHandled: () => setHandledFocus(targetKey) }
+    : null;
 
   // Derived, never stored. While the smart diff loads, a placeholder stands in
   // for the files: rendering the whole flat diff first and then re-rendering it
@@ -73,7 +85,7 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha }: Diff
         setShowComments(true); // a just-posted comment shouldn't stay hidden
         return res;
       } catch (err) {
-        notify.error(err instanceof Error ? err.message : "Couldn't post the comment to GitHub.");
+        notify.error(err instanceof Error ? err.message : tShell("diffViewer.commentPostFailed"));
         throw err;
       }
     },
@@ -148,11 +160,12 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha }: Diff
               files={groupFiles}
               commenting={commenting}
               findings={findingApi}
+              focus={diffFocus}
             />
           ))}
         </div>
       ) : (
-        <DiffViewer files={files} commenting={commenting} findings={findingApi} />
+        <DiffViewer files={files} commenting={commenting} findings={findingApi} focus={diffFocus} />
       )}
     </section>
   );

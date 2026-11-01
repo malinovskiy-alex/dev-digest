@@ -3,8 +3,77 @@
     "intent": "Intent",
     "blast": "Blast radius",
     "risks": "Risks",
-    "history": "PR history"
+    "history": "PR history",
+    "brief": "PR Brief"
   },
+  "generate": "Generate brief",
+  "regenerate": "Regenerate brief",
+  "generating": "Generating…",
+  "noBriefYet": "No brief yet",
+  "loading": "Loading brief…",
+  "loadError": "Could not load the brief.",
+  "retry": "Retry",
+  "generatedLine": "Generated {ago} for {sha} · {model}",
+  "cost": "Cost of this generation: {cost}",
+  "costUnknown": "cost unknown",
+  "trimmedNote": "Built from trimmed inputs",
+  "trim": {
+    "specs": "Specs removed: {paths}",
+    "description": {
+      "truncated": "PR description truncated",
+      "dropped": "PR description removed"
+    },
+    "callers": "{count} blast-radius callers removed",
+    "issue": {
+      "truncated": "Linked issue body truncated",
+      "dropped": "Linked issue body removed"
+    },
+    "diffRows": "{count} changed-file rows removed",
+    "focusMoved": "{count} Review focus lines moved to the nearest changed line"
+  },
+  "stale": "Brief is for an older commit ({sha})",
+  "noKey": "No API key for {provider}",
+  "noKeyLink": "Settings → API Keys",
+  "missingInputs": "Generated without: {list}",
+  "missingItem": "{input} ({reason})",
+  "missing": {
+    "intent": "intent",
+    "blast": "blast radius",
+    "diff_stats": "diff stats",
+    "description": "PR description",
+    "issue": "linked issue",
+    "specs": "specs"
+  },
+  "missingReason": {
+    "not_derived": "not derived",
+    "no_index": "no index",
+    "degraded": "index degraded ({reason})",
+    "no_files": "no changed files",
+    "empty": "empty",
+    "none_linked": "none linked",
+    "github_unavailable": "GitHub not connected",
+    "fetch_failed": "could not be fetched",
+    "none_attached": "none attached",
+    "not_cloned": "repository not cloned",
+    "read_error": "could not be read"
+  },
+  "summary": "Summary",
+  "riskAreas": "Risk areas",
+  "severity": {
+    "high": "High severity",
+    "medium": "Medium severity",
+    "low": "Low severity"
+  },
+  "riskExpand": "Show details for {title}",
+  "reviewFocus": "Review focus — read these first",
+  "noFocus": "No review focus items.",
+  "viaBlast": "via blast radius",
+  "notInDiff": "File not in this PR's diff",
+  "openRef": "Open {path} at line {line}",
+  "openRefNoLine": "Open {path}",
+  "regenFailed": "Regeneration failed — {reason}",
+  "genFailed": "Generation failed — {reason}",
+  "dismiss": "Dismiss",
   "noRisks": "No notable risks flagged.",
   "noHistory": "No prior PRs overlap these files.",
   "overlap": "{count} overlap",

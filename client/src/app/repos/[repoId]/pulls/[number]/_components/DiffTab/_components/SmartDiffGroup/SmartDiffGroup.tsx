@@ -7,7 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { PrFile, SmartDiffGroup as SmartDiffGroupData } from "@devdigest/shared";
-import { DiffViewer, type DiffCommentApi, type DiffFindingApi } from "@/components/diff-viewer";
+import { DiffViewer, type DiffCommentApi, type DiffFindingApi, type DiffFocus } from "@/components/diff-viewer";
 import { ROLE_META } from "./constants";
 import { filesWithFindings } from "./helpers";
 import * as styles from "./styles";
@@ -17,16 +17,27 @@ export function SmartDiffGroup({
   files,
   commenting,
   findings,
+  focus = null,
 }: {
   group: SmartDiffGroupData;
   /** The group's files as full PrFiles (with patches), in GitHub order. */
   files: PrFile[];
   commenting?: DiffCommentApi;
   findings?: DiffFindingApi;
+  /** A focus target (R-53): the group opens when it holds that file. */
+  focus?: DiffFocus | null;
 }) {
   const t = useTranslations("prReview");
   const meta = ROLE_META[group.role];
-  const [open, setOpen] = React.useState(meta.defaultOpen);
+  const holdsFocus = !!focus && files.some((f) => f.path === focus.path);
+  // Only a target not yet handled opens the group; after that the user's
+  // collapse sticks (F-07).
+  const mustOpen = holdsFocus && !focus?.handled;
+  const [open, setOpen] = React.useState(meta.defaultOpen || mustOpen);
+  // A target that arrives later (or changes) still opens a default-closed group.
+  React.useEffect(() => {
+    if (mustOpen) setOpen(true);
+  }, [mustOpen, focus?.path, focus?.line]);
   const withFindings = filesWithFindings(group);
 
   return (
@@ -59,7 +70,9 @@ export function SmartDiffGroup({
         )}
         <span className={styles.filesCount}>{t("smartDiff.filesCount", { count: files.length })}</span>
       </button>
-      {open && <DiffViewer files={files} commenting={commenting} findings={findings} />}
+      {open && (
+        <DiffViewer files={files} commenting={commenting} findings={findings} focus={holdsFocus ? focus : null} />
+      )}
     </section>
   );
 }

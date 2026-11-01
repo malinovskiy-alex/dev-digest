@@ -8,6 +8,7 @@ import type {
   CodeIndex,
   Embedder,
   LLMProvider,
+  SmartDiffRole,
 } from '@devdigest/shared';
 import type { AppConfig } from './config.js';
 import type { Db } from '../db/client.js';
@@ -30,6 +31,8 @@ import { ReviewRepository } from '../modules/reviews/repository.js';
 import { RepoRepository } from '../modules/repos/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
 import { ProjectContextService } from '../modules/project-context/service.js';
+import { BlastService } from '../modules/blast/service.js';
+import { classifyFile } from '../modules/reviews/smart-diff/helpers.js';
 import { resolveFeatureModel } from '../modules/settings/feature-models.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
@@ -91,6 +94,7 @@ export class Container {
   private _reposRepo?: RepoRepository;
   private _skillsRepo?: SkillsRepository;
   private _projectContext?: ProjectContextService;
+  private _blast?: BlastService;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
@@ -153,6 +157,25 @@ export class Container {
       usage: (workspaceId) => this.agentsRepo.contextDocUsage(workspaceId),
       docGlobs: this.config.contextDocGlobs,
     }));
+  }
+
+  /**
+   * The blast-radius service, shared because the PR brief (L05) reads a PR's
+   * blast radius outside the blast module. Same reason as `projectContext`:
+   * a module never imports a sibling's folder. Explicit deps — it never sees
+   * the container.
+   */
+  get blast(): BlastService {
+    return (this._blast ??= new BlastService({ pulls: this.reviewRepo, repoIntel: this.repoIntel }));
+  }
+
+  /**
+   * The one Smart Diff classifier (`classifyFile`, a pure Ring-1 function),
+   * offered to modules that cannot import `reviews/` — the PR brief labels each
+   * changed file with its role (L05).
+   */
+  smartDiffRole(path: string): SmartDiffRole {
+    return classifyFile(path);
   }
 
   get codeIndex(): CodeIndex {

@@ -20,6 +20,7 @@ import {
   type DiffCommentApi,
 } from "../comments";
 import { partitionFindings, topSeverity, type DiffFindingApi } from "../findings";
+import { focusKey as keyOf, focusLineIndex, type DiffFocus } from "../focus";
 import { s, chevronFor, findingDotFor, findingsBadgeFor } from "../styles";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
@@ -55,16 +56,48 @@ export function FileCard({
   file,
   commenting,
   findings,
+  focus,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
   findings?: DiffFindingApi;
+  /** Set only on the file a PR Brief reference navigated to (D-33). */
+  focus?: DiffFocus;
 }) {
   const t = useTranslations("shell");
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    (!!focus && !focus.handled) || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+
+  // Focus target (R-53, R-54, R-57): the rendered new-side line, else the header.
+  const focusLine = focus?.line ?? null;
+  const targetIndex = focus ? focusLineIndex(lines, focusLine) : -1;
+  const lineMissing = !!focus && focusLine != null && targetIndex < 0;
+  const headerRef = React.useRef<HTMLDivElement>(null);
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  // Only a target not yet handled acts; "handled" is owned above the viewer,
+  // so a remounted card does not force open or scroll again (F-07).
+  const pendingKey = focus && !focus.handled ? keyOf(focus) : null;
+  const onHandled = focus?.onHandled;
+
+  // A new focus target forces the file open (a file > 200 lines starts closed).
+  React.useEffect(() => {
+    if (pendingKey) setOpen(true);
+  }, [pendingKey]);
+
+  // Once open, bring the target into view, move keyboard focus to it, and
+  // report it handled — once per target.
+  React.useEffect(() => {
+    if (!pendingKey || !open) return;
+    const el = targetIndex >= 0 ? rowRef.current : headerRef.current;
+    if (!el) return;
+    el.scrollIntoView?.({ block: "center" });
+    el.focus({ preventScroll: true });
+    onHandled?.();
+    // `onHandled` is a fresh closure each render; the key decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKey, open, targetIndex]);
 
   // Split this file's comment threads and review findings into ones we can
   // anchor to a rendered line vs. the rest (outdated comments; findings whose
@@ -94,8 +127,13 @@ export function FileCard({
     : 0;
 
   return (
-    <div style={s.fileCard}>
-      <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
+    <div style={focus ? { ...s.fileCard, ...s.fileFocused } : s.fileCard}>
+      <div
+        ref={headerRef}
+        tabIndex={focus && targetIndex < 0 ? -1 : undefined}
+        onClick={() => setOpen((o) => !o)}
+        style={s.fileHeader}
+      >
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
         <span style={s.pathWrap}>
@@ -119,6 +157,11 @@ export function FileCard({
       </div>
       {open && (
         <div style={s.fileBody}>
+          {lineMissing && (
+            <div role="status" style={s.lineNotice}>
+              {t("diffViewer.lineNotInDiff", { line: focusLine! })}
+            </div>
+          )}
           {lines.length === 0 ? (
             <div style={s.noDiff}>{t("diffViewer.noDiffText")}</div>
           ) : (
@@ -131,6 +174,8 @@ export function FileCard({
                 commenting={commenting}
                 findings={itemsForLine(ln, matchedFindings)}
                 renderFinding={findings?.showFindings === false ? undefined : findings?.renderFinding}
+                highlighted={i === targetIndex}
+                rowRef={i === targetIndex ? rowRef : undefined}
               />
             ))
           )}

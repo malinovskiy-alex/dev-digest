@@ -30,6 +30,12 @@
   "featurePlaceholder": {
     "defaultBody": "This screen is owned by {owner}. The app shell, routing, theming and data layer are wired — {owner} fills in the screen here."
   },
+  "prDetail": {
+    "description": "Description",
+    "loadErrorTitle": "Couldn't load this pull request",
+    "loadErrorBody": "PR #{number} could not be loaded.",
+    "deleteRunConfirm": "Delete this run from history? (its logs are removed too)"
+  },
   "diffViewer": {
     "noDiffText": "No diff text available (binary or unfetched patch).",
     "noChangedFiles": "No changed files.",
@@ -43,6 +49,9 @@
     "outdatedTitle": "{count} comment(s) on older revisions",
     "findingsCount": "{count, plural, one {# review finding} other {# review findings}}",
     "unanchoredFindings": "Findings outside the shown lines",
+    "lineNotInDiff": "Line {line} is not in the changed lines of this file",
+    "addComment": "Add a comment on this line",
+    "commentPostFailed": "Couldn't post the comment to GitHub.",
     "findingLabel": {
       "CRITICAL": "blocker",
       "WARNING": "warning",
