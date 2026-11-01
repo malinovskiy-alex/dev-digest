@@ -726,7 +726,7 @@ describe('regression F-32 — a NaN blob size is not read (AC-68, F-18)', () => 
 });
 
 describe('regression F-33 — the runner fails before the handler runs (INV-17, AC-28, AC-21)', () => {
-  it('F-33 — the status update throws → the lock is released, a second start is accepted (not 409), no model call from the first', async () => {
+  it('F-33, F-35 — the status update throws → failure provider_error "the generation job could not start", no model call, nothing stored; the lock is released and a second start is accepted (not 409)', async () => {
     const s = setup();
     const realEnqueue = s.jobs.enqueue.bind(s.jobs);
     let failNext = true;
@@ -741,7 +741,13 @@ describe('regression F-33 — the runner fails before the handler runs (INV-17, 
     const { done } = await s.svc.startGeneration(WS, REPO_ID);
     await done; // the lock settles instead of sticking until restart
     expect(s.structuredCalls()).toHaveLength(0);
-    expect((await s.svc.getTour(WS, REPO_ID)).generation.running).toBe(false);
+    const after = await s.svc.getTour(WS, REPO_ID);
+    expect(after.generation.running).toBe(false);
+    // F-35: the failed start is visible on the page, not silently gone
+    expect(after.generation.failure).toMatchObject({ code: 'provider_error', message: 'the generation job could not start' });
+    expect(s.structuredCalls()).toHaveLength(0); // the model was never called
+    expect(s.stored()).toBeUndefined();
+    expect(db.upserts).toBe(0);
 
     const second = await s.svc.startGeneration(WS, REPO_ID); // not a 409
     await second.done;
