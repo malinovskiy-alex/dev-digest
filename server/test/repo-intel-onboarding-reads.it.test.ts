@@ -24,6 +24,7 @@ import * as t from '../src/db/schema.js';
 import { MockGitClient, MockGitHubClient, MockSecretsProvider } from '../src/adapters/mocks.js';
 import { INDEXER_VERSION } from '../src/modules/repo-intel/constants.js';
 import type { RepoIntel } from '../src/modules/repo-intel/types.js';
+import { RepoIntelRepository } from '../src/modules/repo-intel/repository.js';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -227,5 +228,37 @@ d('repo-intel facade reads for the onboarding tour (Testcontainers pg)', () => {
       git.changed = [];
       await rm(dir, { recursive: true, force: true });
     }
+  });
+  // F-39 (D-16 rev. 4): "who imports these files?" — the edges into the given
+  // targets, served by the (repo_id, to_file) index; other repos never leak in.
+  it('F-39 — getEdgesTo / getImporters return exactly the edges into the given targets, ordered, scoped to the repo', async () => {
+    await edges([
+      ['test/main.ts', 'source/index.ts'],
+      ['source/other.ts', 'source/index.ts'],
+      ['test/main.ts', 'source/core.ts'],
+      ['source/index.ts', 'source/util.ts'], // a target not asked for
+    ]);
+    // the same edge in another repo must not appear
+    const [other] = await pg.handle.db
+      .insert(t.repos)
+      .values({ workspaceId, owner: 'acme', name: `o-${Math.random().toString(36).slice(2)}`, fullName: `acme/o-${Math.random().toString(36).slice(2)}` })
+      .returning();
+    await pg.handle.db.insert(t.fileEdges).values({ repoId: other!.id, fromFile: 'test/evil.ts', toFile: 'source/index.ts' });
+
+    const repo = new RepoIntelRepository(pg.handle.db);
+    expect(await repo.getEdgesTo(repoId, ['source/index.ts', 'source/core.ts'])).toEqual([
+      { fromFile: 'source/other.ts', toFile: 'source/index.ts' },
+      { fromFile: 'test/main.ts', toFile: 'source/core.ts' },
+      { fromFile: 'test/main.ts', toFile: 'source/index.ts' },
+    ]);
+    expect(await repo.getEdgesTo(repoId, [])).toEqual([]);
+
+    expect(await ri.getImporters(repoId, ['source/index.ts', 'source/core.ts'])).toEqual([
+      { from: 'source/other.ts', to: 'source/index.ts' },
+      { from: 'test/main.ts', to: 'source/core.ts' },
+      { from: 'test/main.ts', to: 'source/index.ts' },
+    ]);
+    expect(await ri.getImporters(repoId, ['source/nothing.ts'])).toEqual([]);
+    expect(await ri.getImporters(repoId, [])).toEqual([]);
   });
 });

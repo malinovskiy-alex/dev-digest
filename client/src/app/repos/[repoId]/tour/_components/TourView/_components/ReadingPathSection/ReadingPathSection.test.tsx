@@ -3,7 +3,7 @@
  * (plan step 30b: AC-48, AC-49, AC-51).
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { TourFileList } from "@devdigest/shared";
 import onboarding from "../../../../../../../../../messages/en/onboarding.json";
@@ -26,9 +26,21 @@ describe("ReadingPathSection", () => {
     expect(list.tagName).toBe("OL");
     const items = screen.getAllByRole("listitem");
     expect(items).toHaveLength(8);
-    expect(items[0]).toHaveTextContent("1.src/f1.ts— start here");
-    expect(items[1]).toHaveTextContent("2.src/f2.ts— imported by 7 files · top 2% by rank");
-    expect(items[7]).toHaveTextContent(/^8\./);
+    // UI-D-14 (F-46): a number badge without a dot, the path on one line and
+    // the why on the next, with no "— " joining them. Each part on its own.
+    const parts = (item: HTMLElement, n: number, path: string, why: string) => {
+      expect(within(item).getByText(String(n), { exact: true })).toBeInTheDocument();
+      const code = within(item).getByText(path);
+      expect(code.tagName).toBe("CODE");
+      const reason = within(item).getByText(why, { exact: true });
+      expect(reason).not.toBe(code);
+      expect(code).not.toContainElement(reason);
+      expect(item.textContent!.startsWith(`${n}.`)).toBe(false); // no "1." badge
+      expect(item.textContent).not.toContain("—");
+    };
+    parts(items[0]!, 1, "src/f1.ts", "start here");
+    parts(items[1]!, 2, "src/f2.ts", "imported by 7 files · top 2% by rank");
+    parts(items[7]!, 8, "src/f8.ts", "imported by 1 files · top 8% by rank");
   });
 
   it("AC-51 — not_ranked with a reason → the message with the reason", () => {

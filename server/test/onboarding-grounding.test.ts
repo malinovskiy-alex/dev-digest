@@ -12,6 +12,7 @@ import {
   buildKnownSet,
   buildRefSet,
   classifyGenerationError,
+  generationFailureLog,
   groundComponents,
   groundTasks,
   mergeReasons,
@@ -418,6 +419,7 @@ describe('round-trip — scrubProse escapes are insertion-only (F-30, reviewer-c
     '**https://e.example/bold** and ~https://e.example/strike~ and _https://e.example/em_',
     '<x:https://e>',
     'Mail admin@e.example, or see e.g. 1.2.3.',
+    'Known in parens: (`src/my_file.ts`) and ( `docs/guide.md` ), plus (`src/my_file.ts`, docs).',
     '```sh\ncurl https://e.example/health\n[a]: https://e\n```\nafter the fence',
   ];
 
@@ -457,5 +459,89 @@ describe('round-trip — scrubProse escapes are insertion-only (F-30, reviewer-c
     expect(scrubProse('<x:https://e>', known)).toBe('<x:`https://e`>');
     // a real angle autolink loses both brackets together, never only one
     expect(scrubProse('See <https://e.example/x> now.', known)).toBe('See `https://e.example/x` now.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 5 — F-43 (D-26 (1), AC-61): an unknown path in code is still removed,
+// but a "()" it leaves empty goes with it, so the prose does not read
+// "server () providing".
+// ---------------------------------------------------------------------------
+
+describe('regression F-43 — an emptied "()" goes with the removed unknown path (AC-61)', () => {
+  const known = buildKnownSet({ treePaths: ['src/my_file.ts'], indexedPaths: [] });
+
+  it.each([
+    ['(`unknown/x.ts`)', 'A local Express server (`unknown/x.ts`) providing mocks.'],
+    ['( `unknown/x.ts` )', 'A local Express server ( `unknown/x.ts` ) providing mocks.'],
+  ])('F-43 — %s → the brackets go too', (_case, prose) => {
+    expect(scrubProse(prose, known)).toBe('A local Express server providing mocks.');
+  });
+
+  it('F-43 — brackets that still hold something stay; the unknown path is still removed (AC-61)', () => {
+    const out = scrubProse('A local Express server (`unknown/x.ts`, foo) providing mocks.', known);
+    expect(out).not.toContain('unknown/x.ts');
+    expect(out).toContain('(');
+    expect(out).toContain(', foo) providing mocks.');
+    expect(out.startsWith('A local Express server')).toBe(true);
+  });
+
+  it('F-43 — a known path in brackets is untouched', () => {
+    expect(scrubProse('A server (`src/my_file.ts`) providing mocks.', known)).toBe('A server (`src/my_file.ts`) providing mocks.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 5 — F-37: the server-side log record of a failed generation.
+// ---------------------------------------------------------------------------
+
+describe('generationFailureLog (F-37)', () => {
+  it('F-37 — a plain Error: its own message, its name and the failure code; no optional fields', () => {
+    const rec = generationFailureLog(new Error('OpenRouter returned no choices'));
+    expect(rec).toEqual({ code: 'provider_error', error: 'OpenRouter returned no choices', errorName: 'Error' });
+  });
+
+  it('F-37 — the cause of an invalid answer is kept (not the fixed UI text): finishReason, issues, raw excerpt', () => {
+    const issues = Array.from({ length: 15 }, (_, i) => ({ path: ['sections', i, 'prose'], message: `bad ${i}` }));
+    issues[0] = { path: [], message: 'Required' } as never;
+    const err = Object.assign(new Error('OnboardingTour failed schema validation'), {
+      finishReason: 'length',
+      issues,
+      raw: `{"architecture": {"prose": "${'x'.repeat(1_000)}`,
+    });
+    const rec = generationFailureLog(err);
+    expect(rec.code).toBe('invalid_output');
+    expect(rec.error).toBe('OnboardingTour failed schema validation'); // the real message, not "the model returned invalid output"
+    expect(rec.finishReason).toBe('length');
+    expect(rec.issues).toHaveLength(10);
+    expect(rec.issues![0]).toBe('(root): Required');
+    expect(rec.issues![1]).toBe('sections.1.prose: bad 1');
+    expect(rec.rawExcerpt!.length).toBeLessThanOrEqual(300);
+    expect(rec.rawExcerpt!.startsWith('{"architecture": {"prose": "xxx')).toBe(true);
+  });
+
+  it('F-37 — issues as a string are split per line, capped; messages and raw are one line', () => {
+    const lines = Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n');
+    const rec = generationFailureLog(Object.assign(new Error(`multi\nline\n${'m'.repeat(500)}`), { issues: lines, raw: 'a\n\nb' }));
+    expect(rec.issues).toEqual(Array.from({ length: 10 }, (_, i) => `line ${i}`));
+    expect(rec.error).not.toContain('\n');
+    expect(rec.error.length).toBeLessThanOrEqual(300);
+    expect(rec.rawExcerpt).toBe('a b');
+  });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a string', 'boom'],
+    ['a number', 42],
+    ['an empty object', {}],
+    ['odd field types', { name: 5, message: { x: 1 }, finishReason: 3, issues: [null, 7, { path: 'p' }], raw: 9 }],
+  ])('F-37 — never throws on %s', (_what, err) => {
+    let rec: ReturnType<typeof generationFailureLog> | undefined;
+    expect(() => {
+      rec = generationFailureLog(err);
+    }).not.toThrow();
+    expect(typeof rec!.code).toBe('string');
+    expect(typeof rec!.error).toBe('string');
   });
 });

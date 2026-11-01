@@ -13,6 +13,7 @@ import {
   envExampleNames,
   excerpt,
   manifestPaths,
+  isTestPath,
   missingTestCandidates,
   openPrCandidates,
   orderCandidates,
@@ -389,5 +390,53 @@ describe('regression F-20 — a dir segment starting with `-` gives no command (
     const cmds = commandsOf(tree, manifests);
     expect(cmds).toEqual(['pnpm install', 'pnpm run dev']);
     for (const c of cmds) expect(c).not.toMatch(/(^|\s|\/)-/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 5 — F-39 (D-16 rev. 4, AC-52): a file a test imports is covered, even
+// when no test has its name (ky keeps its suites in `test/*.ts`).
+// ---------------------------------------------------------------------------
+
+describe('regression F-39 — missing-tests uses who imports the file (AC-52, D-16)', () => {
+  it('F-39 — isTestPath: a *.test/*.spec basename, or any file under a test directory', () => {
+    for (const p of ['src/a.test.ts', 'src/a.spec.tsx', 'test/main.ts', 'tests/x/y.js', 'pkg/__tests__/z.ts', 'spec/a.ts', 'specs/b.mjs']) {
+      expect(isTestPath(p), p).toBe(true);
+    }
+    for (const p of ['src/a.ts', 'source/index.ts', 'src/testing.ts', 'src/latest/a.ts', 'docs/spec.md.ts', 'contest/a.ts']) {
+      expect(isTestPath(p), p).toBe(false);
+    }
+  });
+
+  it('F-39 — a file imported by a test path is no candidate; imports from non-test files do not count', () => {
+    const scan = ['source/index.ts', 'source/core.ts', 'source/util.ts'];
+    const tree = [...scan, 'test/main.ts', 'source/other.ts'];
+    const importers = [
+      { from: 'test/main.ts', to: 'source/index.ts' }, // ky's case: a test suite imports it
+      { from: 'source/other.ts', to: 'source/core.ts' }, // a plain import does not cover it
+    ];
+    expect(missingTestCandidates(scan, tree, importers).map((c) => c.path)).toEqual(['source/core.ts', 'source/util.ts']);
+  });
+
+  it('F-39 — the name rule still works with no import edges, and a test file is never a candidate', () => {
+    // a: covered by name (a test anywhere in the tree); c: covered by `.spec.`; b: no test
+    // test/helpers.ts and src/d.spec.ts are tests themselves, never candidates
+    const scan = ['src/a.ts', 'test/helpers.ts', 'src/b.ts', 'src/c.ts', 'src/d.spec.ts'];
+    const tree = [...scan, 'other/a.test.ts', 'src/c.spec.tsx'];
+    expect(missingTestCandidates(scan, tree, []).map((c) => c.id)).toEqual(['missing-tests:src/b.ts']);
+    // default argument: the same as no edges
+    expect(missingTestCandidates(scan, tree).map((c) => c.id)).toEqual(['missing-tests:src/b.ts']);
+  });
+
+  it('F-39, AC-52, AC-53 — candidates keep the scan (rank) order, and the 15-cap of orderCandidates still applies', () => {
+    const scan = Array.from({ length: 20 }, (_, i) => `src/f${String(i).padStart(2, '0')}.ts`);
+    const covered = new Set(['src/f03.ts', 'src/f10.ts']);
+    const importers = [...covered].map((to) => ({ from: 'test/all.ts', to }));
+    const c = missingTestCandidates(scan, [...scan, 'test/all.ts'], importers);
+    expect(c.map((x) => x.path)).toEqual(scan.filter((p) => !covered.has(p)));
+    const rankIndex = new Map(scan.map((p, i) => [p, i]));
+    const ordered = orderCandidates(c, [], rankIndex);
+    expect(ordered).toHaveLength(15);
+    expect(ordered.map((x) => x.path)).toEqual(scan.filter((p) => !covered.has(p)).slice(0, 15));
   });
 });

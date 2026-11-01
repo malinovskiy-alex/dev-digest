@@ -173,6 +173,8 @@ interface Setup {
   indexed?: IndexedFile[];
   files?: Record<string, string>;
   generationTimeoutMs?: number;
+  importers?: Array<{ from: string; to: string }>;
+  log?: { warn: (obj: object, msg?: string) => void };
 }
 
 function setup(opts: Setup = {}) {
@@ -192,6 +194,8 @@ function setup(opts: Setup = {}) {
     getEndpoints: vi.fn(async () => [{ file: 'src/routes/pay.ts', endpoint: 'POST /pay' }]),
     getTopFilesByRank: vi.fn(async (_id: string, n: number) => ranked.slice(0, n)),
     getCriticalPaths: vi.fn(async () => (ranked.length >= 2 ? [[ranked[0]!, ranked[1]!]] : [])),
+    // Mirrors the facade (F-39): the import edges into the given paths.
+    getImporters: vi.fn(async (_id: string, paths: string[]) => (opts.importers ?? []).filter((e) => paths.includes(e.to))),
   };
   const choice = opts.choice ?? { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' };
   const featureModel = vi.fn(opts.featureModel ?? (async () => choice));
@@ -221,6 +225,7 @@ function setup(opts: Setup = {}) {
     hasLlmKey,
     jobs,
     generationTimeoutMs: opts.generationTimeoutMs,
+    log: opts.log,
   });
   const structuredCalls = () => llm.calls.filter((c) => c.method === 'completeStructured');
   const lastReq = () => structuredCalls().at(-1)!.req as StructuredRequest<unknown>;
@@ -256,10 +261,10 @@ describe('one model call per generation (AC-21, AC-83, D-3, D-40)', () => {
     expect(s.lastReq().maxRetries).toBe(0);
   });
 
-  it('AC-83 — the call asks for at most 4,000 output tokens', async () => {
+  it('AC-83 (amended 2026-11-01) — the call asks for an output limit of 10,000 tokens', async () => {
     const s = setup();
     await generate(s);
-    expect(s.lastReq().maxTokens).toBe(4000);
+    expect(s.lastReq().maxTokens).toBe(10_000);
   });
 
   it('D-3 — when the LLM rejects, the job handler resolves (never rejects): a JobRunner retry cannot re-call the model', async () => {
@@ -753,5 +758,65 @@ describe('regression F-33 — the runner fails before the handler runs (INV-17, 
     await second.done;
     expect(s.structuredCalls()).toHaveLength(1);
     expect(s.stored()).toBeDefined();
+  });
+});
+
+describe('regression F-37 — a failed generation logs its cause on the server, once (AC-72)', () => {
+  it('F-37 — success → no warning', async () => {
+    const warn = vi.fn();
+    const s = setup({ log: { warn } });
+    await generate(s);
+    expect(s.stored()).toBeDefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('F-37 — an invalid answer → one warning with the cause and sizes; the page keeps the fixed text; no prompt in the log', async () => {
+    const warn = vi.fn();
+    const s = setup({ log: { warn }, llm: new MockLLMProvider('openai', { structured: { architecture: 'not an object' } }) });
+    await generate(s);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [obj, msg] = warn.mock.calls[0]!;
+    expect(msg).toBe('onboarding tour generation failed');
+    expect(obj).toMatchObject({ repoId: REPO_ID, provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', maxTokens: 10_000, code: 'invalid_output' });
+    expect(typeof obj.error).toBe('string');
+    expect(obj.promptChars).toBeGreaterThan(0);
+    // the page still shows only the fixed text (AC-72)
+    expect((await s.svc.getTour(WS, REPO_ID)).generation.failure?.message).toBe('the model returned invalid output');
+    // sizes only — never the prompt itself (README text is in the prompt)
+    expect(JSON.stringify(obj)).not.toContain(README);
+  });
+
+  it('F-37 — a provider error → one warning carrying the provider message', async () => {
+    const warn = vi.fn();
+    const s = setup({ log: { warn }, llm: new FailingLLM(new Error('upstream 503: overloaded')) });
+    await generate(s);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toMatchObject({ code: 'provider_error', error: 'upstream 503: overloaded' });
+  });
+});
+
+describe('regression F-39 — a scanned file that a test imports is no missing-tests candidate (AC-52, D-16)', () => {
+  const candidatesBlock = (u: string) => u.match(/<untrusted source="task-candidates">[\s\S]*?<\/untrusted>/)![0];
+
+  it('F-39 — without importers src/a.ts is a candidate; with test/all.ts importing it, it is not', async () => {
+    const plain = setup();
+    await generate(plain);
+    expect(candidatesBlock(plain.lastReq().messages[1]!.content as string)).toContain('missing-tests:src/a.ts');
+
+    db.rows.clear();
+    const s = setup({ importers: [{ from: 'test/all.ts', to: 'src/a.ts' }, { from: 'src/b.ts', to: 'src/f0.ts' }] });
+    await generate(s);
+    const block = candidatesBlock(s.lastReq().messages[1]!.content as string);
+    expect(block).not.toContain('missing-tests:src/a.ts');
+    expect(block).toContain('missing-tests:src/f0.ts'); // a non-test importer does not cover it
+    expect(s.repoIntel.getImporters).toHaveBeenCalledWith(REPO_ID, expect.arrayContaining(['src/a.ts']));
+  });
+
+  it('F-39 — a failing importer read leaves the name rule in force; the generation still succeeds', async () => {
+    const s = setup();
+    s.repoIntel.getImporters.mockRejectedValue(new Error('db down'));
+    await generate(s);
+    expect(s.stored()).toBeDefined();
+    expect(candidatesBlock(s.lastReq().messages[1]!.content as string)).toContain('missing-tests:src/a.ts');
   });
 });
