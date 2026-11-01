@@ -56,6 +56,10 @@ export const TourFolder = z.object({ path: z.string(), files: z.number().int() }
 export type TourFolder = z.infer<typeof TourFolder>;
 
 export const TourArchitecture = z.object({
+  // `prose` is UNTRUSTED model output. The server scrub (D-26) is best effort
+  // only: render it with `<UntrustedMarkdown inertLinks>` so no href in it is
+  // ever followable (F-29, F-36). Never render it with a markdown component
+  // that turns links into anchors.
   prose: z.string().nullable(),          // model markdown (scrubbed, D-26); null in a skeleton
   components: z.array(TourComponent),     // grounded (AC-33); [] in a skeleton
   connections: z.array(TourConnection),

@@ -46,6 +46,7 @@ import {
   GENERATION_MAX_RETRIES,
   GENERATION_TEMPERATURE,
   GENERATION_TIMEOUT_MS,
+  JOB_NOT_STARTED_MESSAGE,
   OPEN_PR_LIMIT,
   OUTPUT_MAX_TOKENS,
   READ_MAX_BYTES,
@@ -334,10 +335,18 @@ export class OnboardingService {
       // gave up waiting (the handler still settles the lock itself) or when
       // the runner failed before calling the handler at all — its `running`
       // status update threw. Only in the second case is the generation still
-      // pending, and nobody else would ever release its lock (F-33).
+      // pending, and nobody else would ever release its lock (F-33). It is
+      // recorded as a failure so the page shows it instead of the generation
+      // vanishing — no model call was made and nothing is stored (F-35).
       job.done.catch(() => {
         if (this.pending.get(repoId)?.generationId !== generationId) return;
         this.pending.delete(repoId);
+        this.failures.set(repoId, {
+          code: 'provider_error',
+          message: JOB_NOT_STARTED_MESSAGE,
+          provider: null,
+          at: this.now().toISOString(),
+        });
         this.release(repoId, generationId);
       });
     } catch (err) {

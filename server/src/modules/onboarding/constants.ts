@@ -76,6 +76,8 @@ export const FAILURE_MESSAGE_MAX = 300;
 export const STORED_TOUR_VERSION = 1;
 /** The exact failure text for a schema-invalid answer (AC-72). */
 export const INVALID_OUTPUT_MESSAGE = 'the model returned invalid output';
+/** The failure text when the job runner failed before the handler ran (F-35). */
+export const JOB_NOT_STARTED_MESSAGE = 'the generation job could not start';
 
 // ---- Run commands (AC-40, D-7, D-8, D-9, D-44) ----
 /** Script names that become commands, in derivation order — exactly AC-40 (D-9). */
