@@ -47,7 +47,7 @@ function defaultIsRetryable(err: unknown): boolean {
 export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}): Promise<T> {
   const retries = opts.retries ?? 5;
   const base = opts.baseDelayMs ?? 250;
-  const max = opts.maxDelayMs ?? 30000;
+  const max = opts.maxDelayMs ?? 20000;
   const isRetryable = opts.isRetryable ?? defaultIsRetryable;
 
   let lastErr: unknown;
