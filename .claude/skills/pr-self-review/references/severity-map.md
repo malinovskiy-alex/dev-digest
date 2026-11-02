@@ -46,6 +46,13 @@ Note the deliberate downgrade: that skill's "CRITICAL" is written against
 component health, not against the merge bar. A missing `key` prop does not take
 production down.
 
+Never recommend a React API without first confirming it exists in the React
+that Next bundles: grep
+`client/node_modules/next/dist/compiled/react/cjs/react.development.js`.
+`@types/react` and vitest's React are newer and prove nothing. In the L05 PR
+Brief banner run a lens recommended `useEffectEvent` (B-05) and every PR page
+then crashed (B-06; `client/INSIGHTS.md`, 2026-11-02).
+
 ### `onion-architecture`
 
 | Situation | Ours |

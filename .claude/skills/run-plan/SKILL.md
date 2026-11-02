@@ -16,7 +16,10 @@ the work is done.
 
 The spec and the plan come **before** this command, run by hand:
 `spec-creator` → `<slug>.requirements.md`, then `implementation-planner` →
-`<slug>.md`. This command starts where the plan ends.
+`<slug>.md`. This command starts where the plan ends. For a screen, before
+spawning `spec-creator`, list every visible element of the target design and ask
+the user about all of them in **one** batch — in the L05 PR Brief banner run the
+run line and the Review focus card arrived mid-run, as 4 follow-ups.
 
 ## 0. Preflight
 
@@ -61,8 +64,8 @@ write here:
 ## 2. Phases
 
 ```
-implement ─▶ review ⇄ fix ─▶ [--docs] ─▶ pr ─▶ wrap-up
-                (max N rounds)
+implement ─▶ review ⇄ fix ─▶ [--docs] ─▶ [smoke] ─▶ pr ─▶ wrap-up
+                (max N rounds)        (client/ changed)
 ```
 
 ### implement
@@ -99,6 +102,13 @@ severity: a recorded user decision is not a defect, and a finding that
 contradicts one is at most a question for the user. In L05 PR Brief F-11 was
 rated CRITICAL against Q-10 / R-12.
 
+Every reviewer prompt that may touch `client/` also says: **do not recommend a
+React API without first confirming it exists in the React that Next bundles** —
+grep `client/node_modules/next/dist/compiled/react/cjs/react.development.js`;
+`@types/react` and vitest's React do not count. In the L05 PR Brief banner run a
+lens recommended `useEffectEvent` (B-05), it typechecked, and every PR page
+crashed (B-06; `client/INSIGHTS.md`, 2026-11-02).
+
 Merge both into `findings.md` (§4) and run the loop.
 
 ### tests — only with `--test-writer`
@@ -111,6 +121,17 @@ and `## Blocked` items → findings → one more loop.
 
 `doc-writer` on the shipped feature. It writes `docs/` only and does not reopen
 review.
+
+### smoke — required whenever `client/` changed
+
+Before `pr`, open every route the change touches in the running `pnpm dev`
+(`client/`, port 3000) and read the browser console: it must show no route
+error — no `[route error]` line and no error-boundary output. No browser tool in
+this session → ask the user to open those routes and report the console; do not
+skip the step. A failure is a finding: Sev `CRITICAL`, source `browser-smoke` →
+fix loop → smoke again. In L05 PR Brief every automated gate was green and
+`plan-verifier` graded complete while every PR page crashed (B-06, caught only
+by a manual browser check).
 
 ### pr
 
@@ -243,4 +264,7 @@ commit? — or what blocks it
 - **Do not fix anything yourself**, however small. An unreviewed fix is the
   failure this chain exists to prevent — route it through a fix round.
 - **Give agents paths, not retellings.** One sentence of phase, then paths.
+- **Before a test review run, ask once** whether to move any review agent off a
+  model known to hang. In the L05 PR Brief banner run the Security Reviewer on
+  `deepseek-v4-flash` hung for 17+ minutes before the user switched it.
 - Talk to the user in Ukrainian; identifiers, paths and rule names stay as they are.

@@ -87,6 +87,16 @@ Sequencing is the **main session's** job, not the agents'. **None of the eight**
 spawns a subagent of its own, and none of them commits, pushes or opens a PR —
 that stays with you, after [`pr-self-review`](../skills/pr-self-review/SKILL.md).
 
+Two hand-off rules for the main session:
+
+- **Before spawning `spec-creator` for a screen**, list every visible element of
+  the target design and ask the user about all of them in **one** batch. In the
+  L05 PR Brief banner run the run line and the Review focus card arrived mid-run,
+  as 4 follow-ups.
+- **Before a test review run**, ask once whether to move any review agent off a
+  model known to hang — there, the Security Reviewer on `deepseek-v4-flash` hung
+  for 17+ minutes.
+
 Two distinctions a reader will otherwise guess at:
 
 - `plan-verifier` asks *is the plan done?*, against `specs/<plan>.md` item by item.
