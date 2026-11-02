@@ -1,6 +1,6 @@
 import type { IntentSource } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
-import { KNOWN_REASONS, RISK_ICON_FALLBACK, RISK_ICON_RULES, SHORT_SHA_LENGTH, type KnownReason } from "./constants";
+import { KNOWN_REASONS, RISK_ICON_FALLBACK, RISK_ICON_RULES, type KnownReason } from "./constants";
 
 /** Pure helpers for the PR intent card. */
 
@@ -12,10 +12,6 @@ export function isIntentUnavailable(err: unknown): boolean {
 /** 404 `intent_not_derived` = nobody asked yet: the card offers the "Derive intent" button. */
 export function isIntentNotDerived(err: unknown): boolean {
   return err instanceof ApiError && err.status === 404 && err.code === "intent_not_derived";
-}
-
-export function shortSha(sha: string | null | undefined): string | null {
-  return sha ? sha.slice(0, SHORT_SHA_LENGTH) : null;
 }
 
 /** The reason as a translatable key, or null when the server sent one we have no label for. */

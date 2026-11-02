@@ -7,13 +7,14 @@
 
 import React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
 import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
-import { DiffTab } from "./_components/DiffTab";
+import { DiffTab, diffFocusHref, parseDiffFocus, tabHref } from "./_components/DiffTab";
 import RunTraceDrawer from "./_components/RunTraceDrawer";
 import { usePullDetail, usePulls } from "@/lib/hooks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -34,6 +35,7 @@ export default function PRDetailPage() {
   const params = useParams<{ repoId: string; number: string }>();
   const search = useSearchParams();
   const router = useRouter();
+  const t = useTranslations("shell");
   const { repoId, number } = params;
   const { activeRepo } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
@@ -42,6 +44,8 @@ export default function PRDetailPage() {
   const { data: pulls, isLoading: pullsLoading } = usePulls(repoId);
   const prId = pulls?.find((p) => p.number === Number(number))?.id ?? null;
   const { data: pr, isLoading: detailLoading, isError, error, refetch } = usePullDetail(prId);
+  // One array per PR detail, not per render, so the Overview's in-diff lookup is built once (F-19).
+  const changedPaths = React.useMemo(() => (pr?.files ?? []).map((f) => f.path), [pr?.files]);
 
   const isLoading = pullsLoading || (prId != null && detailLoading);
   const { data: reviews, refetch: refetchReviews } = usePrReviews(prId);
@@ -72,7 +76,14 @@ export default function PRDetailPage() {
     else sp.set(key, val);
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
-  const setTab = (t: string) => setParam("tab", t);
+  const base = `/repos/${repoId}/pulls/${number}`;
+  // A tab click replaces the entry and drops the focus target (R-77, D-32).
+  const setTab = (next: string) => router.replace(tabHref(base, search, next));
+  // A PR Brief reference opens Files changed as a NEW history entry, so Back
+  // returns to Overview (R-53, R-77); the Overview restores its own scroll.
+  const openInDiff = (path: string, line: number | null) =>
+    router.push(diffFocusHref(base, search, path, line), { scroll: false });
+  const diffFocus = parseDiffFocus(search);
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -90,7 +101,7 @@ export default function PRDetailPage() {
   const repoFullName = activeRepo?.full_name ?? null;
   const crumb = [
     { label: repoName, mono: true, href: `/repos/${repoId}/pulls` },
-    { label: "Pull Requests", href: `/repos/${repoId}/pulls` },
+    { label: t("nav.pulls"), href: `/repos/${repoId}/pulls` },
     { label: `#${number}`, mono: true },
   ];
 
@@ -120,8 +131,8 @@ export default function PRDetailPage() {
       <AppShell crumb={crumb}>
         <ErrorState
           fullScreen
-          title="Couldn't load this pull request"
-          body={error instanceof ApiError ? error.message : `PR #${number} could not be loaded.`}
+          title={t("prDetail.loadErrorTitle")}
+          body={error instanceof ApiError ? error.message : t("prDetail.loadErrorBody", { number })}
           onRetry={() => refetch()}
         />
       </AppShell>
@@ -149,6 +160,8 @@ export default function PRDetailPage() {
             repoId={repoId}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            changedPaths={changedPaths}
+            onOpenInDiff={openInDiff}
           />
         )}
 
@@ -166,7 +179,7 @@ export default function PRDetailPage() {
             cancelMutation={cancel}
             onOpenTrace={(id) => setParam("trace", id)}
             onDelete={(id) => {
-              if (window.confirm("Delete this run from history? (its logs are removed too)"))
+              if (window.confirm(t("prDetail.deleteRunConfirm")))
                 deleteRun.mutate(id);
             }}
             onRunDone={() => {
@@ -188,6 +201,7 @@ export default function PRDetailPage() {
             canComment={pr.status === "open"}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            focus={diffFocus}
           />
         )}
       </div>

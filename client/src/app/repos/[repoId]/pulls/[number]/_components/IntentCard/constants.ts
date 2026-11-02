@@ -3,9 +3,6 @@ import type { IntentSource } from "@devdigest/shared";
 
 /** Constants for the PR intent card (L03). */
 
-/** How many characters of the head sha the "derived … for abc1234" line shows. */
-export const SHORT_SHA_LENGTH = 7;
-
 /** Refresh the "derived 3m ago" line once a minute. */
 export const AGE_TICK_MS = 60_000;
 

@@ -39,6 +39,11 @@ Stop, and say why, if:
   question, or the plan's `## Risks / open questions` has a row blocking a step;
 - `.git/HEAD` points at `main` — lesson work belongs on `lesson/L<NN>-<slug>`.
   Creating the branch is the user's call.
+- the plan accepts a cross-model review (its `## Execution` has a phase 0) and
+  `<specs-dir>/<slug>.plan-review.md` does not exist — *"run the cross-model
+  review first, or say to skip it"*. Only the user's explicit override starts
+  `implement` without it; record the override in `state.md`. In L05 PR Brief
+  phase 0 never ran and code started at `21427de` without it.
 
 The plan is the input; you read only its header, `## Execution` and
 `## Risks / open questions`. The agents read the rest themselves.
@@ -71,7 +76,12 @@ Spawn `implementer`:
 
 With `--test-writer`, drop the test clause: test steps stay with `test-writer`.
 
-**Keep the agent's ID** — every fix round resumes this same agent (§4). Its
+If the plan's `## Execution` has a file-ownership table with disjoint paths
+(e.g. a server stream and a client stream), spawn one `implementer` per row
+**in one message**, each told which steps and paths it owns (see *Rules*).
+
+**Keep the agent's ID** — fix rounds resume this same agent (§4, with the
+exception for small late rounds there). Its
 `## Not done / blocked` lines become findings (source `implementer`).
 
 ### review
@@ -81,6 +91,13 @@ Spawn **both in one message** — read-only, so they may run in parallel:
 - `architecture-reviewer` — the open change.
 - `plan-verifier` — the plan path. Without `--test-writer`: a **full** pass.
   With it: the *gap* pass (test items not graded yet).
+
+Every reviewer prompt — these two, a frontend lens, `/code-review`, any other
+lens agent — names `findings.md` and the plan's `## Decisions` (and the
+requirements file's `## Decisions`) as inputs to read **before** rating
+severity: a recorded user decision is not a defect, and a finding that
+contradicts one is at most a question for the user. In L05 PR Brief F-11 was
+rated CRITICAL against Q-10 / R-12.
 
 Merge both into `findings.md` (§4) and run the loop.
 
@@ -163,6 +180,12 @@ Never decide for the user.
 
    No live implementer (a new chat, `--from review`)? Spawn a fresh one with the
    plan path, the findings path and the same instructions.
+
+   A **small late round** — round 2 or later with one or two findings to fix —
+   also gets a fresh implementer with those paths instead of a resume: resuming
+   re-pays the whole accumulated context for a one-line change. In L05 PR Brief
+   the server stream reached 100 requests / 20.37M input after 4 rounds, and its
+   round-2 fix was one line.
 2. **Ledger.** `fixed` with the resolution, or `disputed` with the reason. A new
    failure in its `verify.mjs` output is a new `test` row.
 3. **Disputes** → one `AskUserQuestion` for all of them: *keep the finding*
@@ -207,7 +230,13 @@ commit? — or what blocks it
 
 - **Writers run one at a time** — two agents writing in one checkout destroy each
   other's work (`INSIGHTS.md`, *What Doesn't Work*). Only the read-only reviewers
-  run in parallel.
+  run in parallel. **The one exception:** the plan's `## Execution` has a
+  file-ownership table whose paths are disjoint — then the writers it lists may
+  run in parallel, each confined to its own paths, and none touches a file
+  another owns (a shared file, e.g. both vendored `@devdigest/shared` copies,
+  belongs to exactly one row). No table, or overlapping paths → one at a time.
+  Evidence: the L05 PR Brief run, server ∥ client and their test writers in
+  parallel, zero collisions.
 - **Never `--save-baseline` once the `implement` phase has started** — the tree is no longer
   clean, and that baseline would bless the failures you are looking for.
 - **No git writes**: no commit, push, branch switch, stash, `gh pr create`.

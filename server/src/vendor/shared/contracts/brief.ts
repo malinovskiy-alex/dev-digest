@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Provider } from './knowledge.js';
 
 /**
  * PR Brief building blocks: Intent, Blast radius, Risks, PR History,
@@ -207,11 +208,99 @@ export const SmartDiff = z.object({
 });
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
-// ---- Composed PR Brief (pr_brief.json) ----
+// ---- Composed PR Brief (pr_brief.json) — L05 ----
+// One brief per PR, generated on demand by ONE `risk_brief` model call over
+// facts that are already computed. Stored whole in `pr_brief.json`.
+
+/** One "read this first" line. `line` is a new-side line of `file` (R-34). */
+export const ReviewFocusItem = z.object({
+  file: z.string(),
+  line: z.number().int().min(1),
+  reason: z.string(),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+/** An input the brief was generated without (R-27). */
+export const BriefInput = z.enum(['intent', 'blast', 'diff_stats', 'description', 'issue', 'specs']);
+export type BriefInput = z.infer<typeof BriefInput>;
+export const BriefMissingInput = z.object({
+  input: BriefInput,
+  // not_derived | no_index | degraded:<reason> | degraded:error | no_files | empty
+  // | none_linked | github_unavailable | fetch_failed | none_attached | not_cloned | read_error
+  reason: z.string(),
+});
+export type BriefMissingInput = z.infer<typeof BriefMissingInput>;
+
+export const BriefCut = z.enum(['kept', 'truncated', 'dropped']);
+export type BriefCut = z.infer<typeof BriefCut>;
+
+/** What the 8,000-token budget removed, in trim order (R-20…R-24), plus moved focus lines (R-34). */
+export const BriefTrim = z.object({
+  specs_removed: z.array(z.string()),
+  description: BriefCut,
+  callers_removed: z.number().int().nonnegative(),
+  issue_body: BriefCut,
+  diff_rows_removed: z.number().int().nonnegative(),
+  focus_lines_moved: z.number().int().nonnegative(),
+  /** ceil(final input chars / 4), system prompt included. */
+  input_tokens: z.number().int().nonnegative(),
+});
+export type BriefTrim = z.infer<typeof BriefTrim>;
+
+export const BriefMeta = z.object({
+  head_sha: z.string(),
+  generated_at: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  tokens_in: z.number().int().nonnegative(),
+  tokens_out: z.number().int().nonnegative(),
+  cost_usd: z.number().nullable(),
+  missing_inputs: z.array(BriefMissingInput),
+  trim: BriefTrim,
+  /** Removed for naming a path outside the PR and the blast map (R-30, R-31). */
+  dropped: z.object({
+    risks: z.number().int().nonnegative(),
+    risk_refs: z.number().int().nonnegative(),
+    review_focus: z.number().int().nonnegative(),
+  }),
+});
+export type BriefMeta = z.infer<typeof BriefMeta>;
+
 export const PrBrief = z.object({
-  intent: Intent,
-  blast: BlastRadius,
+  /** What the PR does and why; ≤ 600 chars. Plain text. */
+  summary: z.string(),
+  /** The stored intent the brief was built from; null when not derived (R-42). */
+  intent: Intent.nullable(),
+  /** The blast radius the brief was built from; null when the read failed. */
+  blast: BlastRadius.nullable(),
+  /** ≤ 5, each with ≥ 1 known `file_refs` entry (`<path>`, `<path>:<n>`, `<path>:<a>-<b>`). */
   risks: Risks,
-  history: PrHistory,
+  /** ≤ 6, in the model's order. */
+  review_focus: z.array(ReviewFocusItem),
+  /** Not a brief input; always null for a generated brief (R-42). */
+  history: PrHistory.nullable(),
+  meta: BriefMeta,
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+export const BriefFailureCode = z.enum(['invalid_output', 'timeout', 'provider_error', 'no_api_key', 'store_failed']);
+export type BriefFailureCode = z.infer<typeof BriefFailureCode>;
+export const BriefFailure = z.object({ code: BriefFailureCode, message: z.string(), at: z.string() });
+export type BriefFailure = z.infer<typeof BriefFailure>;
+
+/** GET /pulls/:id/brief. Everything but `brief` is computed at read time, never stored (R-43). */
+export const PrBriefView = z.object({
+  brief: PrBrief.nullable(),
+  stale: z.boolean(),
+  current_head_sha: z.string(),
+  generating: z.boolean(),
+  last_failure: BriefFailure.nullable(),
+  key_available: z.boolean(),
+  /** The "Risk Brief" feature model; names the provider in "No API key for <provider>" (R-68). */
+  feature_model: z.object({ provider: Provider, model: z.string() }),
+});
+export type PrBriefView = z.infer<typeof PrBriefView>;
+
+/** POST /pulls/:id/brief/generate → 202. */
+export const BriefGenerateAccepted = z.object({ generating: z.literal(true) });
+export type BriefGenerateAccepted = z.infer<typeof BriefGenerateAccepted>;

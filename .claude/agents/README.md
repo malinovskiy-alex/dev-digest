@@ -214,11 +214,11 @@ as anything upstream.
 |---|---|
 | `@devdigest/shared` is vendored twice — both copies, one commit | [`AGENTS.md`](../../AGENTS.md) |
 | lockfiles are load-bearing; `main` is the course starter; commands run from inside the package | " |
-| two agents in one checkout destroy each other's work → no `checkout`/`stash`, and no stashing to find a baseline | [`INSIGHTS.md:42`](../../INSIGHTS.md) |
-| a DB test must be `*.it.test.ts`, or it poisons the unit suite | [`server/INSIGHTS.md:91`](../../server/INSIGHTS.md) |
-| a service resolves its model through the container, never by importing `settings` | `server/INSIGHTS.md:110` |
+| two agents in one checkout destroy each other's work → no `checkout`/`stash`, and no stashing to find a baseline | [`INSIGHTS.md:66`](../../INSIGHTS.md) |
+| a DB test must be `*.it.test.ts`, or it poisons the unit suite | [`server/INSIGHTS.md:109`](../../server/INSIGHTS.md) |
+| a service resolves its model through the container, never by importing `settings` | `server/INSIGHTS.md:128` |
 | `pnpm typecheck` does not cover `test/` → run the suite too | [`server/AGENTS.md`](../../server/AGENTS.md) |
-| no `@testing-library/user-event` here — use `fireEvent` | [`client/INSIGHTS.md:175`](../../client/INSIGHTS.md) |
+| no `@testing-library/user-event` here — use `fireEvent` | [`client/INSIGHTS.md:221`](../../client/INSIGHTS.md) |
 | 6 of 11 tests in `indexer-pipeline.test.ts` fail on a clean tree → failures are compared, not counted | [`pr-self-review`](../skills/pr-self-review/SKILL.md) §2 |
 | the path → lens table, and that `perf-prompt` is a rubric (`docs/agent-prompts/performance-reviewer.md`), not a loadable skill | [`routing.md:97`](../skills/pr-self-review/references/routing.md) |
 | the severity vocabulary and the per-lens mapping are cited, never invented | `contracts/findings.ts:11`, `severity-map.md`, `general-reviewer.md:53-73` |
@@ -226,9 +226,9 @@ as anything upstream.
 | the known-violations file must be **counted** — it holds 21 entries while three reference files say 25 | `server/.dependency-cruiser-known-violations.json` |
 | `routing.md` routes no `server/test/**` or `reviewer-core/test/**` path → `test-writer` picks from the reconciled skill list and says which | `routing.md`, `scripts/lib/routing.mjs:32,45,60` |
 | a generator is not a lens → `mermaid-diagram` is never routed | `routing.md`, *Adding a skill to the routing* |
-| the integration suite silently skips itself; counts, not exit codes | `server/INSIGHTS.md:72`, `:265` |
-| `pnpm typecheck` does not cover `server/test/` | `server/INSIGHTS.md:128` |
-| `findByRole` hides a duplicate accessible name; a new `common` namespace breaks colocated tests silently while staying green | `client/INSIGHTS.md:44`, `:117` |
+| the integration suite silently skips itself; counts, not exit codes | `server/INSIGHTS.md:90`, `:289` |
+| `pnpm typecheck` does not cover `server/test/` | `server/INSIGHTS.md:146` |
+| `findByRole` hides a duplicate accessible name; a new `common` namespace breaks colocated tests silently while staying green | `client/INSIGHTS.md:78`, `:151` |
 | a test's own rubric: what would have to change in production for it to fail | `docs/agent-prompts/test-quality-reviewer.md` |
 | where a doc page goes, and what each `docs/` directory refuses | `docs/README.md`, `<pkg>/docs/README.md`, root `AGENTS.md` *Where to write what* |
 | a spec stays the record of intent once it ships | [`specs/README.md`](../../specs/README.md) |

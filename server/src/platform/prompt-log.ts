@@ -22,7 +22,7 @@ export interface PromptLogSink {
 export interface PromptLogContext {
   /** Ties this line to the rest of the operation: the run id, or the request id. */
   correlationId: string;
-  kind: 'review' | 'intent';
+  kind: 'review' | 'intent' | 'brief';
   provider: string;
   model: string;
   prId: string;

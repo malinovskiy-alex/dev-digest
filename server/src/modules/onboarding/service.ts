@@ -37,6 +37,7 @@ import type {
   TourSections,
 } from '@devdigest/shared';
 import type { Db } from '../../db/client.js';
+import { mapBounded } from '../../platform/concurrency.js';
 import { AppError, ConfigError, NotFoundError } from '../../platform/errors.js';
 import { renderPrompt } from '../../platform/prompts.js';
 import { withTimeout } from '../../platform/resilience.js';
@@ -189,20 +190,6 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = r;
   });
   return { promise, resolve };
-}
-
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next;
-      next += 1;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
 }
 
 export class OnboardingService {
@@ -630,12 +617,12 @@ export class OnboardingService {
         .map((dir) => findEnvExample(dir, treePaths))
         .find((p): p is string => p !== null) ?? null;
 
-    const manifestTexts = await mapLimit(manifestRefs, READ_CONCURRENCY, (m) => read(m.path));
+    const manifestTexts = await mapBounded(manifestRefs, READ_CONCURRENCY, (m) => read(m.path));
     const [readmeText, envText] = await Promise.all([
       readmePath ? read(readmePath) : Promise.resolve(null),
       envPath ? read(envPath) : Promise.resolve(null),
     ]);
-    const scanTexts = await mapLimit(scanPaths, READ_CONCURRENCY, (p) => read(p));
+    const scanTexts = await mapBounded(scanPaths, READ_CONCURRENCY, (p) => read(p));
 
     const manifests: ManifestFact[] = [];
     manifestRefs.forEach((m, i) => {
