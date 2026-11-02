@@ -17,7 +17,7 @@ Commits:
 Execution followed the plan's `## Execution` (user decision, 2026-11-01). Server and client implementers ran in parallel, each owning its own files. Tests came in a separate `test-writer` phase, with server and client writers also in parallel. Review phase 3 ran five read-only reviewers in parallel: `plan-verifier` (gap pass), `architecture-reviewer`, a security lens, the perf rubric, and `/code-review` at high.
 
 ## Findings
-32 total · fixed 30 · accepted 2 · wontfix 0 · open 0. The ledger is copied below.
+33 total · fixed 31 · accepted 2 · wontfix 0 · open 0. The ledger is copied below.
 
 Accepted, to go into the PR description:
 - **F-11.** `maxRetries: 0` stops only the module's own re-asks. Network retries in the adapter and SDK on 429, 5xx or ECONNRESET can still send more than one HTTP request per generation, while the log reports `model_calls: 1`. The user allowed this under Q-10 / R-12: adapter retries are permitted and INV-3 forbids touching the adapters. It is a known limit (plan R-1).
@@ -137,3 +137,14 @@ Changed outside the plan:
 | F-30 | 4 | pr-self-review (frontend) | SUGGESTION→must-fix | `client/.../OverviewTab/helpers.ts:67-92` | module-level Map + window listeners in a "pure" helpers.ts → own module (e.g. `backListener.ts`) | fixed | OverviewTab/backListener.ts (new); helpers.ts pure again |
 | F-31 | 4 | pr-self-review (frontend) | SUGGESTION→must-fix | `SmartDiffGroup.tsx` (mustOpen effect); `FileCard.tsx:86-88` | adjust-state-on-prop-change via useEffect → adjust during render (prev-key pattern) | fixed | openedFor prev-key during render: FileCard.tsx:87-91, SmartDiffGroup.tsx:35-44 |
 | F-32 | 4 | pr-self-review (frontend) | SUGGESTION→must-fix | `client/src/components/diff-viewer/FileCard/FileCard.tsx:92-100`; `DiffTab.tsx` | eslint-disable exhaustive-deps for `onHandled` → stable callback (useCallback in DiffTab or latest-ref) | fixed | useCallback onHandled DiffTab.tsx:62,64; FileCard.tsx:102 deps complete, eslint-disable removed |
+| F-33 | 5 | manual browser check | WARNING | `client/src/app/repos/[repoId]/pulls/[number]/_components/PrBriefCard/_components/BriefHeader/BriefHeader.tsx:63` | a brief generated after page load read "Generated in 47 seconds": next-intl fixes `useNow` to the server-render time and ticks every 60 s | fixed | `now` clamped to `generated_at`; regression test in `PrBriefCard.test.tsx`; verified "Generated now" in the browser |
+
+## Manual browser check (2026-11-02, test PR malinovskiy-alex/dev-digest#33)
+Done after the run, with `risk_brief` set to `openrouter/openai/gpt-4.1`. The default `openai/gpt-4.1` had no OpenAI key, so the card showed the R-68 no-key state as designed.
+- **Generate:** brief rendered with summary, Review focus (4 items) and "Generated without: linked issue". Risk areas appeared in the Intent card, each with a file.
+- **API log:** one `prompt.assembled` (`kind: "brief"`) and one `brief.generation.finished` with `model_calls: 1`, `attempts: 1`, `input_tokens: 5557`, `cost_usd: 0.015764`, `duration_ms: 3841`.
+- **Review focus `resilience.ts:40`:** opened `?tab=diff&file=…&line=40`, the file was outlined and new-side line 40 highlighted. Back returned to Overview at the previous scroll position.
+- **Reload:** the brief showed immediately with no new `brief.generation.finished` line.
+- **Regenerate:** the generating skeleton showed, then the new brief.
+- **New commit pushed to the PR:** the "Brief is for an older commit (8e6908f)" badge showed, with no automatic regeneration.
+- **Found here:** F-33 (fixed).

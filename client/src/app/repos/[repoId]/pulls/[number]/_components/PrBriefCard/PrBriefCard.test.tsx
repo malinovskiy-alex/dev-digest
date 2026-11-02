@@ -244,6 +244,15 @@ describe("PrBriefCard — a stored brief", () => {
     expect(screen.getByText(/^Generated 2 hours ago/)).toHaveAccessibleDescription("cost unknown");
   });
 
+  it("R-08 — a brief generated after the page's `now` reads 'now', never 'in N seconds'", async () => {
+    // The provider's now is fixed at page render; the generation finishes 40 s later.
+    serve(() => respond(view({ brief: withMeta({ generated_at: "2026-11-01T12:00:40.000Z" }) })));
+    renderCard();
+    await briefShown();
+    expect(screen.getByText("Generated now for abc1234 · openai/gpt-4.1")).toBeInTheDocument();
+    expect(screen.queryByText(/Generated in /)).not.toBeInTheDocument();
+  });
+
   it("R-25, D-25 — 'Built from trimmed inputs' with one tooltip line per non-zero trim field", async () => {
     serve(() =>
       respond(

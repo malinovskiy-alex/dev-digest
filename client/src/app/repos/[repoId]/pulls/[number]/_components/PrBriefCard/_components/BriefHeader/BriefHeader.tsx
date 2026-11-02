@@ -60,9 +60,13 @@ function MetaLine({ brief, stale }: { brief: PrBrief; stale: boolean }): React.J
   const t = useTranslations("brief");
   const format = useFormatter();
   // An explicit `now`: without one next-intl reports ENVIRONMENT_FALLBACK on every render.
-  const now = useNow({ updateInterval: NOW_TICK_MS });
+  const tick = useNow({ updateInterval: NOW_TICK_MS });
   const meta = brief.meta;
   const at = generatedAt(meta.generated_at);
+  // The provider's `now` is fixed at the page's server render and only ticks every
+  // NOW_TICK_MS, so a brief generated after the page loaded would read "in 40 seconds".
+  // Never let `now` fall behind the generation time.
+  const now = at && at.getTime() > tick.getTime() ? at : tick;
   const line = t("generatedLine", {
     ago: at ? format.relativeTime(at, now) : meta.generated_at,
     sha: shortSha(meta.head_sha) ?? "",
