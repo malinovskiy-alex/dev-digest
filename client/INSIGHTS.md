@@ -19,6 +19,12 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-11-02 — Newer React APIs pass vitest but crash the App Router: `React.useEffectEvent is not a function`
+**Symptom:** all 473 client tests, typecheck and lint were green, yet every PR page crashed in `pnpm dev` with `TypeError: react__WEBPACK_IMPORTED_MODULE_0___default(...).useEffectEvent is not a function at useWhenActiveRunsEnd`.
+**Cause:** the Next 15 App Router renders with its own bundled `next/dist/compiled/react`, which has no stable `useEffectEvent`; vitest (and `@types/react`) resolve `react` 19.2 from `node_modules`, where it exists. The tests exercise a different React than the app.
+**Rule:** before using a React API newer than what Next bundles, grep `client/node_modules/next/dist/compiled/react/cjs/react.development.js` for it; keep the latest-callback ref pattern for "call the newest callback from an effect". After any hook change, open the page in a browser — the suite cannot catch this.
+**Where:** `client/src/lib/hooks/reviews.ts:47` (`useWhenActiveRunsEnd`)
+
 ### 2026-11-01 — A green `verify.mjs` run does not mean `pnpm build` passes: it never runs eslint
 **Symptom:** typecheck and all 408 client tests were green and every reviewer approved, then `pnpm build` failed with `'../../../BriefFileRef' import is restricted from being used by a pattern. Use the @/ alias instead of climbing three or more levels.  no-restricted-imports`.
 **Cause:** `scripts/verify.mjs` runs only typecheck and vitest for `client`; `next build` also runs eslint, and the repo's `no-restricted-imports` rule rejects relative imports three or more levels up — exactly what a nested `_components/<X>/_components/<Y>` reaching a sibling route component produces.

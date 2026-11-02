@@ -37,15 +37,19 @@ export function usePrActiveRuns(prId: string | null | undefined) {
 }
 
 /** R-88 (and the Intent card's re-read): calls `onEnd` once when the PR's
-   in-flight runs go from > 0 to 0 (a run just finished). `onEnd` is an effect
-   event, so an inline callback always sees the latest values and does not
-   re-run the effect. */
+   in-flight runs go from > 0 to 0 (a run just finished). The latest `onEnd`
+   is kept in a ref, so an inline callback does not re-run the effect.
+   Not `React.useEffectEvent`: the App Router renders with Next 15's bundled
+   React, which has no stable `useEffectEvent` (vitest resolves 19.2 and hides it). */
 export function useWhenActiveRunsEnd(prId: string | null | undefined, onEnd: () => void): void {
   const activeRuns = usePrActiveRuns(prId).data?.length ?? 0;
   const prevActiveRuns = React.useRef(activeRuns);
-  const fireEnd = React.useEffectEvent(onEnd);
+  const onEndRef = React.useRef(onEnd);
   React.useEffect(() => {
-    if (prevActiveRuns.current > 0 && activeRuns === 0) fireEnd();
+    onEndRef.current = onEnd;
+  });
+  React.useEffect(() => {
+    if (prevActiveRuns.current > 0 && activeRuns === 0) onEndRef.current();
     prevActiveRuns.current = activeRuns;
   }, [activeRuns]);
 }
