@@ -30,7 +30,9 @@ better, and you ask before you plan around it.
   the user) through your hand-back; the plan cites requirement IDs, it never
   restates or rewrites them.
 - **You write exactly one kind of file: `<specs-dir>/<slug>.md`** — the plan,
-  next to `<slug>.requirements.md`, same `<slug>`. `<specs-dir>` is `specs/` or
+  next to `<slug>.requirements.md`, same `<slug>` — plus its appendix
+  `<specs-dir>/<slug>.decisions.md` when the plan would outgrow its size cap
+  (see *The plan file*). `<specs-dir>` is `specs/` or
   one package's `specs/`. No `README.md`, no subfolders, no `src/`, no
   `.claude/`, no `docs/`, no `INSIGHTS.md`, no `package.json`, no lockfile.
   Before every `Write`/`Edit`, check the path against this rule: a name ending
@@ -158,8 +160,10 @@ step count, whether a contract changes). The answer shapes `## Execution`:
 
 - **Multi-agent** — one row per phase: which agent, which steps it owns, which
   file it reads, what it produces. Writers run **one at a time** — two agents in
-  one checkout destroy each other's work (`INSIGHTS.md:42`). Only read-only
-  agents (`plan-verifier`, `architecture-reviewer`) may run in parallel. Note
+  one checkout destroy each other's work (`INSIGHTS.md:66`) — unless you add a
+  **file-ownership table** (writer → paths it owns) with disjoint paths; then
+  `/run-plan` may run those writers in parallel. Read-only agents
+  (`plan-verifier`, `architecture-reviewer`) may always run in parallel. Note
   what `implementer` must leave for `test-writer` so tests are not written twice.
   The order is fixed and has a reason: the reviewers run **before** the tests,
   because a missing step or a file in the wrong ring found after `test-writer`
@@ -246,10 +250,22 @@ on it, and cite what you found:
 file (`specs/L05-x.requirements.md` → `specs/L05-x.md`). If `<slug>.md` already
 exists, you **edit it** — never write a second plan for the same feature.
 
+**Keep the plan under about 20k tokens.** Every downstream agent reads it cold,
+and `Read` refuses a file over 25k tokens — the L05 PR Brief plan hit
+`exceeds maximum allowed tokens (25000)` six times. Bulky material goes to an
+appendix, `<specs-dir>/<slug>.decisions.md`, that agents open on demand: the
+full `## Requirements check` table, the detailed rationale behind
+`## Decisions`, and test-case lists. The plan keeps a one-line summary of each
+(counts for the check, `ID → answer` for decisions, the suite and file for
+tests) and links the appendix in its header as `**Decisions:**`. Steps,
+`## Contract`, `## Constraints`, `## Execution`, `## Done when` and
+`## Risks / open questions` never move — they are what the agents execute.
+
 ````markdown
 # L0X — <feature> · implementation plan
 
 **Requirements:** `specs/L0X-<slug>.requirements.md` (Status: Approved) | the task, quoted below
+**Decisions:** `specs/L0X-<slug>.decisions.md` — only when the plan needed the appendix
 **Execution:** multi-agent | single-agent — chosen by the user, <date>
 **Branch:** `lesson/L0X-<slug>` (never `main`)
 
@@ -293,8 +309,8 @@ Derived from `.claude/skills/pr-self-review/references/routing.md`.
 ## Constraints
 | Constraint | Source |
 |---|---|
-| a service resolves its model through the container, not by importing `settings` | `server/INSIGHTS.md:110` |
-| a DB test must be named `*.it.test.ts` | `server/INSIGHTS.md:91` |
+| a service resolves its model through the container, not by importing `settings` | `server/INSIGHTS.md:128` |
+| a DB test must be named `*.it.test.ts` | `server/INSIGHTS.md:109` |
 
 ## Steps
 1. **<package>** · `<file>` · skill: `<skill>` · covers: R-01, R-03 — <what changes, concretely>
@@ -311,10 +327,15 @@ Multi-agent:
 | 1 | `implementer` | baseline, 1–6 | this file | baseline file + working tree + `verify.mjs` output | — |
 | 2 | `plan-verifier` — **gap** pass | all except 7–8 | this file | verdict per item | `architecture-reviewer` |
 | 2 | `architecture-reviewer` | — | the open change | findings | `plan-verifier` |
+| 2 | frontend lenses — `react-best-practices`, `next-best-practices` (only when `client/` changed) | — | the open change | findings | `plan-verifier`, `architecture-reviewer` |
 | 3 | `implementer` — **fix round(s)**, resumed via `SendMessage`, until no CRITICAL/WARNING/gap is open (max 3, then the user decides) | the findings | `.devdigest/cache/sdd/<slug>/findings.md` | fixes + `verify.mjs` output | — |
 | 4 | `test-writer` | 7–8 | this file, `## Done when` | test files + `verify.mjs` output | — |
 | 5 | `plan-verifier` — **final** pass | what phase 2 did not mark `done`, plus 7–8 | this file + the phase-2 report | verdict per item | — |
 | 6 | `doc-writer` | — | the shipped code | one `docs/` page | — |
+
+The frontend lenses run in phase 2, not only at the pre-PR gate: in the L05 PR
+Brief run 4 of the 8 pre-PR suggestions (F-29…F-32) were frontend-lens only and
+cost a fourth fix round after the gate.
 
 Phase 3 is skipped when phase 2 returned no gap and no CRITICAL/WARNING. Between
 phases 2 and 3 the main session writes both reports into the findings file — the

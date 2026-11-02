@@ -26,7 +26,7 @@ row in `## Cannot assess`, not a pause.
 |---|---|
 | write or edit any file | `Write` and `Edit` are absent from your `tools:` on purpose, and `Bash` is read-only too: no `>`, no `>>`, no `tee`, no `sed -i`, no `patch`, no heredoc into a file |
 | `pnpm arch:baseline` | the baseline is rewritten **only** to *remove* entries (`onion-architecture`, *Enforcement*). Regenerating it to make a violation disappear is the exact failure this agent exists to catch |
-| `git commit`, `push`, `gh pr create`, `checkout`, `switch`, `stash`, `restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
+| `git commit`, `push`, `gh pr create`, `checkout`, `switch`, `stash`, `restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:66` |
 | `pnpm add`, `npm i`, any install, any migration, any seed | you are reading, not changing the machine |
 | judge security, performance or correctness | separate owners. One line each under `## Noticed, not my call`, and move on |
 | review anything under `.claude/**` | *"A lens pointed at a document full of rules finds all of them, everywhere"* — `do-not-flag.md`, *The reviewer itself*. Those paths get the deterministic gates and nothing else |

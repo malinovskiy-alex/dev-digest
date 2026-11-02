@@ -23,7 +23,7 @@ plan becomes a line in `## Blocked`, not a pause.
 | touch `e2e/` | an e2e flow needs the whole stack plus the `agent-browser` CLI, and it is data rather than code (`e2e/AGENTS.md`, `TESTING.md` suite map). Out of scope for you |
 | weaken an assertion, loosen a matcher, add `skip`/`only`, widen a snapshot, or special-case production code to reach green | see `## Never do this to get green` |
 | `git commit`, `git push`, `gh pr create` | opening a PR is `/pr-self-review`'s job, in the parent session. You hand over a working tree |
-| `git checkout`, `git switch`, `git stash`, `git restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
+| `git checkout`, `git switch`, `git stash`, `git restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:66` |
 | `pnpm add`, `npm i`, anything that rewrites a lockfile | all five lockfiles are committed and load-bearing. In particular: **do not install `@testing-library/user-event`** — see `## Constraints` |
 | land work on `main` | `main` is the course starter. Lesson work lives on its branch |
 | edit `.claude/skills/**` | most are upstream (`skills-lock.json`); an edit there is overwritten on the next update |
@@ -98,12 +98,12 @@ Each of these has already cost someone a day in this repository.
 
 | Constraint | Source |
 |---|---|
-| a test that touches Postgres is named `*.it.test.ts`. No exceptions — any other name poisons the hermetic unit suite | `server/INSIGHTS.md:91` |
-| the integration suite **silently skips itself** under parallelism. Read the passed/skipped counts, not the exit code; re-run a skipped file alone; `--no-file-parallelism` is the fix | `server/INSIGHTS.md:72`, `:265` |
-| `pnpm typecheck` does **not** cover `server/test/` — a test file with a real type error passes it clean. Run the suite, not just the typecheck | `server/INSIGHTS.md:128` |
-| there is no `@testing-library/user-event` here. Use `fireEvent`, and `vi.useFakeTimers()` + `act()` for hover timing. Installing it would rewrite `client/pnpm-lock.yaml` — forbidden | `client/INSIGHTS.md:175` |
-| never `findByRole` for an element whose accessible name is not unique once the screen settles. Await a final-state element, then `getAllByRole(...)[n]` deliberately | `client/INSIGHTS.md:44` |
-| a shared component translating a new namespace makes **every** existing colocated test provider render the raw key while staying green. Add the namespace and assert the rendered string; watch stderr, not just the exit code | `client/INSIGHTS.md:117` |
+| a test that touches Postgres is named `*.it.test.ts`. No exceptions — any other name poisons the hermetic unit suite | `server/INSIGHTS.md:109` |
+| the integration suite **silently skips itself** under parallelism. Read the passed/skipped counts, not the exit code; re-run a skipped file alone; `--no-file-parallelism` is the fix | `server/INSIGHTS.md:90`, `:289` |
+| `pnpm typecheck` does **not** cover `server/test/` — a test file with a real type error passes it clean. Run the suite, not just the typecheck | `server/INSIGHTS.md:146` |
+| there is no `@testing-library/user-event` here. Use `fireEvent`, and `vi.useFakeTimers()` + `act()` for hover timing. Installing it would rewrite `client/pnpm-lock.yaml` — forbidden | `client/INSIGHTS.md:221` |
+| never `findByRole` for an element whose accessible name is not unique once the screen settles. Await a final-state element, then `getAllByRole(...)[n]` deliberately | `client/INSIGHTS.md:78` |
+| a shared component translating a new namespace makes **every** existing colocated test provider render the raw key while staying green. Add the namespace and assert the rendered string; watch stderr, not just the exit code | `client/INSIGHTS.md:151` |
 | query by role, label or text — never by class or test id. Upstream: `getByTestId` is *"only recommended for cases where you can't match by role or text"*, because *"the user cannot see (or hear) test ids"* | `client/AGENTS.md`; Testing Library query priority |
 | mock the outside world through `server/src/adapters/mocks.ts`. Hermetic by default | `TESTING.md`, *Conventions* |
 | "this function has no test" is **not** a finding. "this changed a seam and the suite that owns it has nothing for it" is | `do-not-flag.md`, *Test coverage* |
@@ -130,7 +130,7 @@ ran and what each one said**, verbatim.
 | `e2e/` | not yours |
 
 **For an integration run, quote the passed/skipped counts.** `3 passed, 6 skipped`
-is not a green run, and the exit code will not tell you (`server/INSIGHTS.md:72`).
+is not a green run, and the exit code will not tell you (`server/INSIGHTS.md:90`).
 The script flags it with `⚠`.
 
 ### Failures are compared, not counted
@@ -195,7 +195,7 @@ NEW FAIL src/components/FindingsPanel/FindingsPanel.test.tsx > hides low-confide
 ```
 
 For an integration run, quote the **passed/skipped counts**
-(`server/INSIGHTS.md:72`): `3 passed, 6 skipped` is not a green run.
+(`server/INSIGHTS.md:90`): `3 passed, 6 skipped` is not a green run.
 
 ## vs baseline
 <what failed before these tests existed, and therefore does not count>

@@ -36,6 +36,13 @@ it. That is the plan, and it is not yours.
 - **You never accept your own proposal.** A UX improvement or an edge-case
   behaviour you invented becomes a requirement only after the user said yes.
   Until then it lives in `## UX improvements` or `## Open questions`.
+- **No numeric limit the user did not ask for.** A timeout, a cap, a size or a
+  retry count that neither the request nor the designs set is never written
+  into a requirement or recorded as an *assumption* in `## Decisions` — not even
+  under *"just write it"*. It goes to `## Open questions` with the number you
+  would propose. In L05 PR Brief an unrequested 120 s reasoning timeout
+  overlapped the JobRunner wall clock and needed a plan invariant (D-39) and a
+  fix (F-12).
 - **`main` is the course starter.** Lesson specs target a `lesson/L<NN>-*` branch.
 - **The spec is written in English** — headings, requirements, tables, questions, like
   every other file in `specs/`. The user's language (often Ukrainian) is for talking to
