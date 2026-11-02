@@ -19,6 +19,12 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-11-01 — A green `verify.mjs` run does not mean `pnpm build` passes: it never runs eslint
+**Symptom:** typecheck and all 408 client tests were green and every reviewer approved, then `pnpm build` failed with `'../../../BriefFileRef' import is restricted from being used by a pattern. Use the @/ alias instead of climbing three or more levels.  no-restricted-imports`.
+**Cause:** `scripts/verify.mjs` runs only typecheck and vitest for `client`; `next build` also runs eslint, and the repo's `no-restricted-imports` rule rejects relative imports three or more levels up — exactly what a nested `_components/<X>/_components/<Y>` reaching a sibling route component produces.
+**Rule:** after creating nested client components, run `pnpm exec next lint --dir src` before calling a client stream done; import across three or more levels through `@/…`.
+**Where:** `client/eslint.config.mjs:87` (`no-restricted-imports`), `scripts/verify.mjs:29` (client = typecheck + tests only)
+
 ### 2026-11-01 — Sanitising markdown links with a source regex cannot be made complete
 **Symptom:** after three rounds of `scrubProse` fixes, a security re-check still produced clickable links from `&#104;ttps://x`, `https\://x`, `_https://x_`, `\www.x` and from code spans with escaped or unequal backtick runs.
 **Cause:** remark-gfm finds autolinks in the *decoded* text (after entities and backslash escapes are resolved) and tokenises code spans by CommonMark's backtick-run rules; a regex over the raw source sees neither.
@@ -200,6 +206,12 @@ typecheck both packages.
 
 ## Tool & Library Notes
 
+### 2026-11-01 — TanStack `refetchInterval` keyed on response data keeps polling while the fetch fails
+**Symptom:** a GET that started failing (5xx) would be polled every 2 s indefinitely.
+**Cause:** after a failed refetch TanStack keeps the last successful `data`, which still says `generating: true`, so a `refetchInterval` that reads only `q.state.data` never returns `false`.
+**Rule:** gate polling on the query status too — `q.state.status !== "error" && q.state.data?.<flag>` — and render the error (with Retry) even when older data is cached.
+**Where:** `client/src/lib/hooks/brief.ts:29` (`usePrBrief`)
+
 ### 2026-11-01 — next-intl `format.relativeTime(date)` without `now` reports an error on every render
 **Symptom:** the tour header logged an IntlError (`ENVIRONMENT_FALLBACK`, "The `now` parameter wasn't provided") on each 2 s poll, and "last refreshed 2 hours ago" never changed. Component tests did not show it because they pass `now` to the provider.
 **Cause:** the app's `NextIntlClientProvider` sets no global `now`; use-intl 3.26 then falls back to the current time and calls `onError` each time.
@@ -221,6 +233,12 @@ timing use `vi.useFakeTimers()` + `act(() => vi.advanceTimersByTime(ms))`.
 
 ## Recurring Errors & Fixes
 
+### 2026-11-01 — Stopping `pnpm dev` on Windows can leave `next dev` listening on :3000
+**Symptom:** the user stopped `pnpm dev`, yet `netstat -ano | findstr :3000` still showed `LISTENING` for a `node.exe` (2 GB, hours of CPU), so `pnpm build` ran next to a live dev server — the `.next` clash in the 2026-09-20 entry under What Doesn't Work.
+**Cause:** on Windows, interrupting the pnpm wrapper does not always reach the child `next dev` node process.
+**Rule:** before `pnpm build`, check the port, not the terminal: `netstat -ano | findstr :3000`; if a PID still listens, `taskkill /PID <pid> /F` (with the user's OK) and restart `pnpm dev` after the build.
+**Where:** `client/package.json:6` (`dev` script); see the 2026-09-20 "`pnpm build` kills a running `pnpm dev`" entry in this file
+
 ### 2026-09-17 — "Updating a style property during rerender (borderColor)"
 **Symptom:** React logs `Updating a style property during rerender (borderColor)
 when a conflicting property is set (borderLeftColor)` to **stderr** while the
@@ -241,6 +259,7 @@ the shorthand/longhand mix React warns about — the existing comment claiming
 
 ## Session Notes
 
+- 2026-11-01 — L05 PR Brief (client): `pnpm build` failed on lint after a green verify (eslint is not in verify.mjs); orphaned `next dev` on :3000; polling gated on query status.
 - 2026-11-01 — L05 Onboarding Tour via spec → plan (+ Sonnet cross-model review) → /run-plan: 4 pre-PR rounds; tour prose links made inert at render after regex scrubbing kept leaking.
 
 - 2026-09-16 — added the Cost column to the PR list, tokens+cost to the

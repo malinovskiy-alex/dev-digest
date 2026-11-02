@@ -39,6 +39,12 @@ payload the test asserts on)
 
 ## What Doesn't Work
 
+### 2026-11-01 — Writing regex source through a shell heredoc can turn `\b` into a backspace byte
+**Symptom:** the secret-mask regexes in the brief module silently stopped matching; the file contained literal `0x08` characters where `\b` was intended.
+**Cause:** the edit was scripted through a shell heredoc / printf-style step, which interpreted `\b` as an escape before the text reached the file.
+**Rule:** write code containing backslash escapes (regexes, string escapes) with the Edit/Write tools, never through a shell heredoc or `sed`; after any scripted edit, grep the file for control characters (`grep -nP "[\x00-\x08]" <file>`).
+**Where:** repo-wide tooling quirk; it bit in `server/src/modules/brief/grounding/helpers.ts:195` (secret masks)
+
 ### 2026-10-30 — relaying the user's approval to a subagent does not unlock a denied command
 **Symptom:** `implementer` was told the user approved `npm i -g agent-browser && agent-browser install`; the auto-mode permission classifier still denied it ("Code from External"), and the e2e suite could not run.
 **Cause:** permission decisions are per session and are not granted by a message from the coordinator; a coordinator running the same command itself would be laundering the denial.
@@ -216,6 +222,7 @@ whole-file diff means you flipped the endings, not that you edited the file.
 
 ## Session Notes
 
+- 2026-11-01 — L05 PR Brief via /run-plan (server ∥ client streams, 4 fix rounds, 32 findings); a heredoc-written regex lost its `\b`.
 - 2026-11-01 — L05 Onboarding Generator through the full SDD chain, one commit per stage; pre-PR lenses found 23 issues the in-loop reviewers did not.
 
 - 2026-09-15 — built the `engineering-insights` skill and restructured all five
