@@ -11,7 +11,8 @@
 import React from "react";
 import { useIsFetching } from "@tanstack/react-query";
 import { RESTORE_MAX_WAIT_MS } from "./constants";
-import { disarmOverviewBack, sessionStore, takeOverviewScroll } from "./helpers";
+import { disarmOverviewBack } from "./backListener";
+import { sessionStore, takeOverviewScroll } from "./helpers";
 
 export function useOverviewScrollRestore(prId: string): void {
   const fetching = useIsFetching();

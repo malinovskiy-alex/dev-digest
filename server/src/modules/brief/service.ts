@@ -38,9 +38,9 @@ import type {
 } from '@devdigest/shared';
 import { sectionMeta } from '@devdigest/reviewer-core';
 import type { Db } from '../../db/client.js';
+import { mapBounded } from '../../platform/concurrency.js';
 import { AppError, ConfigError, NotFoundError } from '../../platform/errors.js';
 import { logPromptAssembly } from '../../platform/prompt-log.js';
-import { renderPrompt } from '../../platform/prompts.js';
 import { TimeoutError, withTimeout } from '../../platform/resilience.js';
 import {
   BRIEF_JOB_KIND,
@@ -132,24 +132,15 @@ export interface BriefServiceDeps {
   /** The app logger: a generation outlives its request. */
   logger: BriefLogger;
   promptLogVerbose: boolean;
+  /**
+   * Loads and interpolates a prompt template from `src/prompts/` — the
+   * file-reading `platform/prompts.ts`, injected so this Ring-2 service does
+   * not import a Ring-3 file (F-26).
+   */
+  renderPrompt: (name: string, vars: Record<string, string>) => Promise<string>;
   now?: () => Date;
   /** Overrides the outer wall around the model call (tests). */
   generationTimeoutMs?: number;
-}
-
-/** Runs `fn` over `items` with at most `limit` in flight, keeping order (F-08). */
-async function mapBounded<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next;
-      next += 1;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
 }
 
 /** What the pre-checks resolved, handed from `startGeneration` to the job handler (D-7). */
@@ -360,7 +351,7 @@ export class BriefService {
       const pull = await this.requirePull(workspaceId, prId);
       const facts = await this.collect(workspaceId, pull);
       specSkips = facts.specSkips;
-      const system = await renderPrompt(BRIEF_PROMPT_FILE, {});
+      const system = await this.deps.renderPrompt(BRIEF_PROMPT_FILE, {});
       fitted = fitBudget(facts, system.length);
       logPromptAssembly(
         this.deps.logger,

@@ -32,12 +32,16 @@ export function SmartDiffGroup({
   const holdsFocus = !!focus && files.some((f) => f.path === focus.path);
   // Only a target not yet handled opens the group; after that the user's
   // collapse sticks (F-07).
-  const mustOpen = holdsFocus && !focus?.handled;
-  const [open, setOpen] = React.useState(meta.defaultOpen || mustOpen);
-  // A target that arrives later (or changes) still opens a default-closed group.
-  React.useEffect(() => {
-    if (mustOpen) setOpen(true);
-  }, [mustOpen, focus?.path, focus?.line]);
+  const openFor = holdsFocus && !focus?.handled ? `${focus.path}:${focus.line ?? ""}` : null;
+  const [open, setOpen] = React.useState(meta.defaultOpen || openFor !== null);
+  // A target that arrives later (or changes) still opens a default-closed
+  // group — adjusted during render against the previous target, not in an
+  // effect (F-31).
+  const [openedFor, setOpenedFor] = React.useState(openFor);
+  if (openFor !== openedFor) {
+    setOpenedFor(openFor);
+    if (openFor) setOpen(true);
+  }
   const withFindings = filesWithFindings(group);
 
   return (

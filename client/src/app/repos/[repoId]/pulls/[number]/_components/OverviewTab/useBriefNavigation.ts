@@ -8,7 +8,8 @@
 import React from "react";
 import type { BriefNavigation } from "@/lib/hooks/brief";
 import { NOT_IN_DIFF_MS } from "./constants";
-import { armOverviewBack, saveOverviewScroll, sessionStore } from "./helpers";
+import { armOverviewBack } from "./backListener";
+import { saveOverviewScroll, sessionStore } from "./helpers";
 
 export function useBriefNavigation({
   prId,

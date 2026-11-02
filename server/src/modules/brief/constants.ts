@@ -34,6 +34,12 @@ export const MAX_FOCUS = 6;
 /** R-35: the summary is cut to this many characters. */
 export const SUMMARY_MAX_CHARS = 600;
 
+/** F-27: caps on model-written risk and focus text (stored and served; the schema stays constraint-free). */
+export const RISK_KIND_MAX_CHARS = 40;
+export const RISK_TITLE_MAX_CHARS = 200;
+export const RISK_EXPLANATION_MAX_CHARS = 1_000;
+export const FOCUS_REASON_MAX_CHARS = 300;
+
 /** R-64: the linked issue's body is cut to this many characters before the budget. */
 export const ISSUE_BODY_MAX_CHARS = 4_000;
 /** R-21, R-24: appended to a text the budget cut. */

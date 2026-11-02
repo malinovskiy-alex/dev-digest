@@ -1,8 +1,5 @@
 /** Constants for the PR Brief block (L05). */
 
-/** Settings screen for API keys (R-39, R-68). */
-export const API_KEYS_HREF = "/settings/api-keys";
-
 /** Error code of a generation rejected for a missing key (R-39, D-8). */
 export const NO_KEY_CODE = "brief_no_api_key";
 

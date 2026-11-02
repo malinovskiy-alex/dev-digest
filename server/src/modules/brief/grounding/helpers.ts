@@ -17,6 +17,10 @@ import {
   MAX_FOCUS,
   MAX_RISKS,
   STORE_FAILED_MESSAGE,
+  FOCUS_REASON_MAX_CHARS,
+  RISK_EXPLANATION_MAX_CHARS,
+  RISK_KIND_MAX_CHARS,
+  RISK_TITLE_MAX_CHARS,
   SUMMARY_MAX_CHARS,
   TIMEOUT_MESSAGE,
 } from '../constants.js';
@@ -149,7 +153,15 @@ export function groundAnswer(answer: BriefModelAnswer, ctx: GroundingContext): G
       dropped.risks += 1;
       continue;
     }
-    risks.push({ ...risk, file_refs: refs });
+    // Model text is stored as-is apart from a length cap (F-27): the strict
+    // json_schema carries no `maxLength`, so the cap is applied here.
+    risks.push({
+      kind: sliceWhole(risk.kind, RISK_KIND_MAX_CHARS),
+      title: sliceWhole(risk.title, RISK_TITLE_MAX_CHARS),
+      explanation: sliceWhole(risk.explanation, RISK_EXPLANATION_MAX_CHARS),
+      severity: risk.severity,
+      file_refs: refs,
+    });
   }
 
   const focus = answer.review_focus.filter((item) => {
@@ -164,7 +176,7 @@ export function groundAnswer(answer: BriefModelAnswer, ctx: GroundingContext): G
   const review_focus = focus.slice(0, MAX_FOCUS).map((item) => {
     const snapped = snapFocusLine(item, ctx);
     if (snapped.moved) focusLinesMoved += 1;
-    return { file: item.file, line: snapped.line, reason: item.reason };
+    return { file: item.file, line: snapped.line, reason: sliceWhole(item.reason, FOCUS_REASON_MAX_CHARS) };
   });
 
   return {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Provider } from './knowledge.js';
 
 /**
  * PR Brief building blocks: Intent, Blast radius, Risks, PR History,
@@ -296,7 +297,7 @@ export const PrBriefView = z.object({
   last_failure: BriefFailure.nullable(),
   key_available: z.boolean(),
   /** The "Risk Brief" feature model; names the provider in "No API key for <provider>" (R-68). */
-  feature_model: z.object({ provider: z.string(), model: z.string() }),
+  feature_model: z.object({ provider: Provider, model: z.string() }),
 });
 export type PrBriefView = z.infer<typeof PrBriefView>;
 

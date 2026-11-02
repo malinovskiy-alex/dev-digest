@@ -22,6 +22,7 @@ import type {
 } from '@devdigest/shared';
 import { MockLLMProvider } from '../src/adapters/mocks.js';
 import { AppError, ConfigError, NotFoundError } from '../src/platform/errors.js';
+import { renderPrompt } from '../src/platform/prompts.js';
 import { FailingLLM, GatedLLM } from './helpers/onboarding-llm.js';
 
 // ---------------------------------------------------------------------------
@@ -253,6 +254,7 @@ function setup(o: Setup = {}) {
     jobs,
     logger,
     promptLogVerbose: false,
+    renderPrompt,
     now: () => new Date('2026-11-01T10:00:00.000Z'),
     generationTimeoutMs: o.generationTimeoutMs,
   });

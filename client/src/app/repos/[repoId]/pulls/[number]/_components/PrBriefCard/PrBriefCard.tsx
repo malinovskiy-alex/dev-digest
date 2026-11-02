@@ -17,7 +17,7 @@ import type { PrBrief, PrBriefView } from "@devdigest/shared";
 import { usePrBrief, useGenerateBrief, type BriefNavigation } from "@/lib/hooks/brief";
 import { BriefHeader } from "./_components/BriefHeader";
 import { ReviewFocusList } from "./_components/ReviewFocusList";
-import { API_KEYS_HREF } from "./constants";
+import { API_KEYS_HREF } from "@/lib/settings-urls";
 import { isNoKeyError, missingItems, regenerationFailure, viewSignature } from "./helpers";
 import { cx } from "./styles";
 

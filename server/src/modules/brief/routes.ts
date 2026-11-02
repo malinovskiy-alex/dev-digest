@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { BriefGenerateAccepted, PrBriefView } from '@devdigest/shared';
+import { renderPrompt } from '../../platform/prompts.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { GENERATE_RATE_LIMIT_MAX, GENERATE_RATE_LIMIT_WINDOW } from './constants.js';
@@ -43,6 +44,7 @@ export default async function briefRoutes(appBase: FastifyInstance) {
     // The app logger, not `req.log`: a generation outlives its request.
     logger: app.log,
     promptLogVerbose: c.config.promptLogVerbose,
+    renderPrompt,
   });
 
   app.get('/pulls/:id/brief', { schema: { params: IdParams, response: { 200: PrBriefView } } }, async (req) => {

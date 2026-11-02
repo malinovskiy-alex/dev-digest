@@ -81,10 +81,14 @@ export function FileCard({
   const pendingKey = focus && !focus.handled ? keyOf(focus) : null;
   const onHandled = focus?.onHandled;
 
-  // A new focus target forces the file open (a file > 200 lines starts closed).
-  React.useEffect(() => {
+  // A new focus target forces the file open (a file > 200 lines starts
+  // closed). Adjusted during render, not in an effect: the previous target is
+  // remembered and compared (F-31).
+  const [openedFor, setOpenedFor] = React.useState(pendingKey);
+  if (pendingKey !== openedFor) {
+    setOpenedFor(pendingKey);
     if (pendingKey) setOpen(true);
-  }, [pendingKey]);
+  }
 
   // Once open, bring the target into view, move keyboard focus to it, and
   // report it handled — once per target.
@@ -95,9 +99,7 @@ export function FileCard({
     el.scrollIntoView?.({ block: "center" });
     el.focus({ preventScroll: true });
     onHandled?.();
-    // `onHandled` is a fresh closure each render; the key decides.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingKey, open, targetIndex]);
+  }, [pendingKey, open, targetIndex, onHandled]);
 
   // Split this file's comment threads and review findings into ones we can
   // anchor to a rendered line vs. the rest (outdated comments; findings whose

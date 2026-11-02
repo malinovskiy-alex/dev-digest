@@ -57,8 +57,11 @@ export function DiffTab({ prId, files, canComment, repoFullName, headSha, focus 
   // reload starts fresh, so the target acts again (R-59).
   const [handledFocus, setHandledFocus] = React.useState<string | null>(null);
   const targetKey = focus ? focusKey(focus) : null;
+  // Stable per target, so FileCard's scroll effect can list it as a
+  // dependency without re-running on every render (F-32).
+  const onFocusHandled = React.useCallback(() => setHandledFocus(targetKey), [targetKey]);
   const diffFocus: DiffFocus | null = focus
-    ? { ...focus, handled: handledFocus === targetKey, onHandled: () => setHandledFocus(targetKey) }
+    ? { ...focus, handled: handledFocus === targetKey, onHandled: onFocusHandled }
     : null;
 
   // Derived, never stored. While the smart diff loads, a placeholder stands in
