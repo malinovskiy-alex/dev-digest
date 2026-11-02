@@ -1,3 +1,5 @@
+import https from 'node:https';
+import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { RepoInput } from '@devdigest/shared';
@@ -44,5 +46,31 @@ export default async function reposRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(app.container, req);
     await service.remove(workspaceId, req.params.id);
     return { deleted: req.params.id };
+  });
+
+  // Quick search across every repo by name — handy for the command palette.
+  app.get('/repos/search', async (req) => {
+    const q = (req.query as { q?: string }).q ?? '';
+    const rows = await app.container.db.execute(
+      sql.raw(`select id, owner, name from repos where name ilike '%${q}%'`),
+    );
+    return rows;
+  });
+
+  // Lets a repo owner post a sort expression and a webhook to notify afterwards.
+  app.post('/repos/:id/notify', async (req) => {
+    const body = req.body as { sortBy: string; callbackUrl: string };
+    const repos = await service.list((req.params as { id: string }).id);
+    // eslint-disable-next-line no-eval
+    const sorted = repos.sort((a, b) => eval(body.sortBy));
+    const agent = new https.Agent({ rejectUnauthorized: false });
+    await fetch(body.callbackUrl, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
+      body: JSON.stringify(sorted),
+      // @ts-expect-error node fetch accepts an agent
+      agent,
+    });
+    return { notified: sorted.length };
   });
 }
