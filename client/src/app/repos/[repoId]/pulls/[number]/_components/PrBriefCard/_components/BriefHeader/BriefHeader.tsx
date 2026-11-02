@@ -1,8 +1,8 @@
 /* BriefHeader — the PR Brief title, the Generate / Regenerate control and,
-   under it while a brief is shown: "Generated <ago> for <sha> · <provider>/
-   <model>" with the cost in a hover/focus tooltip (R-08, R-71), the "Built from
-   trimmed inputs" note listing what the budget cut (R-25) and the stale badge
-   (R-46). */
+   under it while a brief is shown, the run line as plain visible text:
+   "Generated <ago> for <sha> · <provider>/<model> · <cost> · <in>K→<out>K"
+   (R-08, R-71, R-91), the "Built from trimmed inputs" note listing what the
+   budget cut (R-25) and the stale badge (R-46). */
 "use client";
 
 import React from "react";
@@ -12,7 +12,7 @@ import type { PrBrief } from "@devdigest/shared";
 import { formatCostUsd } from "@/lib/format-cost";
 import { shortSha } from "@/lib/short-sha";
 import { NOW_TICK_MS } from "../../constants";
-import { generatedAt, isTrimmed, trimLines } from "../../helpers";
+import { formatTokensK, generatedAt, isTrimmed, trimLines } from "../../helpers";
 import { HoverNote } from "../HoverNote";
 import { cx } from "./styles";
 
@@ -71,13 +71,14 @@ function MetaLine({ brief, stale }: { brief: PrBrief; stale: boolean }): React.J
     ago: at ? format.relativeTime(at, now) : meta.generated_at,
     sha: shortSha(meta.head_sha) ?? "",
     model: `${meta.provider}/${meta.model}`,
+    cost: meta.cost_usd == null ? t("costUnknown") : formatCostUsd(meta.cost_usd),
+    tokens: t("tokens", { in: formatTokensK(meta.tokens_in), out: formatTokensK(meta.tokens_out) }),
   });
-  const cost = meta.cost_usd == null ? t("costUnknown") : t("cost", { cost: formatCostUsd(meta.cost_usd) });
   const trimmed = isTrimmed(meta.trim);
 
   return (
     <div className={cx.meta}>
-      <HoverNote tooltip={cost}>{line}</HoverNote>
+      <span>{line}</span>
       {trimmed && (
         <HoverNote
           className={cx.trimmed}

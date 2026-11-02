@@ -21,4 +21,7 @@ export const cx = {
   body: "flex flex-col gap-4",
   /** Model text: plain text with its line breaks kept (D-28). */
   summary: "m-0 whitespace-pre-line text-[14px] leading-relaxed text-[var(--text-primary)]",
+  /** The brief's summary as the review banner's text: plain text (D-28), the banner's summary look. */
+  bannerText: "m-0 mt-2 whitespace-pre-line text-[14px] leading-[1.55] text-[var(--text-secondary)]",
+  bannerSkeleton: "mt-2 flex flex-col gap-2",
 } as const;

@@ -10,8 +10,8 @@ import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-li
 import { NextIntlClientProvider, type AbstractIntlMessages } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PrBrief, PrBriefView } from "@devdigest/shared";
-import type { BriefNavigation } from "@/lib/hooks/brief";
 import brief from "../../../../../../../../messages/en/brief.json";
+import prReview from "../../../../../../../../messages/en/prReview.json";
 import shell from "../../../../../../../../messages/en/shell.json";
 import common from "../../../../../../../../messages/en/common.json";
 import { PrBriefCard } from "./PrBriefCard";
@@ -84,14 +84,29 @@ const apiError = (status: number, code: string, message: string) => respond({ er
 const method = (c: unknown[]) => (c[1] as RequestInit | undefined)?.method ?? "GET";
 const posts = () => fetchMock.mock.calls.filter((c) => method(c) === "POST");
 
-/** GET answers `get()`, POST answers `post()`. */
+// The verdict banner's reads (reviews, runs, active runs); empty by default.
+let reviews: () => Promise<Response>;
+let active: () => Promise<Response>;
+let runs: () => Promise<Response>;
+
+/** GET `/brief` answers `get()`, the banner's GETs answer their fixtures, POST answers `post()`. */
 function serve(get: () => Promise<Response>, post: () => Promise<Response> = () => respond({ generating: true }, 202)) {
-  fetchMock.mockImplementation((_u: string, init?: RequestInit) => (init?.method === "POST" ? post() : get()));
+  fetchMock.mockImplementation((u: string, init?: RequestInit) => {
+    if (init?.method === "POST") return post();
+    const url = String(u);
+    if (url.endsWith("/reviews")) return reviews();
+    if (url.endsWith("/runs/active")) return active();
+    if (url.endsWith("/runs")) return runs();
+    return get();
+  });
 }
 
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  reviews = () => respond([]);
+  active = () => respond([]);
+  runs = () => respond([]);
 });
 afterEach(() => {
   cleanup();
@@ -100,21 +115,14 @@ afterEach(() => {
 
 // ---- render ---------------------------------------------------------------
 
-const CHANGED = new Set(["src/api/public/webhooks.ts"]);
-let activate: ReturnType<typeof vi.fn>;
 let qc: QueryClient;
 
-function nav(): BriefNavigation {
-  return { activate, noticeKey: null, inDiff: (p) => CHANGED.has(p) };
-}
-
-function renderCard(messages: AbstractIntlMessages = { brief, shell, common }) {
+function renderCard(messages: AbstractIntlMessages = { brief, prReview, shell, common }) {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  activate = vi.fn();
   return render(
     <QueryClientProvider client={qc}>
       <NextIntlClientProvider locale="en" timeZone="UTC" now={NOW} messages={messages}>
-        <PrBriefCard prId="pr-1" nav={nav()} />
+        <PrBriefCard prId="pr-1" headSha={HEAD} lastReviewedSha={null} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
   );
@@ -155,12 +163,12 @@ describe("PrBriefCard — states", () => {
     expect(String(posts()[0]![0])).toMatch(/\/pulls\/pr-1\/brief\/generate$/);
   });
 
-  it("R-05, F-16 — generating: Summary and Review focus skeletons in the block, control disabled 'Generating…', no Risk-areas skeleton here", async () => {
+  it("R-05, R-93, F-16 — generating: Summary skeleton in the block, no Review focus here, control disabled 'Generating…', no Risk-areas skeleton here", async () => {
     serve(() => respond(view({ generating: true, brief: BRIEF })));
     renderCard();
     const skeleton = await within(card()).findByRole("status", { name: "Generating…" });
     expect(within(skeleton).getByText("Summary")).toBeInTheDocument();
-    expect(within(skeleton).getByText("Review focus — read these first")).toBeInTheDocument();
+    expect(within(card()).queryByText("Review focus — read these first")).not.toBeInTheDocument();
     // F-16: the Risk-areas skeleton lives in the Intent card slot, not in this block.
     expect(within(card()).queryByText("Risk areas")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generating…" })).toBeDisabled();
@@ -186,11 +194,10 @@ describe("PrBriefCard — states", () => {
     serve(() => apiError(500, "internal", "API restarted"));
     qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     qc.setQueryData(["pr-brief", "pr-1"], view({ generating: true }));
-    activate = vi.fn();
     render(
       <QueryClientProvider client={qc}>
-        <NextIntlClientProvider locale="en" timeZone="UTC" now={NOW} messages={{ brief, shell, common }}>
-          <PrBriefCard prId="pr-1" nav={nav()} />
+        <NextIntlClientProvider locale="en" timeZone="UTC" now={NOW} messages={{ brief, prReview, shell, common }}>
+          <PrBriefCard prId="pr-1" headSha={HEAD} lastReviewedSha={null} />
         </NextIntlClientProvider>
       </QueryClientProvider>,
     );
@@ -203,32 +210,13 @@ describe("PrBriefCard — states", () => {
 });
 
 describe("PrBriefCard — a stored brief", () => {
-  it("R-08, R-48, R-51, R-71 — header line, cost tooltip on a focusable trigger, summary, and Review focus in model order", async () => {
+  it("R-08, R-48, R-71 — header line with cost and tokens, and the summary", async () => {
     serve(() => respond(view({ brief: BRIEF })));
     renderCard();
     expect(await briefShown()).toBeInTheDocument();
 
     // R-08: relative time from an explicit now, short (7-char) SHA, provider/model.
-    const line = screen.getByText("Generated 2 hours ago for abc1234 · openai/gpt-4.1");
-    // R-71, D-26: hover AND focus — the trigger is in the tab order and described by the tooltip.
-    expect(line).toHaveAttribute("tabindex", "0");
-    expect(line).toHaveAccessibleDescription("Cost of this generation: $0.014");
-
-    // R-51: heading, count badge, one row per item in the model's order.
-    const heading = screen.getByRole("heading", { name: /Review focus — read these first/ });
-    expect(heading).toHaveTextContent("Review focus — read these first2");
-    const items = within(screen.getByRole("list")).getAllByRole("listitem");
-    expect(items).toHaveLength(2);
-    expect(within(items[0]!).getByRole("button", { name: "Open src/api/public/webhooks.ts at line 61" })).toBeInTheDocument();
-    expect(items[0]).toHaveTextContent("src/api/public/webhooks.ts:61—Signature compare must be constant-time.");
-    expect(within(items[1]!).getByRole("button", { name: "Open src/billing/invoice.ts at line 7" })).toBeInTheDocument();
-    // R-76: the second file is not in the PR's diff.
-    expect(within(items[1]!).getByText("via blast radius")).toBeInTheDocument();
-    expect(within(items[0]!).queryByText("via blast radius")).not.toBeInTheDocument();
-
-    // a click hands path + line to the Overview's navigation (R-53)
-    fireEvent.click(within(items[1]!).getByRole("button", { name: "Open src/billing/invoice.ts at line 7" }));
-    expect(activate).toHaveBeenCalledWith(expect.any(String), "src/billing/invoice.ts", 7);
+    expect(screen.getByText("Generated 2 hours ago for abc1234 · openai/gpt-4.1 · $0.014 · 3.1K→0.4K")).toBeInTheDocument();
 
     // nothing trimmed, nothing missing, not stale
     expect(screen.queryByText("Built from trimmed inputs")).not.toBeInTheDocument();
@@ -241,7 +229,7 @@ describe("PrBriefCard — a stored brief", () => {
     serve(() => respond(view({ brief: withMeta({ cost_usd: null }) })));
     renderCard();
     await briefShown();
-    expect(screen.getByText(/^Generated 2 hours ago/)).toHaveAccessibleDescription("cost unknown");
+    expect(screen.getByText("Generated 2 hours ago for abc1234 · openai/gpt-4.1 · cost unknown · 3.1K→0.4K")).toBeInTheDocument();
   });
 
   it("R-08 — a brief generated after the page's `now` reads 'now', never 'in N seconds'", async () => {
@@ -249,7 +237,7 @@ describe("PrBriefCard — a stored brief", () => {
     serve(() => respond(view({ brief: withMeta({ generated_at: "2026-11-01T12:00:40.000Z" }) })));
     renderCard();
     await briefShown();
-    expect(screen.getByText("Generated now for abc1234 · openai/gpt-4.1")).toBeInTheDocument();
+    expect(screen.getByText("Generated now for abc1234 · openai/gpt-4.1 · $0.014 · 3.1K→0.4K")).toBeInTheDocument();
     expect(screen.queryByText(/Generated in /)).not.toBeInTheDocument();
   });
 
@@ -332,31 +320,20 @@ describe("PrBriefCard — a stored brief", () => {
     expect(posts()).toHaveLength(0); // R-47: stale never regenerates on its own
   });
 
-  it("R-52 — an empty Review focus says so, with a zero count", async () => {
-    serve(() => respond(view({ brief: { ...BRIEF, review_focus: [] } })));
-    renderCard();
-    await briefShown();
-    expect(screen.getByText("No review focus items.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Review focus — read these first/ })).toHaveTextContent(/0$/);
-  });
-
   it("R-36, D-28 — model text with HTML and markdown renders as literal text: no img, no link, no script run", async () => {
     const summary = 'Ships <img src=x onerror="window.__pwned=1"> and [x](http://e) **bold**';
-    const reason = "<a href=\"http://evil\">click</a> [docs](http://e)";
     serve(() =>
       respond(
         view({
           brief: {
             ...BRIEF,
             summary,
-            review_focus: [{ file: "src/api/public/webhooks.ts", line: 61, reason }],
           },
         }),
       ),
     );
     renderCard();
     expect(await screen.findByText(summary)).toBeInTheDocument();
-    expect(screen.getByText(reason)).toBeInTheDocument();
     expect(card().querySelector("img")).toBeNull();
     expect(within(card()).queryAllByRole("link")).toHaveLength(0);
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
@@ -399,7 +376,9 @@ describe("PrBriefCard — keys and failures", () => {
     expect(box).toHaveTextContent(message);
     expect(within(box).getByRole("link", { name: "Settings → API Keys" })).toHaveAttribute("href", "/settings/api-keys");
     // the refetch that follows the rejection does not hide it
-    await waitFor(() => expect(fetchMock.mock.calls.filter((c) => method(c) === "GET").length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter((c) => method(c) === "GET" && String(c[0]).endsWith("/brief")).length).toBeGreaterThan(1),
+    );
     expect(screen.getByRole("alert")).toHaveTextContent(message);
 
     // F-13: once the view changes (a brief arrives), the rejection is stale and goes away.

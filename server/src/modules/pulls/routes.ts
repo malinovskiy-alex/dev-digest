@@ -273,7 +273,8 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         })
         .where(eq(t.pullRequests.id, pr.id));
 
-      return { ...detail, id: pr.id };
+      // R-95 — after the spread, so the DB column wins over anything the adapter sends.
+      return { ...detail, id: pr.id, last_reviewed_sha: pr.lastReviewedSha ?? null };
     } catch (err) {
       app.log.warn({ err }, 'GitHub PR detail refresh skipped (no token / offline); serving persisted detail');
       const files = await container.db.select().from(t.prFiles).where(eq(t.prFiles.prId, pr.id));
@@ -293,6 +294,8 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: pr.openedAt?.toISOString() ?? null,
         updated_at: pr.updatedAt?.toISOString() ?? null,
         body: pr.body ?? null,
+        // R-95 — head SHA of the last successful review run, null when never reviewed.
+        last_reviewed_sha: pr.lastReviewedSha ?? null,
         files: files.map((f) => ({
           path: f.path,
           additions: f.additions,

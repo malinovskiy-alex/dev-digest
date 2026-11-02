@@ -1,4 +1,5 @@
 /** Helpers for the PR Overview tab. The storage is passed in, so these stay testable without a browser; the Back listeners live in backListener.ts. */
+import type { PrBriefView, ReviewFocusItem } from "@devdigest/shared";
 import { OVERVIEW_SCROLL_KEY_PREFIX } from "./constants";
 
 /** What is saved before a focus navigation: the scroll offset, and whether the user came back with Back. */
@@ -62,4 +63,18 @@ export function sessionStore(): Storage | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * What the Review focus card shows (R-92, R-93, R-100): nothing when the brief
+ * read failed or there is no brief, a skeleton while a generation runs, else
+ * the brief's items. Keys on the read's `generating`, like the Risk-areas slot.
+ */
+export function reviewFocusCardState(
+  view: PrBriefView | undefined,
+  isError: boolean,
+): "hidden" | "generating" | ReviewFocusItem[] {
+  if (isError || !view) return "hidden";
+  if (view.generating) return "generating";
+  return view.brief ? view.brief.review_focus : "hidden";
 }

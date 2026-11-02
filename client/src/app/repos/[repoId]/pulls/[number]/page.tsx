@@ -160,6 +160,7 @@ export default function PRDetailPage() {
             repoId={repoId}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            lastReviewedSha={pr.last_reviewed_sha ?? null}
             changedPaths={changedPaths}
             onOpenInDiff={openInDiff}
           />
@@ -189,6 +190,8 @@ export default function PRDetailPage() {
               // refetchReviews() is exact-key, so the nested smart-diff query
               // (its group finding counts) needs its own refresh.
               if (prId) qc.invalidateQueries({ queryKey: smartDiffKey(prId) });
+              // R-94: the PR read carries `last_reviewed_sha`, which the run just moved.
+              if (prId) qc.invalidateQueries({ queryKey: ["pull", prId] });
             }}
           />
         )}

@@ -154,6 +154,7 @@ function tree(qc: QueryClient) {
           repoId="repo-1"
           repoFullName="acme/api"
           headSha="abc1234def"
+          lastReviewedSha={null}
           changedPaths={[IN_DIFF, "src/lib/other.ts"]}
           onOpenInDiff={onOpenInDiff}
         />
@@ -169,6 +170,7 @@ function renderTab() {
 }
 
 const briefCard = () => screen.getByRole("region", { name: "PR Brief" });
+const focusCard = () => screen.getByRole("region", { name: /Review focus — read these first/ });
 const intentCard = () => screen.getByRole("region", { name: "Intent" });
 /** The final state: the summary of the stored brief and the intent quote are on screen. */
 async function settled() {
@@ -225,7 +227,11 @@ describe("OverviewTab — layout", () => {
     const card = intentCard();
     await within(card).findByText(/Reject forged webhook events\./);
     expect(within(card).getByText("Risk areas")).toBeInTheDocument();
-    expect(within(card).getByRole("status", { name: "Generating…" })).toBeInTheDocument();
+    // B-03: the slot's skeleton is visual only; the one live "Generating…" status is the PR Brief block's.
+    expect(within(card).queryByRole("status", { name: "Generating…" })).not.toBeInTheDocument();
+    const generating = screen.getAllByRole("status", { name: "Generating…" });
+    expect(generating).toHaveLength(1);
+    expect(briefCard().contains(generating[0]!)).toBe(true);
     expect(within(card).queryByText("Touches payment webhooks")).not.toBeInTheDocument();
     expect(within(card).queryByText("Signature check can be bypassed")).not.toBeInTheDocument();
   });
@@ -235,7 +241,7 @@ describe("OverviewTab — navigation", () => {
   it("R-53, R-55 — an in-diff Review focus item or risk ref opens Files changed at its file and line (or the top)", async () => {
     renderTab();
     await settled();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
     expect(onOpenInDiff).toHaveBeenLastCalledWith(IN_DIFF, 61);
 
     // risk ref: its first line
@@ -254,7 +260,7 @@ describe("OverviewTab — navigation", () => {
     renderTab();
     await settled();
     vi.useFakeTimers();
-    const focusRef = within(briefCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` });
+    const focusRef = within(focusCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` });
     fireEvent.click(focusRef);
     expect(onOpenInDiff).not.toHaveBeenCalled();
     const row = focusRef.closest("li")!;
@@ -275,7 +281,7 @@ describe("OverviewTab — navigation", () => {
     renderTab();
     await settled();
     vi.useFakeTimers();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` }));
     act(() => {
       vi.advanceTimersByTime(3_000);
     });
@@ -298,9 +304,9 @@ describe("OverviewTab — navigation", () => {
   it("R-56 — activating an in-diff item clears a showing notice", async () => {
     renderTab();
     await settled();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` }));
     expect(screen.getByText("File not in this PR's diff")).toBeInTheDocument();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
     expect(screen.queryByText("File not in this PR's diff")).not.toBeInTheDocument();
   });
 });
@@ -315,7 +321,7 @@ describe("OverviewTab — scroll on Back (R-77, D-32, F-14)", () => {
     setScrollY(640);
     const first = renderTab();
     await settled();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
     expect(onOpenInDiff).toHaveBeenCalledWith(IN_DIFF, 61);
     first.unmount(); // the page switches to Files changed
     setScrollY(0);
@@ -339,7 +345,7 @@ describe("OverviewTab — scroll on Back (R-77, D-32, F-14)", () => {
     setScrollY(900);
     const first = renderTab();
     await settled();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${IN_DIFF} at line 61` }));
     first.unmount();
 
     renderTab(); // tab click: no popstate
@@ -361,7 +367,7 @@ describe("OverviewTab — scroll on Back (R-77, D-32, F-14)", () => {
     setScrollY(300);
     const first = renderTab();
     await settled();
-    fireEvent.click(within(briefCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` }));
+    fireEvent.click(within(focusCard()).getByRole("button", { name: `Open ${BLAST_ONLY} at line 7` }));
     first.unmount();
     window.dispatchEvent(new PopStateEvent("popstate"));
     renderTab();

@@ -1,31 +1,42 @@
-/* ReviewFocusList — "Review focus — read these first": a count badge and one
-   row per item `<file>:<line> — <reason>`, in the model's order (R-51). The
-   reason is plain text (R-36, D-28); an empty list says so (R-52). */
+/* ReviewFocusCard — "Review focus — read these first" as its own card on
+   Overview, after the Intent / Blast grid (R-92): a count badge and one row per
+   item `<file>:<line> — <reason>`, in the model's order (R-51). The reason is
+   plain text (R-36, D-28); an empty list says so (R-52). While a brief is
+   generated it shows an `aria-hidden` skeleton, no count, and is `aria-busy`
+   (R-93). */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Skeleton } from "@devdigest/ui";
 import type { ReviewFocusItem } from "@devdigest/shared";
 import type { BriefNavigation } from "@/lib/hooks/brief";
-import { BriefFileRef } from "@/app/repos/[repoId]/pulls/[number]/_components/BriefFileRef";
+import { BriefFileRef } from "../BriefFileRef";
 import { cx } from "./styles";
 
-export function ReviewFocusList({
+export function ReviewFocusCard({
   items,
   nav,
 }: {
-  items: ReviewFocusItem[];
+  /** The brief's items, or null while a generation runs (R-93). */
+  items: ReviewFocusItem[] | null;
   nav: BriefNavigation;
 }): React.JSX.Element {
   const t = useTranslations("brief");
   const headingId = React.useId();
   return (
-    <section className={cx.section} aria-labelledby={headingId}>
+    <section className={cx.card} aria-labelledby={headingId} aria-busy={items === null}>
       <h3 id={headingId} className={cx.heading}>
         {t("reviewFocus")}
-        <span className={cx.count}>{items.length}</span>
+        {items && <span className={cx.count}>{items.length}</span>}
       </h3>
-      {items.length === 0 ? (
+      {items === null ? (
+        // Purely visual: the one live "Generating…" status is the PR Brief block's (R-93).
+        <div className={cx.skeletons} aria-hidden>
+          <Skeleton width="65%" />
+          <Skeleton width="55%" />
+        </div>
+      ) : items.length === 0 ? (
         <p className={cx.empty}>{t("noFocus")}</p>
       ) : (
         <ol className={cx.list}>

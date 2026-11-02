@@ -1,9 +1,11 @@
-/** Tailwind class strings for the PR Brief's Review focus list. */
+/** Tailwind class strings for the Review focus card (moved from the PR Brief's Review focus list). */
 export const cx = {
-  section: "flex flex-col gap-2",
+  /** The same card look as the PR Brief block. */
+  card: "mb-4 flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-[18px]",
   heading: "m-0 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-muted)]",
   count:
     "rounded-full border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 text-[11px] font-semibold normal-case tracking-normal text-[var(--text-secondary)]",
+  skeletons: "flex flex-col gap-2",
   list: "m-0 flex list-none flex-col gap-1.5 p-0",
   item: "flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]",
   dash: "shrink-0 text-[var(--text-muted)]",

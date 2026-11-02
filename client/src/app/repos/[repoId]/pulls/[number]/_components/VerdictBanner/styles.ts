@@ -29,6 +29,15 @@ export const s = {
     flexWrap: "wrap",
   } satisfies CSSProperties,
   label: (color: string): CSSProperties => ({ fontSize: 18, fontWeight: 700, color }),
+  notes: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 8,
+    fontSize: 13,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
   summary: {
     fontSize: 14,
     lineHeight: 1.55,

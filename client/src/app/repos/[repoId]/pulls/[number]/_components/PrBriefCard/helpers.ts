@@ -83,3 +83,11 @@ export function viewSignature(view: PrBriefView | undefined): string {
   if (!view) return "";
   return [view.generating ? "1" : "0", view.brief?.meta.generated_at ?? "", view.last_failure?.at ?? ""].join("|");
 }
+
+/**
+ * Tokens in thousands with one decimal, for the run line (R-91):
+ * 8200 → "8.2", 420 → "0.4", 1250 → "1.3", 0 → "0.0". No grouping separator.
+ */
+export function formatTokensK(n: number): string {
+  return (Math.round(n / 100) / 10).toFixed(1);
+}

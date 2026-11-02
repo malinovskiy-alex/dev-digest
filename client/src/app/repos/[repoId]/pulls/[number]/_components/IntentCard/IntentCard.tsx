@@ -13,7 +13,7 @@ import React from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Button, Icon, Skeleton } from "@devdigest/ui";
 import type { IntentSource, PrIntentRecord } from "@devdigest/shared";
-import { usePrActiveRuns, usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
+import { usePrIntent, useRefreshIntent, useWhenActiveRunsEnd } from "@/lib/hooks/reviews";
 import { AGE_TICK_MS, SOURCE_STATUS_TONE } from "./constants";
 import {
   derivedAt,
@@ -54,13 +54,7 @@ export function IntentCard({
   // A review run derives the intent too. When the PR's last active run
   // finishes, re-read it — otherwise the card keeps its cached "not derived"
   // (or older) answer and invites a second, paid derive.
-  const activeRuns = usePrActiveRuns(prId).data?.length ?? 0;
-  const prevActiveRuns = React.useRef(activeRuns);
-  const refetchIntent = intent.refetch;
-  React.useEffect(() => {
-    if (prevActiveRuns.current > 0 && activeRuns === 0) void refetchIntent();
-    prevActiveRuns.current = activeRuns;
-  }, [activeRuns, refetchIntent]);
+  useWhenActiveRunsEnd(prId, () => void intent.refetch());
 
   // A newer intent (from a review run or a retry) makes an old derive error stale.
   const generatedAt = data?.generated_at;

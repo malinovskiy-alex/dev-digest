@@ -214,6 +214,9 @@ export const PrDetail = PrMeta.extend({
   files: z.array(PrFile),
   commits: z.array(PrCommit),
   linked_issue: IssueMeta.nullish(),
+  // Head SHA of the PR's last successful review run (`pull_requests.last_reviewed_sha`),
+  // null when never reviewed. Detail endpoint only; the GitHub adapters never set it.
+  last_reviewed_sha: z.string().nullish(),
 });
 export type PrDetail = z.infer<typeof PrDetail>;
 

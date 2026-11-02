@@ -36,6 +36,20 @@ export function usePrActiveRuns(prId: string | null | undefined) {
   });
 }
 
+/** R-88 (and the Intent card's re-read): calls `onEnd` once when the PR's
+   in-flight runs go from > 0 to 0 (a run just finished). `onEnd` is an effect
+   event, so an inline callback always sees the latest values and does not
+   re-run the effect. */
+export function useWhenActiveRunsEnd(prId: string | null | undefined, onEnd: () => void): void {
+  const activeRuns = usePrActiveRuns(prId).data?.length ?? 0;
+  const prevActiveRuns = React.useRef(activeRuns);
+  const fireEnd = React.useEffectEvent(onEnd);
+  React.useEffect(() => {
+    if (prevActiveRuns.current > 0 && activeRuns === 0) fireEnd();
+    prevActiveRuns.current = activeRuns;
+  }, [activeRuns]);
+}
+
 // ---- Full run history for a PR (every agent_runs row, any status) ----
 /** All runs for a PR — done, failed (with error), cancelled, running. Survives
    reload (DB-backed). Polls while anything is running so it self-updates. */

@@ -136,12 +136,13 @@ describe("BriefRiskAreas", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("R-05, F-16 — the skeleton for the Intent card slot is a 'Generating…' status", () => {
-    render(
+  it("R-05, F-16 — the skeleton for the Intent card slot renders, hidden from assistive tech (the live status is the PR Brief block's)", () => {
+    const { container } = render(
       <NextIntlClientProvider locale="en" messages={{ brief }}>
         <BriefRiskAreasSkeleton />
       </NextIntlClientProvider>,
     );
-    expect(screen.getByRole("status", { name: "Generating…" })).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

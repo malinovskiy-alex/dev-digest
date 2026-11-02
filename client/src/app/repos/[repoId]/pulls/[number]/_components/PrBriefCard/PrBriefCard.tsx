@@ -2,11 +2,16 @@
    PR, generated only on the user's click (R-47) by one `risk_brief` model call.
    Opening the page reads what is stored and never calls the model (R-03).
 
+   Directly under the header (and its run line) sits the latest review's
+   verdict banner, with or without a brief (R-78, BA-1); while it is shown it
+   carries the brief's summary as its text (R-81, R-97).
+
    States, in this order: loading → skeleton (R-04); read failed → error +
-   Retry (R-06); generating → skeleton of summary / Risk areas / Review focus
-   with the control disabled (R-05); no brief → "No brief yet" (R-02, R-62);
-   brief → header + summary + Review focus (R-08, R-48, R-51). Risk areas render
-   inside the Intent card (R-63). Model text is plain text (R-36, D-28). */
+   Retry (R-06); generating → summary skeleton, in the banner when there is
+   one, with the control disabled (R-05); no brief → "No brief yet" (R-02,
+   R-62); brief → header + summary (R-08, R-48). Risk areas render inside the
+   Intent card (R-63); Review focus is its own card after the Intent / Blast
+   grid (R-92). Model text is plain text (R-36, D-28). */
 "use client";
 
 import React from "react";
@@ -14,17 +19,28 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button, Skeleton } from "@devdigest/ui";
 import type { PrBrief, PrBriefView } from "@devdigest/shared";
-import { usePrBrief, useGenerateBrief, type BriefNavigation } from "@/lib/hooks/brief";
+import { usePrBrief, useGenerateBrief } from "@/lib/hooks/brief";
 import { BriefHeader } from "./_components/BriefHeader";
-import { ReviewFocusList } from "./_components/ReviewFocusList";
+import { ReviewBanner, useReviewBanner } from "./_components/ReviewBanner";
 import { API_KEYS_HREF } from "@/lib/settings-urls";
 import { isNoKeyError, missingItems, regenerationFailure, viewSignature } from "./helpers";
 import { cx } from "./styles";
 
-export function PrBriefCard({ prId, nav }: { prId: string; nav: BriefNavigation }): React.JSX.Element {
+export function PrBriefCard({
+  prId,
+  headSha,
+  lastReviewedSha,
+}: {
+  prId: string;
+  /** The PR's head: a review of another commit gets the stale badge (R-94). */
+  headSha: string;
+  /** Head SHA of the PR's last successful review run, null when never reviewed (R-95). */
+  lastReviewedSha: string | null;
+}): React.JSX.Element {
   const t = useTranslations("brief");
   const query = usePrBrief(prId);
   const generate = useGenerateBrief(prId);
+  const banner = useReviewBanner(prId, headSha, lastReviewedSha);
   const view = query.data;
 
   const busy = !!view?.generating || generate.isPending;
@@ -42,6 +58,25 @@ export function PrBriefCard({ prId, nav }: { prId: string; nav: BriefNavigation 
     generate.mutate();
   };
 
+  // While a review banner is shown, it carries the brief's summary (R-81, R-48)
+  // and the block's one loading / generating status (R-04, R-05, R-97);
+  // otherwise the block does. Never both, so exactly one skeleton shows.
+  const bannerShown = banner.kind === "review";
+  const bannerText = query.isLoading ? (
+    // BA-2: no flash from the review's summary to the brief's while the brief is read.
+    <div className={cx.bannerSkeleton} role="status" aria-label={t("loading")}>
+      <Skeleton width="90%" height={14} />
+      <Skeleton width="70%" height={14} />
+    </div>
+  ) : busy ? (
+    <div className={cx.bannerSkeleton} role="status" aria-label={t("generating")}>
+      <Skeleton width="90%" height={14} />
+      <Skeleton width="70%" height={14} />
+    </div>
+  ) : view && !query.isError && view.brief ? (
+    <p className={cx.bannerText}>{view.brief.summary}</p>
+  ) : undefined; // R-96: the review's own summary, hidden when empty
+
   return (
     <section aria-label={t("block.brief")} aria-busy={query.isLoading || busy} className={cx.card}>
       <BriefHeader
@@ -51,16 +86,19 @@ export function PrBriefCard({ prId, nav }: { prId: string; nav: BriefNavigation 
         disabled={disabled}
         onGenerate={onGenerate}
       />
+      <ReviewBanner state={banner} text={bannerText} />
 
       {view && keyMissing && <NoKeyLine provider={view.feature_model.provider} />}
       {startError && <StartError error={startError} />}
 
       {query.isLoading ? (
-        <div className={cx.skeletons} role="status" aria-label={t("loading")}>
-          <Skeleton width="85%" height={16} />
-          <Skeleton width="60%" />
-          <Skeleton width="70%" />
-        </div>
+        bannerShown ? null : (
+          <div className={cx.skeletons} role="status" aria-label={t("loading")}>
+            <Skeleton width="85%" height={16} />
+            <Skeleton width="60%" />
+            <Skeleton width="70%" />
+          </div>
+        )
       ) : !view || query.isError ? (
         <div role="alert" className={cx.errorBox}>
           <p className="m-0">{t("loadError")}</p>
@@ -72,9 +110,11 @@ export function PrBriefCard({ prId, nav }: { prId: string; nav: BriefNavigation 
           </div>
         </div>
       ) : busy ? (
-        <GeneratingSkeleton />
+        bannerShown ? null : (
+          <GeneratingSkeleton />
+        )
       ) : view.brief ? (
-        <BriefBody view={view} brief={view.brief} nav={nav} />
+        <BriefBody view={view} brief={view.brief} showSummary={!bannerShown} />
       ) : (
         <div className={cx.empty}>
           <p className={cx.stateText}>{t("noBriefYet")}</p>
@@ -121,7 +161,8 @@ function StartError({ error }: { error: Error }): React.JSX.Element {
   );
 }
 
-/** R-05: the summary and Review focus skeletons while a generation runs; the Risk areas one sits in the Intent card (F-16). */
+/** R-05: the summary skeleton while a generation runs and no banner carries it (R-97). The Risk areas
+   one sits in the Intent card (F-16), the Review focus one in its own card (R-93). */
 function GeneratingSkeleton(): React.JSX.Element {
   const t = useTranslations("brief");
   return (
@@ -131,11 +172,6 @@ function GeneratingSkeleton(): React.JSX.Element {
         <Skeleton width="90%" height={14} />
         <Skeleton width="70%" height={14} />
       </div>
-      <div className={cx.group}>
-        <span className={cx.groupLabel}>{t("reviewFocus")}</span>
-        <Skeleton width="65%" />
-        <Skeleton width="55%" />
-      </div>
     </div>
   );
 }
@@ -143,11 +179,12 @@ function GeneratingSkeleton(): React.JSX.Element {
 function BriefBody({
   view,
   brief,
-  nav,
+  showSummary,
 }: {
   view: PrBriefView;
   brief: PrBrief;
-  nav: BriefNavigation;
+  /** False while the review banner carries the summary, so it renders once (R-48). */
+  showSummary: boolean;
 }): React.JSX.Element {
   const t = useTranslations("brief");
   // Dismissal is keyed by the failure's timestamp, so a newer failure shows again (R-61).
@@ -179,8 +216,7 @@ function BriefBody({
           </button>
         </div>
       )}
-      <p className={cx.summary}>{brief.summary}</p>
-      <ReviewFocusList items={brief.review_focus} nav={nav} />
+      {showSummary && <p className={cx.summary}>{brief.summary}</p>}
     </div>
   );
 }

@@ -13,8 +13,8 @@
   "loading": "Loading brief…",
   "loadError": "Could not load the brief.",
   "retry": "Retry",
-  "generatedLine": "Generated {ago} for {sha} · {model}",
-  "cost": "Cost of this generation: {cost}",
+  "generatedLine": "Generated {ago} for {sha} · {model} · {cost} · {tokens}",
+  "tokens": "{in}K→{out}K",
   "costUnknown": "cost unknown",
   "trimmedNote": "Built from trimmed inputs",
   "trim": {
@@ -32,6 +32,14 @@
     "focusMoved": "{count} Review focus lines moved to the nearest changed line"
   },
   "stale": "Brief is for an older commit ({sha})",
+  "banner": {
+    "label": "Latest review",
+    "noReview": "No review yet — run one to see the verdict and PR score",
+    "running": "Review in progress — showing the previous review",
+    "runningNoReview": "Review in progress",
+    "failed": "The latest review run failed — showing the previous review",
+    "stale": "Review is for an older commit ({sha})"
+  },
   "noKey": "No API key for {provider}",
   "noKeyLink": "Settings → API Keys",
   "missingInputs": "Generated without: {list}",
