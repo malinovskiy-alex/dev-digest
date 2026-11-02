@@ -37,16 +37,17 @@ function defaultIsRetryable(err: unknown): boolean {
     (err as { status?: number })?.status ??
     (err as { statusCode?: number })?.statusCode ??
     (err as { response?: { status?: number } })?.response?.status;
-  if (typeof status === 'number') return status === 429 || status >= 500;
+  // 408 Request Timeout and 409 Conflict are often transient on GitHub too.
+  if (typeof status === 'number') return status === 408 || status === 409 || status === 429 || status >= 500;
   // network-ish errors
   const code = (err as { code?: string })?.code;
   return code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND';
 }
 
 export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}): Promise<T> {
-  const retries = opts.retries ?? 3;
+  const retries = opts.retries ?? 5;
   const base = opts.baseDelayMs ?? 250;
-  const max = opts.maxDelayMs ?? 8000;
+  const max = opts.maxDelayMs ?? 30000;
   const isRetryable = opts.isRetryable ?? defaultIsRetryable;
 
   let lastErr: unknown;
