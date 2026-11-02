@@ -1,11 +1,12 @@
 # L05 — PR Brief · requirements
 
-**Status:** Approved by the user on 2026-11-01 (they asked to proceed to implementation-planner). Q-01…Q-11 were answered with the recommended options and UX-01…UX-06 were accepted (see `## Decisions`). R-34 (a blast-only file snaps to its nearest caller line) and R-56 (the message stays 4 s) keep the agent's defaults.
+**Status:** Approved. The 2026-11-02 amendment (verdict banner, brief run line, separate Review focus card; R-78…R-105) was approved by the user on 2026-11-02: Q-12, Q-13 and Q-14 answered A, UX-07…UX-10 accepted. Q-15 and Q-16 were not answered by the user; the coordinator applied the recommended option A as non-blocking. R-01…R-77 stay approved as they were on 2026-11-01 (the user asked to proceed to implementation-planner; Q-01…Q-11 answered with the recommended options, UX-01…UX-06 accepted; R-34 and R-56 keep the agent's defaults), except the amended R-01, R-05, R-07, R-48, R-51 and R-71. Packages for the amendment: client, plus one field on an existing server PR read and both `@devdigest/shared` copies (R-95).
 **Goal:** a reviewer who opens a PR "cold" sees one PR Brief card on Overview. It says what the PR does and why, what is risky in it (each risk tied to a file) and which lines to read first. Clicking a line opens it in Files changed.
 **Packages:** server · client · vendored `@devdigest/shared` (both copies). `reviewer-core` is used as it is (the structured LLM call) and is not expected to change. No e2e or MCP work (see `## Non-goals`).
 **Designs:**
 - the user's text description: the L05 homework task, translated from Ukrainian, with user stories, the "suggested implementation" and acceptance criteria P1/P2/P3. Quotes are marked «…»
-- `C:\Users\malin\GoITCourse\дз5-1.png`: Overview with the brief (verdict banner, Intent, Blast radius, Risk areas, the top of Review focus)
+- `C:\Users\malin\GoITCourse\дз5-1.png`: Overview with the brief (verdict banner, Intent, Blast radius, Risk areas, the top of Review focus). The banner (red frame) shows "Request changes", "6 findings · 2 blockers", the summary text, a PR score ring "61" with the label "PR SCORE", and under it `$0.014  8.2K→1.3K`
+- the user's text for the banner (amendment 2026-11-02, translated): «The banner at the top shows the verdict and PR score from the latest review, and under them the summary text from the brief. Component `VerdictBanner` (verdict, summary and PR score) already exists — it is visible on the Agent runs tab. On Overview it can be reused.» and «the brief must show the model run, i.e. which model and how much it cost, as in the screenshot»
 - `C:\Users\malin\GoITCourse\дз5-2.png` (= `дз5-4.png`, identical): Risk areas and Review focus highlighted
 - `C:\Users\malin\GoITCourse\дз5-3.png` (= `дз5-6.png`, identical): Files changed after a Review focus click. `src/api/public/webhooks.ts` is expanded and outlined, with lines 61–74 in view
 - the current code of this repository (`file:line` references below)
@@ -44,7 +45,14 @@
 | Tabs and URL | `…/pulls/[number]/page.tsx:67-75` | The tab is `?tab=`. `setParam` uses `router.replace`, so a tab change adds **no** history entry |
 | Files changed | `…/_components/DiffTab/DiffTab.tsx:136-156`, `client/src/components/diff-viewer/FileCard/FileCard.tsx:64-66`, `…/DiffTab/_components/SmartDiffGroup/SmartDiffGroup.tsx:29` | No deep link to a file or a line. Groups have their own open state. A file over 200 changed lines (`diff-viewer/constants.ts:5`) starts **collapsed**. A skeleton stands in until Smart Diff settles (`DiffTab.tsx:136-141`) |
 | Labels | `client/messages/en/brief.json:2-12` | `block.intent`, `block.blast`, `block.risks` ("Risks"), `block.history`, `noRisks`, `unavailable`, `unavailableHint` exist. Nothing yet for Summary, Review focus, Generate or stale |
-| Verdict banner | `…/_components/VerdictBanner/VerdictBanner.tsx` | Exists and is used on Agent runs. Deferred for the brief (non-goal) |
+| Verdict banner (component) | `…/_components/VerdictBanner/VerdictBanner.tsx:12-26` | Props `verdict` (`request_changes \| approve \| comment`, `findings.ts:26`), `summary: string \| null`, `score: number \| null`, `findingsCount`, `blockers`, optional `agentName`. Renders the verdict label, a "N findings · N blockers" badge (blockers only when > 0, `:38-41`), an agent badge when `agentName` is given (`:42-46`), the summary when non-null (`:48`) and the score ring with "PR SCORE" only when `score != null` (`:50-55`). Labels come from the **`prReview`** namespace (`:27`, `client/messages/en/prReview.json:21-27`), not `brief`. It renders **no cost and no tokens**. An unknown verdict falls back to the `comment` look (`:28`) |
+| Verdict banner on Agent runs | `…/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:137-148`, mounted per review by `FindingsTab.tsx:183-194` | Shown only when `review.verdict` is set (`:137`). `findingsCount = review.findings.length` (all findings, dismissed included); `blockers` = findings with severity `CRITICAL` that are not dismissed (`:55`); `summary = review.summary` (the review's own text); `agentName = review.agent_name` |
+| Reviews read (banner data) | client `usePrReviews(prId)` → `GET /pulls/:id/reviews` (`client/src/lib/hooks/reviews.ts:83-89`, query key `["reviews", prId]`); server `reviews/routes.ts:141-143` → `ReviewService.reviewsForPull` (`reviews/service.ts:161-175`, workspace-checked) → `review.repo.ts:58-74` | All review rows of the PR, **newest first** by `created_at`, each with its findings; shape `ReviewRecord` (`contracts/review-api.ts:23-37`: `kind: summary \| review`, `verdict`, `summary`, `score`, `model`, `created_at`, `findings[]`, no cost, no head SHA). **The PR page already calls it** for every tab (`…/pulls/[number]/page.tsx:51`), so Overview needs no new endpoint and no new request. The query does not poll (`reviews.ts:83-89`); after a run it is refreshed by the Agent runs tab's `onRunDone` (`page.tsx:185-191`) or by `useRunReview`'s invalidation (`reviews.ts:184-186`) |
+| "Latest review" today | `latestReviewFindingAnchors` (`review.repo.ts:76-106`), used by Smart Diff (`reviews/service.ts:182-193`); the PR list's "latest-review score" (`contracts/platform.ts:173-174`) | The newest row with `kind = 'review'`, workspace-scoped. Only a **successful** run writes a review row (`run-executor.ts:324-334`, `kind: 'review'`, verdict from the engine's required `Review.verdict`, `findings.ts:79`). A running, failed or cancelled run has no review row. No code path writes `kind = 'summary'` today |
+| Review vs head SHA | `reviews` table (`server/src/db/schema/reviews.ts:18-37`); `pull_requests.last_reviewed_sha` (`pulls.ts:21`), set by every successful run (`run-executor.ts:338-340`, `markReviewed`); `deriveReviewStatus` (`pulls/status.ts:48-63`) | A review row stores **no head SHA**. The PR row stores the head SHA of the last successful review; the PR list derives `needs_review` when it differs from `head_sha` (`status.ts:59`). `last_reviewed_sha` is not in any API response (`PrMeta`, `platform.ts:159-185`) |
+| Review run cost | `agent_runs.cost_usd`, `tokens_in`, `tokens_out` (`server/src/db/schema/runs.ts:30-33`), served as `RunSummary` by `usePrRuns` (`hooks/reviews.ts:42-50`); rendered by `RunCostBadge` (`client/src/components/run-cost-badge/RunCostBadge.tsx:24-52`) on the Agent runs timeline (`RunHistory.tsx:229-234`) and in the PR list (`PRRow.tsx:67`) | Per **run**, not per review (joined by `reviews.run_id`, `reviews.ts:30`). `VerdictBanner` does not show it |
+| Brief run cost today | `BriefHeader.tsx:59-80` | Line "Generated <ago> for <sha> · <provider>/<model>" (`brief.json:16`); the cost only in a hover/focus tooltip (`:75,80`, R-71); tokens are stored (`brief.ts:255-256`, non-null) but **not shown**. `formatCostUsd` (`client/src/lib/format-cost.ts:19-24`) gives `$0.014`; the only token formatter, `formatTokensTotal` (`:30-38`), prints a total ("9,119"), not `in→out` |
+| Overview today (implemented) | `…/_components/OverviewTab/OverviewTab.tsx:53-67`, `…/PrBriefCard/PrBriefCard.tsx:45-89,143-186` | `PrBriefCard` (header, then loading / error / generating / brief / no-brief body), then the Intent + Blast grid. The brief summary is a paragraph in the body (`PrBriefCard.tsx:182`). **Review focus renders inside the PR Brief block** (`ReviewFocusList`, `PrBriefCard.tsx:183`), and its generating skeleton too (`PrBriefCard.tsx:134-138`); the Risk areas skeleton already lives in the Intent card (`OverviewTab.tsx:44-51`, F-16). The PR description section follows the grid (`OverviewTab.tsx:60-65`). Overview does not read reviews today. The design (`дз5-1.png`, `дз5-2.png`) draws Review focus as its own full-width card below the Intent / Blast radius grid (amendment 2026-11-02, R-92) |
 
 **Constraints from `INSIGHTS.md` and the package rules.** These are inputs for the planner, not requirement text:
 - A feature module resolves its model through `container.featureModel`, never by importing `settings` (`server/INSIGHTS.md:116-132`). The same `no-cross-module` rule means the brief cannot import the `blast`, `reviews` or `project-context` folders. Those reads have to reach it through the container.
@@ -58,18 +66,22 @@
 
 ## Goals
 
-1. One PR Brief block on Overview: summary (what and why), Risk areas, Review focus, with Intent and Blast radius beside them.
+1. One PR Brief on Overview: summary (what and why), Risk areas, Review focus, with Intent and Blast radius beside them. [amended 2026-11-02] Laid out as in `дз5-1.png`: the PR Brief block (banner, run line, summary) on top, then the Intent / Blast radius grid (Risk areas inside Intent), then a separate Review focus card.
 2. Exactly one model call per generation, over computed facts only, within an 8,000-token input budget, with the model taken from the `risk_brief` setting.
 3. No invented paths: every file shown is in the PR or in the blast-radius map.
 4. Cached per PR and bound to the head SHA. A reload shows the brief with no model call. A new commit marks it stale.
 5. Navigation from a Review focus item, or a risk, to Files changed at the file, scrolled to the line.
 6. P3 items in scope: a skeleton while generating, labels from `brief.json`, expandable risk explanations, risks open their file, and "File not in this PR's diff".
+7. [amendment 2026-11-02] P3, user-requested: a verdict banner at the top of the PR Brief block with the latest review's verdict, findings and blockers count and PR score, and the brief's summary as its text, reusing the existing `VerdictBanner`, with no model call (R-78…R-90, R-94…R-99, R-101…R-105).
+8. [amendment 2026-11-02] The brief's own run (model, cost, tokens in→out) is visible in the PR Brief block, not only in a tooltip (R-71, R-91).
 
 **Process deliverables (P1/P2 of the task; these are not system behaviour, so they have no R-IDs):** this requirements file and the plan are committed before feature code. The PR description carries a cross-model review note. The final `plan-verifier` report is attached to the PR with no open requirement. The PR contains the spec and the plan.
 
 ## Non-goals
 
-- **The VerdictBanner / PR-score banner** at the top of the brief (`дз5-1.png`, red frame). P3, deferred by the user.
+- ~~**The VerdictBanner / PR-score banner** at the top of the brief (`дз5-1.png`, red frame). P3, deferred by the user.~~ Moved to Goals 7 by the user on 2026-11-02 (R-78…R-90).
+- Adding the review's verdict, score or findings to the brief's model input. R-09 and R-26 are unchanged by the banner; the banner only displays stored review data.
+- A new server endpoint for the banner's review data (coordinator, 2026-11-02: reuse existing data). A review older than the head is detected from the PR's last-reviewed head SHA, added as one field to an existing PR read (Q-12 A, R-95). No migration and no head SHA per review row.
 - **The workflow-retro result and the cost report attached to the PR.** P3, deferred by the user.
 - Deriving the intent, recomputing the blast radius, or fetching prior PRs as part of a brief. The brief reads what exists; the one call is the brief's own (R-12).
 - "Prior PRs touching these files" as a brief input. It stays where it is now, inside the Blast radius card (`PriorPrs`).
@@ -84,18 +96,18 @@
 
 | ID | Pattern | Requirement | Verified by |
 |---|---|---|---|
-| R-01 | Ubiquitous | The system shall show on the PR's Overview tab a block titled "PR Brief", above the Intent and Blast radius cards. | client |
+| R-01 | Ubiquitous | [amended 2026-11-02: user, "Review focus is a separate section"] The system shall show on the PR's Overview tab a block titled "PR Brief", above the Intent and Blast radius cards; Review focus is not part of this block (R-92). | client |
 | R-02 | State-driven | WHILE no brief is stored for the PR, the system shall show in the PR Brief block the text "No brief yet" and a "Generate brief" button. | client + server-integration |
 | R-03 | Event-driven | WHEN the user opens the Overview tab and a brief is stored for the PR, the system shall show it without calling the model. | client + server-integration |
 | R-04 | State-driven | WHILE the stored brief is being loaded, the system shall show a skeleton in place of the PR Brief block. | client |
-| R-05 | State-driven | WHILE a generation for the PR is running, the system shall show a skeleton of the summary, Risk areas and Review focus in the PR Brief block, and show the generate/regenerate control disabled with the label "Generating…". | client |
+| R-05 | State-driven | [amended 2026-11-02: separate Review focus card; F-16] WHILE a generation for the PR is running, the system shall show a skeleton of the summary in the PR Brief block, a skeleton of Risk areas in the Intent card, and a skeleton of Review focus in the Review focus card (R-93), and show the generate/regenerate control disabled with the label "Generating…". *Was:* … a skeleton of the summary, Risk areas and Review focus in the PR Brief block … | client |
 | R-06 | Unwanted | IF reading the stored brief fails (any answer other than a brief or "no brief yet"), THEN the system shall show in the PR Brief block an error with the reason and a "Retry" button, and keep the rest of the Overview tab working. | client |
-| R-07 | Ubiquitous | The system shall take every label of the PR Brief block from the `brief` message namespace (`client/messages/en/brief.json`), with no user-facing string written into the component. | client |
+| R-07 | Ubiquitous | [amended 2026-11-02: verdict banner] The system shall take every label of the PR Brief block from the `brief` message namespace (`client/messages/en/brief.json`), with no user-facing string written into the component; the one exception is the reused verdict banner (R-78…R-81), whose verdict, count and "PR SCORE" labels stay in the `prReview` namespace it already uses, so that Overview and Agent runs word them identically. | client |
 | R-08 | State-driven | WHILE a brief is shown, the system shall show under the block title "Generated <relative time> for <short head SHA> · <provider>/<model>". | client + server-integration |
 | R-68 | State-driven | [accepted UX-01] WHILE no API key is stored for the provider of the "Risk Brief" model, the system shall show in the PR Brief block, as soon as Overview opens and before any click, "No API key for <provider>" with a link to Settings → API Keys, and keep "Generate brief" and the regenerate control disabled; the read answer reports key availability from a key check that makes no model call, and `<provider>` is taken from the read answer's `feature_model` (R-43). | client + server-integration |
 | R-69 | State-driven | [accepted UX-02, decision Q-09] WHILE a generation for the PR is running, the system shall report "generating" in the answer to the brief read, so that a reload or a return to the page during the generation shows the state of R-05. | client + server-integration |
 | R-70 | State-driven | [decision Q-09] WHILE the brief read reports "generating", the client shall poll the read until it reports a finished brief or a failure, and then show that result without a reload. | client |
-| R-71 | Event-driven | [accepted UX-04] WHEN the user hovers or focuses the header line of R-08, the system shall show a tooltip with the cost of that generation in USD, or "cost unknown" when the provider reported none. | client + server-integration |
+| R-71 | State-driven | [accepted UX-04; amended 2026-11-02: user, "show the model run"; Q-14 A] WHILE a brief is shown, the system shall show the cost of that generation in USD as visible text in the header line of R-08, after `<provider>/<model>` and without any hover or focus, formatted as review costs are elsewhere (e.g. `$0.014`), or "cost unknown" when the provider reported none; the line shows with or without a verdict banner. *Was:* WHEN the user hovers or focuses the header line of R-08, the system shall show a tooltip with the cost of that generation in USD, or "cost unknown" when the provider reported none. | client + server-integration |
 | R-72 | Ubiquitous | [accepted UX-05] The system shall truncate a long file path in Risk areas and Review focus in the middle, keeping the file name and line visible, and show the full path in a tooltip. | client |
 
 ### Generation: inputs and the one call
@@ -185,10 +197,10 @@
 
 | ID | Pattern | Requirement | Verified by |
 |---|---|---|---|
-| R-48 | State-driven | WHILE a brief is shown, the system shall show its summary under the block header. | client |
+| R-48 | State-driven | [amended 2026-11-02: verdict banner] WHILE a brief is shown, the system shall show its summary under the block header; WHILE the verdict banner is also shown (R-78), the summary is the banner's text (R-81) and is not shown a second time. | client |
 | R-49 | State-driven | WHILE a brief is shown, the system shall show Risk areas as a list in which each risk shows its title, a severity indicator (high, medium, low) and its first file reference as `<path>[:<lines>]` in monospace. | client |
 | R-50 | Event-driven | [P3] WHEN the user activates a risk's expand control, the system shall show or hide that risk's explanation and all its file references; the control exposes its expanded state to assistive technology. | client |
-| R-51 | State-driven | WHILE a brief is shown, the system shall show Review focus with the heading "Review focus — read these first", a count badge, and one row per item `<file>:<line> — <reason>`, in the model's order. | client |
+| R-51 | State-driven | [amended 2026-11-02: placement only] WHILE a brief is shown, the system shall show Review focus, in the Review focus card of R-92, with the heading "Review focus — read these first", a count badge, and one row per item `<file>:<line> — <reason>`, in the model's order. Its behaviour (R-52, R-53…R-59, R-72, R-76, R-77) is unchanged. | client |
 | R-52 | Unwanted | IF the brief has no risks or no Review focus items after validation, THEN the system shall show in the empty section "No notable risks flagged." or "No review focus items." respectively. | client |
 | R-63 | State-driven | [decision Q-05] WHILE a brief is shown, the system shall show the Intent and Blast radius cards side by side, with the brief's Risk areas (R-49) inside the Intent card in place of the intent's own risk-area list. | client |
 | R-67 | State-driven | [decision Q-05] WHILE no brief is stored for the PR, the system shall show in the Intent card the intent's own risk-area list, as today. | client |
@@ -207,11 +219,61 @@
 | R-58 | Ubiquitous | The system shall render every Review focus item and risk file reference as a keyboard-reachable control whose accessible name contains the file path and line. | client |
 | R-59 | Event-driven | WHEN the Files changed tab is opened by a reload of a URL carrying `file` and `line`, the system shall behave as in R-53 and R-54. | client |
 
+### Verdict banner and the brief's run line (amendment 2026-11-02)
+
+Answers folded in on 2026-11-02: Q-12 A → R-94, R-95; Q-13 A → R-78 (amended), R-96, R-97; Q-14 A → R-71, R-91, R-98; Q-15 A → R-99; UX-07…UX-10 → R-101…R-105. New banner labels (notes, the stale badge, the no-review line) come from `brief.json` (R-07).
+
+| ID | Pattern | Requirement | Verified by |
+|---|---|---|---|
+| R-78 | State-driven | [amended 2026-11-02: Q-13 A] WHILE the PR has a latest review (R-82), the system shall show at the top of the PR Brief block, under the block header and above the rest of the block's content, a verdict banner with the latest review's verdict label: "Request changes", "Approve" or "Comment" — whether or not a brief exists. *Was:* WHILE the PR has a latest review (R-82) and a brief is shown, … | client |
+| R-79 | Ubiquitous | The verdict banner shall show the latest review's findings count and, when it is greater than zero, its blockers count ("6 findings · 2 blockers"), counted exactly as the Agent runs tab's banner counts them for the same review: every finding of the review, and its `CRITICAL` findings that are not dismissed. | client |
+| R-80 | State-driven | WHILE the verdict banner is shown and the latest review has a score, the system shall show that score in the banner as a score ring labelled "PR SCORE". | client |
+| R-81 | State-driven | WHILE the verdict banner is shown together with a brief, the system shall use the brief's summary as the banner's text, and not the review's own summary. | client |
+| R-82 | Ubiquitous | The system shall take as the latest review the PR's newest stored review of kind "review" by creation time, in the caller's workspace — the same review the Smart Diff finding counts and the PR list's score use; a review run that stored no review (running, failed, cancelled) is never the latest review. | client + server-integration |
+| R-83 | Ubiquitous | The system shall show the verdict banner with the same verdict icon, colour and label, the same count wording and the same score ring as the banner on the Agent runs tab shows for the same review. | client |
+| R-84 | State-driven | [settled by the user] WHILE the PR has no stored review, the system shall show no verdict banner — no verdict, no findings count and no score, not even a placeholder — and show the brief's summary as in R-48. | client |
+| R-85 | Ubiquitous | [settled by the user] The system shall show, update and hide the verdict banner without any model call and without any request to GitHub, using only the review data already stored for the PR. | client + server-integration |
+| R-86 | Unwanted | IF the latest review has no score, THEN the system shall show the verdict banner without a score ring and without any placeholder number. | client |
+| R-87 | State-driven | WHILE a review run for the PR is in progress, the system shall show in the verdict banner the newest stored review (or no banner, per R-84), never a partial result of the running run. | client |
+| R-88 | Event-driven | WHEN a review run for the PR finishes successfully while the Overview tab is open, the system shall show that run's review in the verdict banner without a page reload. | client |
+| R-89 | Unwanted | IF the newest review run of the PR failed or was cancelled, THEN the system shall show in the verdict banner the newest stored review, or no banner when the PR has none (R-84). | client |
+| R-90 | Ubiquitous | [settled by the user] The system shall generate the brief from the same inputs, with the same single model call (R-09, R-11, R-12), whether or not the PR has reviews; the verdict banner never changes the brief's model input or its stored content. | server-unit |
+| R-91 | State-driven | [user, 2026-11-02: "show the model run"; Q-14 A] WHILE a brief is shown, the system shall show as visible text in the header line of R-08, after the generation's cost (R-71), its input and output tokens as `<in>→<out>`, each in thousands rounded to one decimal place with the suffix `K` (8,200 → `8.2K`, 400 → `0.4K`), so that with R-08 and R-71 the block reads e.g. "… · openai/gpt-4.1 · $0.014 · 8.2K→1.3K". | client |
+| R-94 | State-driven | [Q-12 A] WHILE the verdict banner is shown and the PR's last-reviewed head SHA is set and differs from the PR's current head SHA, the system shall show in the banner the badge "Review is for an older commit (<short last-reviewed SHA>)", keeping the verdict, counts and score visible. | client |
+| R-95 | Ubiquitous | [Q-12 A] The system shall return the PR's last-reviewed head SHA (the head SHA of its last successful review run, or null when it was never reviewed) as one additional field of an existing PR read that the PR page already makes, defined byte-identically in both `@devdigest/shared` copies, with no new endpoint and no database migration. | server-integration + server typecheck + client typecheck |
+| R-96 | State-driven | [Q-13 A] WHILE the verdict banner is shown and no brief is shown (none stored, the last generation failed with none stored, or the brief read failed) and no generation is running, the system shall use the latest review's own summary as the banner's text, and show no text when that summary is empty. | client |
+| R-97 | State-driven | [Q-13 A] WHILE the verdict banner is shown and a generation for the PR is running, the system shall keep the banner's verdict, counts and score visible and show a skeleton in place of the banner's text. | client |
+| R-98 | Ubiquitous | [Q-14 A] The system shall show in the verdict banner only data of the latest review, as the Agent runs banner does: no cost and no tokens of either the review run or the brief generation. | client |
+| R-99 | Unwanted | [Q-15 A — applied by the coordinator as non-blocking; not answered by the user] IF reading the PR's reviews fails, THEN the system shall show no verdict banner and none of the notes of R-101…R-104, and keep the rest of the PR Brief block working as it does with no review. | client |
+| R-101 | State-driven | [accepted UX-07] WHILE the PR has no stored review and no review run for it is in progress, the system shall show at the top of the PR Brief block one muted line "No review yet — run one to see the verdict and PR score", with no link and no button. | client |
+| R-102 | State-driven | [accepted UX-08] WHILE a review run for the PR is in progress and the verdict banner is shown, the system shall show in the banner the note "Review in progress — showing the previous review". | client |
+| R-103 | State-driven | [accepted UX-08] WHILE a review run for the PR is in progress and the PR has no stored review, the system shall show the line "Review in progress" in place of the line of R-101. | client |
+| R-104 | Unwanted | [accepted UX-09] IF the newest review run of the PR failed or was cancelled and the verdict banner is shown, THEN the system shall show in the banner the note "The latest review run failed — showing the previous review" until a newer run starts. | client |
+| R-105 | Ubiquitous | [accepted UX-10] The system shall show in the verdict banner the name of the agent that produced the latest review, as the badge the Agent runs banner shows for the same review. | client |
+
+### Review focus card (amendment 2026-11-02)
+
+The card while no brief is shown: Q-16 A (applied by the coordinator as non-blocking) → R-100.
+
+| ID | Pattern | Requirement | Verified by |
+|---|---|---|---|
+| R-92 | State-driven | [user, 2026-11-02: "Review focus is shown as a separate section"] WHILE a brief is shown, the system shall show Review focus (R-51) as its own full-width card directly below the Intent and Blast radius cards and outside the PR Brief block, so that the PR Brief block holds only the banner, the header and run line, the notices and the summary. | client |
+| R-93 | State-driven | WHILE a generation for the PR is running, the system shall show the Review focus skeleton (R-05) inside the Review focus card at the position of R-92, under the heading "Review focus — read these first", and not inside the PR Brief block. | client |
+| R-100 | State-driven | [Q-16 A — applied by the coordinator as non-blocking; not answered by the user] WHILE no brief is shown (none stored, the brief still loading, the brief read failed, or the last generation failed with none stored) and no generation for the PR is running, the system shall not show the Review focus card. | client |
+
 ## Design analysis
 
 | Screen / action | Covered | Missing | → |
 |---|---|---|---|
-| Overview / PR BRIEF header, verdict banner, score, cost | banner with verdict, findings, score 61, `$0.014` | banner deferred by the user | Non-goals |
+| Overview / PR BRIEF header, verdict banner, score, cost | banner with verdict, findings, score 61, `$0.014` | ~~banner deferred by the user~~ (amendment 2026-11-02) | R-78…R-83, R-86 |
+| Verdict banner / no review | not shown | what replaces verdict and score | R-84 (settled); hint to run a review → UX-07 |
+| Verdict banner / review but no brief, or brief generating | not shown | what the banner's text is; whether it shows at all | Q-13 A → R-78, R-96, R-97 |
+| Verdict banner / review older than the head | not shown | reviews store no head SHA (`reviews.ts:18-37`) | Q-12 A → R-94, R-95 |
+| Verdict banner / review running, failed, cancelled | not shown | which review is "latest"; refresh when a run ends on Overview (the reviews read does not poll) | R-82, R-87…R-89; notes → UX-08, UX-09 |
+| Verdict banner / several agents reviewed the PR | one verdict, no agent shown | whose verdict it is | R-82 (newest review); agent badge → UX-10 |
+| Verdict banner / reviews read fails | — | undefined | Q-15 A → R-99 |
+| Verdict banner / refresh icon inside the banner | icon top-right of the banner | already the "Regenerate brief" control in the block header (R-05) | no change |
+| `$0.014  8.2K→1.3K` under the score | brief run cost and tokens (user, 2026-11-02) | tokens not shown today; cost only in a tooltip; position inside the banner vs the header line; no banner without a review | Q-14 A → R-71 (amended), R-91 in the header line; R-98 |
 | Overview / no brief yet | not shown | Generate button, empty state, missing key before the click | R-02, R-68 |
 | Overview / generating | not shown | skeleton, disabled control, double click, reload or leaving mid-run | R-05, R-15, R-69, R-70, R-74 |
 | Overview / refresh icon | icon top-right of the banner | accessible name, what it does with no brief, failure | R-05, R-61, R-62 (label "Regenerate brief") |
@@ -220,6 +282,7 @@
 | Risk row | icon, title, `path:lines`, chevron | what the chevron shows; click target; severity is not visible; line ranges | R-32, R-49, R-50, R-55 |
 | Blast radius card | symbols, callers, endpoints, cron, tree/graph, Prior PRs | none; reused as is | R-63 |
 | Review focus | count badge 4, `file:line — reason` rows | click behaviour, empty, invented paths, line outside diff, file outside diff | R-30, R-34, R-51…R-58, R-76 |
+| Review focus / placement (`дз5-1.png`, `дз5-2.png`; user, 2026-11-02) | own full-width card below the Intent / Blast radius grid | today it renders inside the PR Brief block (`PrBriefCard.tsx:183`); skeleton location; card with no brief | R-01, R-51 (amended), R-92, R-93; no-brief state → Q-16 A → R-100 |
 | Files changed after click (`дз5-3.png`) | target file expanded and outlined, lines in view | group collapsed, file over 200 lines collapsed, still loading, line not rendered, reload, back | R-53, R-54, R-57, R-59, R-77 |
 | All / data extremes | 3 risks, 4 focus items | caps, very long paths, 0 items | R-35, R-52, R-72 |
 | All / failure | — | no key (default is OpenAI), timeout, invalid output, regeneration failure | R-38, R-39, R-60…R-62 |
@@ -242,6 +305,12 @@ sequenceDiagram
   UI->>BR: read brief (PR id)
   BR->>DB: pr_brief.json + pull_requests.head_sha (workspace-scoped)
   BR-->>UI: brief or null, stale, generating, last_failure, key_available
+
+  Note over UI,RV: verdict banner (amendment 2026-11-02) — no model call
+  UI->>RV: read reviews (PR id) — already made by the PR page
+  RV->>DB: reviews + findings, newest first (workspace-checked)
+  RV-->>UI: reviews (kind, verdict, summary, score, findings)
+  UI->>UI: newest kind=review → banner (verdict, counts, score) + brief summary
 
   UI->>BR: generate (PR id)
   alt generation already running for this PR
@@ -283,6 +352,9 @@ sequenceDiagram
 | server/brief → LLM | facts only, in untrusted blocks, ≤ 8,000 tok | as above; no re-ask | R-12, R-19, R-37, R-38 |
 | server/brief → DB | brief json with meta | write error → generation fails, old brief kept | R-16, R-17, R-61 |
 | client Overview → client Files changed | URL `tab`, `file`, `line` | file not in diff → inline message, no switch; line not rendered → file header + message | R-53…R-59, R-77 |
+| client Overview → server/reviews (reviews read, existing; amendment 2026-11-02) | PR id | 404 foreign PR; no reviews → no banner (R-101 line); read error → no banner, no notes; a run finishing → banner refreshed | R-82, R-84, R-85, R-88, R-99, R-101 |
+| client → server/pulls (an existing PR read the page already makes) | PR id | returns `last_reviewed_sha` (nullable) as one more field; null → no stale badge | R-94, R-95 |
+| client → server (the existing active-runs and run-history reads the page already makes, `page.tsx:56-57`) | PR id | a run in progress → notes of R-102, R-103; newest run failed/cancelled → R-104 | R-87, R-102…R-104 |
 
 ## UX improvements
 
@@ -294,10 +366,24 @@ sequenceDiagram
 | UX-04 | Show the cost of the last generation in the header line's tooltip (R-08). | Makes the cost of Regenerate visible before the click, as on the Onboarding Tour | accepted → R-71 |
 | UX-05 | Truncate a long path in the middle, with the full path in a tooltip, in Risk areas and Review focus. | Same pattern as Project Context R-72 and Onboarding AC-78 | accepted → R-72 |
 | UX-06 | Show a "via blast radius" tag on a Review focus item or risk whose file is not in the diff, before any click. | The reader knows in advance that it leads outside the diff | accepted → R-76 |
+| UX-07 | (2026-11-02) With no review (R-84), show one muted line at the top of the PR Brief block: "No review yet — run one to see the verdict and PR score", with no link and no button (the "Run Review" control is already in the PR header). | The user allowed it as optional; it explains why the banner from the design is missing | accepted 2026-11-02 → R-101 |
+| UX-08 | (2026-11-02) While a review run is in progress (R-87), show in the banner the note "Review in progress — showing the previous review" (or, with no previous review, "Review in progress" in place of UX-07's line). | Without it the banner looks current while a newer verdict is minutes away | accepted 2026-11-02 → R-102, R-103 |
+| UX-09 | (2026-11-02) When the newest review run failed or was cancelled (R-89), show in the banner the note "The latest review run failed — showing the previous review". | Otherwise a failed re-run is invisible on Overview, and the old verdict looks fresh | accepted 2026-11-02 → R-104 |
+| UX-10 | (2026-11-02) Pass the review's agent name to the banner, which already renders it as a badge on Agent runs (`VerdictBanner.tsx:42-46`). | With several agents, "Request changes" is one agent's opinion; the badge says whose. The design shows no badge | accepted 2026-11-02 → R-105 |
 
 ## Open questions
 
-None. Q-01…Q-11 were answered by the user on 2026-11-01, each with option A (Recommended); see `## Decisions`. The table below is kept as asked, for traceability only.
+None open. Q-12…Q-16 (raised by the 2026-11-02 amendment) are resolved: Q-12, Q-13 and Q-14 answered **A** by the user on 2026-11-02; Q-15 and Q-16 not answered by the user, option **A** applied by the coordinator as non-blocking. See `## Decisions`. The table is kept for traceability.
+
+| ID | Question | Options | Blocks | Who answers |
+|---|---|---|---|---|
+| Q-12 | *Answered A, 2026-11-02.* **What does the banner show when the latest review is older than the PR's head commit?** A review row stores no head SHA (`server/src/db/schema/reviews.ts:18-37`). The PR row stores the head SHA of the last successful review (`pull_requests.last_reviewed_sha`, `pulls.ts:21`, set at `run-executor.ts:338-340`), and the PR list already turns "head ≠ last reviewed" into `needs_review` (`pulls/status.ts:59`); that SHA is in no API response today. | **A (Recommended):** show the verdict and score as usual, plus a badge "Review is for an older commit (<short SHA>)" when the PR's last-reviewed head SHA differs from its head SHA; the SHA is added as one field to an existing PR read (both contract copies), no new endpoint, no migration. · B: the same badge without the SHA, decided from the PR-list status the page already loads (`page.tsx:44`), with no server change. · C: show the verdict and score unmarked. · D: hide verdict, counts and score when the review is older; show only the brief summary (as with no review). · E: as A, but exact per review: store the head SHA on each review row (a migration) | new R for the stale review case; R-78, R-80 under D | user |
+| Q-13 | *Answered A, 2026-11-02.* **A review exists but no brief is shown** (Q-16 decides the Review focus card in the same states) (no brief yet, a generation running, the last generation failed with none stored). The settled rule makes the brief's summary the banner's text, and there is none. | **A (Recommended):** show the banner with verdict, counts and score; its text is the review's own summary (as on Agent runs, `ReviewRunAccordion.tsx:141`) until a brief exists; while a generation runs the text is a skeleton (R-05); "No brief yet" / Generate stays below the banner. · B: show verdict, counts and score with no text until a brief exists. · C: no banner until a brief exists (the review's verdict is hidden on Overview) | R-78, R-81 (both are worded for "with a brief" only); R-02, R-05, R-62 layout | user |
+| Q-14 | *Answered A, 2026-11-02.* Where does the brief's run line (model, cost, `in→out` tokens; R-71, R-91) sit, and does the banner also show the **review** run's cost? In `дз5-1.png` `$0.014  8.2K→1.3K` sits under the PR score inside the banner. `VerdictBanner` renders no cost today (`VerdictBanner.tsx:12-58`); the review run's cost lives on `agent_runs` and is shown on the Agent runs timeline (`RunHistory.tsx:229-234`, `RunCostBadge`). With no review there is no banner, so a run line inside it would vanish. | **A (Recommended):** the brief's run line is the header line of R-08 ("Generated … · openai/gpt-4.1 · $0.014 · 8.2K→1.3K"), shown with or without a review; the banner stays as `VerdictBanner` renders on Agent runs, with no cost. · B: inside the banner under the score, as drawn, and in the header line only when there is no banner. · C: as A, and the banner also shows the review run's cost and tokens (`RunCostBadge`, joined by `run_id`) | position of R-71, R-91 | user |
+| Q-16 | *A applied by the coordinator, non-blocking; not answered by the user.* Does the Review focus card (R-92) show while **no brief is shown** (no brief yet, the brief still loading, the brief read failed, or the last generation failed with none stored)? | **A (Recommended):** hidden until a brief exists — the PR Brief block already says "No brief yet" / the error, and an empty card would repeat it; it appears with its skeleton when a generation starts (R-93). · B: always shown, with the text "No brief yet" (or a skeleton while loading) in place of the list | new R for the no-brief state; R-04, R-06 | user |
+| Q-15 | *A applied by the coordinator, non-blocking; not answered by the user.* What does the banner do if the reviews read fails? | **A (Recommended):** no banner, and the rest of the PR Brief block works as without a review (the same principle as R-06); the error is already visible on the Agent runs tab. · B: an error line with "Retry" in the banner's place | new R for the failure case | user |
+
+**Answered on 2026-11-01.** Q-01…Q-11 were answered by the user, each with option A (Recommended); see `## Decisions`. The table below is kept for traceability only.
 
 | ID | Question | Options | Blocks | Who answers |
 |---|---|---|---|---|
@@ -317,7 +403,7 @@ None. Q-01…Q-11 were answered by the user on 2026-11-01, each with option A (R
 
 | Question | Decision | Source |
 |---|---|---|
-| Scope | P1 + P2 + cheap P3: skeleton while generating, labels from `brief.json`, expandable risk explanation, a risk click opens its file, "File not in this PR's diff". VerdictBanner/PR score and workflow-retro/cost report are non-goals (deferred) | user (via coordinator), 2026-11-01 → R-05, R-07, R-50, R-55, R-56, Non-goals |
+| Scope | P1 + P2 + cheap P3: skeleton while generating, labels from `brief.json`, expandable risk explanation, a risk click opens its file, "File not in this PR's diff". VerdictBanner/PR score and workflow-retro/cost report are non-goals (deferred). *Superseded for the banner on 2026-11-02, see the amendment below* | user (via coordinator), 2026-11-01 → R-05, R-07, R-50, R-55, R-56, Non-goals |
 | Input budget | 8,000 tokens by `chars/4` for the single `risk_brief` call. Over budget, trim deterministically: specs first, then PR description, then the blast caller list. Record what was trimmed. Diff hunk bodies never go in | user (via coordinator), 2026-11-01 → R-19…R-23 |
 | Stale cache | Head SHA ≠ the SHA in the cached json → GET returns the cached brief with a stale flag; the UI shows "brief is for an older commit" plus Regenerate; nothing auto-regenerates | user (via coordinator), 2026-11-01 → R-43, R-45…R-47 |
 | One call | Exactly one model call per generation, visible in the log, model from `resolveFeatureModel(…, 'risk_brief')` through `container.featureModel` | user (via coordinator), 2026-11-01 → R-11…R-14 |
@@ -354,3 +440,27 @@ Raised by `implementation-planner` while planning, approved by the user and rela
 | AP-8 (A) | A trim record that holds only moved focus lines is non-empty, so "Built from trimmed inputs" shows | R-25 |
 | REC-5 | Reasoning-model output cap. Rule chosen by spec-creator: a model id (case-insensitive, any `<vendor>/` prefix removed) that starts with `o1`/`o3`/`o4` or contains `gpt-5`, `deepseek-r1`, `deepseek-v4`, `qwq`, `reasoning` or `thinking` gets 10,000 output tokens (the onboarding AC-83 value) and a 120 s timeout. Every other model keeps 2,000 tokens and 60 s. The timeout is raised as well because 10,000 tokens at ~110 tok/s (measured for onboarding) does not fit in 60 s | R-73 (and R-60 by reference) |
 | F-23 | The reasoning-model id rule removes everything up to and including the **last** `/` (`a/b/o3` → `o3`), not just a single `<vendor>/` prefix. Found by `test-writer`: R-73 and the plan's D-38 disagreed | R-73 |
+
+### Amendments 2026-11-02 (user: add the verdict banner)
+
+Requested by the user and relayed by the coordinator. New IDs are R-78…R-105; no existing ID is renumbered. The amendment was approved by the user on 2026-11-02, and Status is back to Approved.
+
+| Item | Change | Source | Requirements |
+|---|---|---|---|
+| Scope | The verdict banner moves from Non-goals to Goals (7): latest review's verdict and PR score at the top of the PR Brief block, the brief's summary under them, reusing `VerdictBanner` | user, 2026-11-02 (course task text) | Goals, Non-goals, R-78…R-90 |
+| Banner placement and text | At the top of the PR Brief block; the brief's summary is the banner's text, so it is not repeated under the header | user (via coordinator), 2026-11-02 | R-78, R-81, R-48 (amended) |
+| No review yet | No verdict, no counts, no score, no placeholder; the brief summary shows as today. A hint to run a review is optional | user (via coordinator), 2026-11-02 | R-84; hint → UX-07 (accepted 2026-11-02 → R-101) |
+| No model call | The banner makes no model call; the brief's single-call rule (R-11, R-12) and its inputs are unchanged | user (via coordinator), 2026-11-02 | R-85, R-90, Non-goals |
+| Labels | Through `client/messages/en/*.json`. The reused banner keeps its `prReview` labels (`VerdictBanner.tsx:27`); new brief-side labels go to `brief.json` | user (via coordinator), 2026-11-02; namespace split from the existing component | R-07 (amended), R-83 |
+| "Latest review" | The newest stored review of kind "review" — the definition Smart Diff (`review.repo.ts:76-106`) and the PR list's score already use; only a successful run stores one (`run-executor.ts:324-334`) | spec-creator, from «from the latest review» and the existing definition | R-82, R-87, R-89 |
+| Counts and look | Same counts and look as the Agent runs banner for the same review (`ReviewRunAccordion.tsx:55,139-146`): findings = all of the review's findings; blockers = non-dismissed `CRITICAL`; score ring only when a score exists (`VerdictBanner.tsx:50`) | spec-creator, from «can be reused» and the existing component | R-79, R-80, R-83, R-86 |
+| Data source | The reviews read the PR page already makes (`page.tsx:51`, `usePrReviews`); no new endpoint | coordinator, 2026-11-02 («prefer reusing existing data») | R-85, Module interaction |
+| Brief run line | The brief's own run — model, cost and tokens `in→out` — is visible, not only in the R-71 tooltip. Data from `brief.meta` (`provider`, `model`, `cost_usd`, `tokens_in`, `tokens_out`; `brief.ts:251-257`), already stored. R-71 is amended in place (its old text is kept in the row), not duplicated. `VerdictBanner` shows no review cost today (`VerdictBanner.tsx:12-58`); the run line sits in the header line and the banner gains no cost (Q-14 A) | user, 2026-11-02 («the brief must show the model run … as in the screenshot») | R-71 (amended), R-91, Q-14 |
+| Review focus as a separate card | Review focus leaves the PR Brief block and becomes its own full-width card directly below the Intent / Blast radius grid, as drawn in `дз5-1.png` / `дз5-2.png`. The PR Brief block keeps the banner, the header and run line, the notices and the summary. Review focus behaviour is unchanged (R-52, R-53…R-59, R-72, R-76, R-77) | user (via coordinator), 2026-11-02 («in the screenshot, Review focus is shown as a separate section») | R-01, R-51 (amended), R-92 |
+| Review focus skeleton | While generating, the Review focus skeleton sits inside the Review focus card — the same rule F-16 applied to Risk areas (their skeleton sits in the Intent card, `OverviewTab.tsx:44-51`) | spec-creator, from the new layout and the F-16 precedent (coordinator's recommendation) | R-05 (amended), R-93 |
+| Q-12 Stale review | A: the badge "Review is for an older commit (<short SHA>)" when the PR's `last_reviewed_sha` differs from its head; `last_reviewed_sha` added as one field to an existing PR read, mirrored in both contract copies; no migration | user, 2026-11-02 | R-94, R-95 |
+| Q-13 Review but no brief | A: the banner shows verdict, counts and score; its text is the review's own summary until a brief exists, and a skeleton while a generation runs | user, 2026-11-02 | R-78 (amended), R-96, R-97 |
+| Q-14 Run line and banner cost | A: the brief's run line (model, cost, `in→out`) is the R-08 header line; the banner shows review data only, as on Agent runs | user, 2026-11-02 | R-71, R-91, R-98 |
+| Q-15 Reviews read fails | A: no banner and no banner notes; the rest of the PR Brief block works as with no review | coordinator, 2026-11-02 — the spec-creator recommendation applied as **non-blocking**; *not answered by the user* | R-99 |
+| Q-16 Review focus card with no brief | A: hidden until a brief exists; appears with its skeleton when a generation starts | coordinator, 2026-11-02 — the spec-creator recommendation applied as **non-blocking**; *not answered by the user* | R-100, R-93 |
+| UX-07…UX-10 | All accepted: a "No review yet" line, "Review in progress" notes, a "latest run failed" note, and the agent badge | user, 2026-11-02 | R-101…R-105 |
