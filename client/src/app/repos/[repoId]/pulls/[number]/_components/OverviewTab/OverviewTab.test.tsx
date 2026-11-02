@@ -19,6 +19,7 @@ import brief from "../../../../../../../../messages/en/brief.json";
 import shell from "../../../../../../../../messages/en/shell.json";
 import common from "../../../../../../../../messages/en/common.json";
 import blast from "../../../../../../../../messages/en/blast.json";
+import prReview from "../../../../../../../../messages/en/prReview.json";
 import { OverviewTab } from "./OverviewTab";
 
 // ---- fixtures -------------------------------------------------------------
@@ -116,14 +117,17 @@ const respond = (body: unknown, status = 200) =>
 
 let briefView: PrBriefView;
 let intent: PrIntentRecord | null;
+/** When set, answers GET /brief instead of `briefView` (a failure, or a read that never settles). */
+let briefReply: (() => Promise<Response>) | null;
 
 beforeEach(() => {
   briefView = view();
+  briefReply = null;
   intent = INTENT;
   fetchMock.mockReset();
   fetchMock.mockImplementation((url: string) => {
     const u = String(url);
-    if (u.endsWith("/pulls/pr-1/brief")) return respond(briefView);
+    if (u.endsWith("/pulls/pr-1/brief")) return briefReply ? briefReply() : respond(briefView);
     if (u.endsWith("/pulls/pr-1/intent")) {
       return intent ? respond(intent) : respond({ error: { code: "intent_not_derived", message: "not derived" } }, 404);
     }
@@ -147,7 +151,7 @@ let onOpenInDiff: ReturnType<typeof vi.fn>;
 function tree(qc: QueryClient) {
   return (
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" timeZone="UTC" now={NOW} messages={{ brief, shell, common, blast }}>
+      <NextIntlClientProvider locale="en" timeZone="UTC" now={NOW} messages={{ brief, prReview, shell, common, blast }}>
         <OverviewTab
           prId="pr-1"
           prBody="PR body text"
@@ -374,5 +378,71 @@ describe("OverviewTab — scroll on Back (R-77, D-32, F-14)", () => {
     await settled();
     await new Promise((r) => setTimeout(r, 50));
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("OverviewTab — the Review focus card (R-92, R-93, R-100)", () => {
+  const focusRegion = () => screen.queryByRole("region", { name: /Review focus — read these first/ });
+  const follows = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("R-01, R-92 — order: PR Brief → Intent | Blast radius → Review focus → description; the card is outside the block", async () => {
+    renderTab();
+    await settled();
+    const blastCard = screen.getByRole("region", { name: "Blast radius" });
+    const description = screen.getByText("PR body text");
+    expect(follows(briefCard(), intentCard())).toBe(true);
+    expect(follows(intentCard(), blastCard)).toBe(true);
+    expect(follows(blastCard, focusCard())).toBe(true);
+    expect(follows(focusCard(), description)).toBe(true);
+    expect(briefCard().contains(focusCard())).toBe(false);
+    expect(within(briefCard()).queryByText("Review focus — read these first")).not.toBeInTheDocument();
+    // the brief's items are in the card
+    expect(within(focusCard()).getByText("Read the compare first.")).toBeInTheDocument();
+  });
+
+  it("R-93, B-03 — generating: the focus card shows its skeleton, aria-busy, no live status; none of it in the block", async () => {
+    briefView = view({ generating: true });
+    renderTab();
+    await within(intentCard()).findByText(/Reject forged webhook events\./);
+    const card = await screen.findByRole("region", { name: /Review focus — read these first/ });
+    expect(card).toHaveAttribute("aria-busy", "true");
+    expect(within(card).queryByRole("listitem")).not.toBeInTheDocument();
+    expect(within(card).queryByRole("status")).not.toBeInTheDocument();
+    // the page's one live "Generating…" is the PR Brief block's
+    const generating = screen.getAllByRole("status", { name: "Generating…" });
+    expect(generating).toHaveLength(1);
+    expect(briefCard().contains(generating[0]!)).toBe(true);
+    expect(within(briefCard()).queryByText("Review focus — read these first")).not.toBeInTheDocument();
+    expect(follows(intentCard(), card)).toBe(true);
+  });
+
+  it("R-100 — no card when no brief is stored", async () => {
+    briefView = view({ brief: null });
+    renderTab();
+    await screen.findByText("No brief yet");
+    await within(intentCard()).findByText(/Reject forged webhook events\./);
+    expect(focusRegion()).not.toBeInTheDocument();
+  });
+
+  it("R-100 — no card when the last generation failed with no brief stored", async () => {
+    briefView = view({ brief: null, last_failure: { code: "timeout", message: "timed out", at: "2026-11-01T11:00:00.000Z" } });
+    renderTab();
+    await screen.findByText("Generation failed — timed out");
+    expect(focusRegion()).not.toBeInTheDocument();
+  });
+
+  it("R-100 — no card when the brief read fails", async () => {
+    briefReply = () => respond({ error: { code: "internal", message: "Database unavailable" } }, 500);
+    renderTab();
+    await within(briefCard()).findByRole("alert", {}, { timeout: 4000 });
+    expect(focusRegion()).not.toBeInTheDocument();
+  });
+
+  it("R-100 — no card while the brief read is pending", async () => {
+    briefReply = () => new Promise<Response>(() => {});
+    renderTab();
+    await within(intentCard()).findByText(/Reject forged webhook events\./);
+    expect(within(briefCard()).getByRole("status", { name: "Loading brief…" })).toBeInTheDocument();
+    expect(focusRegion()).not.toBeInTheDocument();
   });
 });

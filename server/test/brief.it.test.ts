@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { PrBrief, type SecretKey, type SecretsProvider, type StructuredRequest } from '@devdigest/shared';
+import { PrBrief, PrDetail, type SecretKey, type SecretsProvider, type StructuredRequest } from '@devdigest/shared';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
@@ -379,6 +379,59 @@ d('/pulls/:id/brief (Testcontainers pg)', () => {
       const { body } = await getBrief(app, prId);
       expect(body.stale).toBe(true);
       expect(body.current_head_sha).toBe('gh-new-head');
+    });
+  });
+
+  describe('R-95 — GET /pulls/:id returns last_reviewed_sha', () => {
+    const markReviewed = async (prId: string, sha: string) => {
+      await pg.handle.db.update(t.pullRequests).set({ lastReviewedSha: sha }).where(eq(t.pullRequests.id, prId));
+    };
+    class OfflineGitHub extends MockGitHubClient {
+      override async getPullRequest(): Promise<PrDetail> {
+        throw new Error('offline');
+      }
+    }
+
+    it('(a) GitHub path: the persisted column wins over anything the adapter sends', async () => {
+      const prId = await makePr({ headSha: 'head-1' });
+      await markReviewed(prId, 'rev-1');
+      const app = await mk({ github: new MockGitHubClient({ detail: { last_reviewed_sha: 'from-gh' } }) });
+      const res = await app.inject({ method: 'GET', url: `/pulls/${prId}` });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.last_reviewed_sha).toBe('rev-1');
+      expect(PrDetail.safeParse(body).success).toBe(true);
+    });
+
+    it('(b) never reviewed → null, even when the adapter sends a value', async () => {
+      const prId = await makePr();
+      const app = await mk({ github: new MockGitHubClient({ detail: { last_reviewed_sha: 'from-gh' } }) });
+      const res = await app.inject({ method: 'GET', url: `/pulls/${prId}` });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toHaveProperty('last_reviewed_sha', null);
+      expect(PrDetail.safeParse(body).success).toBe(true);
+    });
+
+    it('(c) offline path (GitHub throws) → the persisted value from the row', async () => {
+      const prId = await makePr({ headSha: 'head-2' });
+      await markReviewed(prId, 'rev-1');
+      const app = await mk({ github: new OfflineGitHub() });
+      const res = await app.inject({ method: 'GET', url: `/pulls/${prId}` });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.last_reviewed_sha).toBe('rev-1');
+      // proves the offline branch served it: GitHub's mock head would be 'a1b2c3d4'
+      expect(body.head_sha).toBe('head-2');
+      expect(PrDetail.safeParse(body).success).toBe(true);
+    });
+
+    it('(c′) offline path, never reviewed → null', async () => {
+      const prId = await makePr();
+      const app = await mk({ github: new OfflineGitHub() });
+      const body = (await app.inject({ method: 'GET', url: `/pulls/${prId}` })).json();
+      expect(body).toHaveProperty('last_reviewed_sha', null);
+      expect(PrDetail.safeParse(body).success).toBe(true);
     });
   });
 
