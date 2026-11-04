@@ -3,7 +3,6 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { BlastRadius } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
-import { BlastService } from './service.js';
 
 /**
  * blast module (L04).
@@ -17,10 +16,8 @@ import { BlastService } from './service.js';
 export default async function blastRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
-  const service = new BlastService({
-    pulls: container.reviewRepo,
-    repoIntel: container.repoIntel,
-  });
+  // One shared instance, built in the composition root (also read by the PR brief).
+  const service = container.blast;
 
   app.get('/pulls/:id/blast', { schema: { params: IdParams, response: { 200: BlastRadius } } }, async (req) => {
     const { workspaceId } = await getContext(container, req);

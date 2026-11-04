@@ -2,12 +2,13 @@
 // Compact, baseline-aware verification for one package.
 //
 // Run it from INSIDE the package directory:
-//   node ../scripts/verify.mjs                          # typecheck · arch · full suite
+//   node ../scripts/verify.mjs                          # typecheck · arch · lint · full suite
 //   node ../scripts/verify.mjs --related src/a.ts ...   # only the tests that import these files
 //   node ../scripts/verify.mjs --save-baseline L05-x    # record today's failures before editing
 //   node ../scripts/verify.mjs --baseline L05-x         # fail only on failures that are NEW
 //   node ../scripts/verify.mjs --it                     # server: add the integration suite
 //   node ../scripts/verify.mjs --no-typecheck --no-arch # tests only
+//   node ../scripts/verify.mjs --no-lint                # client: skip eslint
 //
 // Prints ~10–30 lines: one row per check, then the new failures trimmed to their
 // assertion. Baselines live in <repo>/.devdigest/cache/verify/ (gitignored).
@@ -26,7 +27,7 @@ const PKG = basename(CWD);
 // The single source of the per-package commands. Agents and TESTING.md point here.
 const PACKAGES = {
   server: { pm: 'pnpm', typecheck: true, arch: true, tests: true, unitExclude: '**/*.it.test.ts', it: true },
-  client: { pm: 'pnpm', typecheck: true, tests: true },
+  client: { pm: 'pnpm', typecheck: true, lint: true, tests: true },
   'reviewer-core': { pm: 'npm', typecheck: true, tests: true, extra: ['--passWithNoTests'] },
   mcp: { pm: 'npm', typecheck: true, tests: true, build: true },
   e2e: { pm: 'npm', typecheck: true },
@@ -71,7 +72,7 @@ if (compareTo) {
 
 const rows = [];
 const details = [];
-const record = { pkg: PKG, createdAt: new Date().toISOString(), head: run('git rev-parse --short HEAD').out.trim(), typecheckErrors: 0, archOk: true, failures: [] };
+const record = { pkg: PKG, createdAt: new Date().toISOString(), head: run('git rev-parse --short HEAD').out.trim(), typecheckErrors: 0, archOk: true, lintOk: true, failures: [] };
 let blocking = false;
 
 if (cfg.typecheck && !flag('--no-typecheck')) {
@@ -92,6 +93,21 @@ if (cfg.arch && !flag('--no-arch')) {
   blocking ||= bad;
   rows.push(`arch        ${record.archOk ? '✅ no new violation' : `${bad ? '❌ new violation(s)' : '➖ failing, as in the baseline'}`}`);
   if (!record.archOk) details.push(`arch:\n${tail(r.out, 20)}`);
+}
+
+// eslint catches what typecheck and the tests do not (e.g. `no-restricted-imports`,
+// which otherwise surfaces only at `next build`). With --related, only those files.
+if (cfg.lint && !flag('--no-lint')) {
+  const files = related?.filter((f) => /\.[cm]?[jt]sx?$/.test(f));
+  if (!related || files.length) {
+    const r = run(related ? `${cfg.pm} exec eslint ${files.map((f) => JSON.stringify(f)).join(' ')}` : script('lint'));
+    record.lintOk = r.code === 0;
+    const bad = !record.lintOk && (baseline?.lintOk ?? true);
+    blocking ||= bad;
+    const errors = r.out.match(/\((\d+) errors?/)?.[1];
+    rows.push(`lint        ${record.lintOk ? '✅ no errors' : `${bad ? '❌' : '➖'} ${errors ? `${errors} errors` : 'failing'}${bad ? '' : ', as in the baseline'}`}`);
+    if (!record.lintOk) details.push(`lint:\n${tail(r.out, 20)}`);
+  }
 }
 
 const vitest = (label, extraArgs) => {

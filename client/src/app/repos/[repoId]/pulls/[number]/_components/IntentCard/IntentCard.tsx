@@ -13,7 +13,7 @@ import React from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Button, Icon, Skeleton } from "@devdigest/ui";
 import type { IntentSource, PrIntentRecord } from "@devdigest/shared";
-import { usePrActiveRuns, usePrIntent, useRefreshIntent } from "@/lib/hooks/reviews";
+import { usePrIntent, useRefreshIntent, useWhenActiveRunsEnd } from "@/lib/hooks/reviews";
 import { AGE_TICK_MS, SOURCE_STATUS_TONE } from "./constants";
 import {
   derivedAt,
@@ -22,11 +22,22 @@ import {
   knownReason,
   missingContext,
   riskIcon,
-  shortSha,
 } from "./helpers";
+import { shortSha } from "@/lib/short-sha";
 import { cx } from "./styles";
 
-export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
+export function IntentCard({
+  prId,
+  riskAreas,
+}: {
+  prId: string;
+  /**
+   * The PR Brief's Risk areas, given while a brief is stored (R-63, D-27):
+   * rendered in place of the intent's own risk-area list, or below the
+   * not-derived / error block when there is no intent. Absent → today's list (R-67).
+   */
+  riskAreas?: React.ReactNode;
+}): React.JSX.Element {
   const t = useTranslations("brief");
   const intent = usePrIntent(prId);
   const refresh = useRefreshIntent(prId);
@@ -43,13 +54,7 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
   // A review run derives the intent too. When the PR's last active run
   // finishes, re-read it — otherwise the card keeps its cached "not derived"
   // (or older) answer and invites a second, paid derive.
-  const activeRuns = usePrActiveRuns(prId).data?.length ?? 0;
-  const prevActiveRuns = React.useRef(activeRuns);
-  const refetchIntent = intent.refetch;
-  React.useEffect(() => {
-    if (prevActiveRuns.current > 0 && activeRuns === 0) void refetchIntent();
-    prevActiveRuns.current = activeRuns;
-  }, [activeRuns, refetchIntent]);
+  useWhenActiveRunsEnd(prId, () => void intent.refetch());
 
   // A newer intent (from a review run or a retry) makes an old derive error stale.
   const generatedAt = data?.generated_at;
@@ -87,7 +92,7 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
         </div>
       ) : data ? (
         <div className={deriving ? cx.dimmed : cx.body}>
-          <IntentBody record={data} />
+          <IntentBody record={data} riskAreas={riskAreas} />
         </div>
       ) : isIntentNotDerived(loadError) ? (
         <div className={cx.empty}>
@@ -102,6 +107,8 @@ export function IntentCard({ prId }: { prId: string }): React.JSX.Element {
       ) : loadError ? (
         <DeriveError error={loadError} onRetry={() => void intent.refetch()} />
       ) : null}
+
+      {!intent.isLoading && !data && riskAreas && <RiskAreasSlot>{riskAreas}</RiskAreasSlot>}
     </section>
   );
 }
@@ -132,7 +139,13 @@ function DeriveError({ error, onRetry }: { error: Error; onRetry?: () => void })
   );
 }
 
-function IntentBody({ record }: { record: PrIntentRecord }): React.JSX.Element {
+function IntentBody({
+  record,
+  riskAreas,
+}: {
+  record: PrIntentRecord;
+  riskAreas?: React.ReactNode;
+}): React.JSX.Element {
   const t = useTranslations("brief");
 
   return (
@@ -155,7 +168,9 @@ function IntentBody({ record }: { record: PrIntentRecord }): React.JSX.Element {
         />
       </div>
 
-      {record.risk_areas.length > 0 && (
+      {riskAreas ? (
+        <RiskAreasSlot>{riskAreas}</RiskAreasSlot>
+      ) : record.risk_areas.length > 0 && (
         <>
           <hr className={cx.divider} />
           <div>
@@ -196,6 +211,23 @@ function IntentBody({ record }: { record: PrIntentRecord }): React.JSX.Element {
 
       <hr className={cx.divider} />
       <Provenance record={record} />
+    </>
+  );
+}
+
+/** The brief's Risk areas under the card's own "Risk areas" label (D-27). */
+function RiskAreasSlot({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const t = useTranslations("brief");
+  return (
+    <>
+      <hr className={cx.divider} />
+      <div>
+        <div className={cx.groupLabel}>
+          <Icon.AlertTriangle size={12} aria-hidden />
+          {t("intent.riskAreas")}
+        </div>
+        {children}
+      </div>
     </>
   );
 }

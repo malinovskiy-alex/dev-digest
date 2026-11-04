@@ -4,6 +4,7 @@ import type {
   GitClient,
   RepoRef,
 } from '@devdigest/shared';
+import { mapBounded } from '../../platform/concurrency.js';
 import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
 import {
   createContextDocMatcher,
@@ -251,18 +252,4 @@ function memo<T>(cache: Map<string, Promise<T>>, key: string, max: number, load:
     cache.delete(oldest);
   }
   return pending;
-}
-
-/** `Promise.all(items.map(fn))` with at most `limit` in flight; results keep input order. */
-async function mapBounded<I, O>(items: I[], limit: number, fn: (item: I) => Promise<O>): Promise<O[]> {
-  const out = new Array<O>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
 }

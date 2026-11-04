@@ -7,9 +7,21 @@ Append-only. Format, sections and cross-package entries:
 
 ## What Works
 
+### 2026-11-01 — Give a model call inside a JobRunner job a deadline, not a fixed timeout
+**Symptom:** a reasoning model's 120 s call timeout plus fact collection outran JobRunner's own 120 s wall: the `jobs` row read `failed` while the call was still running, and the runner's slot was freed early.
+**Cause:** JobRunner's `withTimeout` covers the whole handler (see the 2026-11-01 JobRunner entry under What Doesn't Work), so a per-call timeout equal to the wall can never fit.
+**Rule:** compute the call timeout as `min(model limit, wall − margin − elapsed since the handler started)`, fail as a timeout without calling the model when nothing is left, and pass the same value to `timeoutMs` and the outer `withTimeout`.
+**Where:** `server/src/modules/brief/grounding/helpers.ts:255` (`callDeadlineMs`)
+
 *(nothing yet)*
 
 ## What Doesn't Work
+
+### 2026-11-01 — Classifying every exception of a generation as a provider error leaks SQL text and host paths to the UI
+**Symptom:** the security review found that a DB failure during fact collection, or a missing prompt file, would surface in the brief card as "Generation failed: Failed query: select … from "pr_files" …" or an absolute `C:\…` path.
+**Cause:** one `catch` wrapped the whole run and passed `err.message` through as the provider's reason, but only the model call's message is meant for the user (R-60).
+**Rule:** wrap only the model call (and its `withTimeout`) in a tagged error and pass that message through (one line, ≤ 300 chars, `sk-…` / `Bearer …` masked); every other error gets fixed text, and the real cause goes only to the warn log.
+**Where:** `server/src/modules/brief/grounding/helpers.ts:52` (`ModelCallError`), `classifyGenerationError` at `:222`
 
 ### 2026-11-01 — A JobRunner handler that throws is retried, so a paid model call inside it runs twice
 **Symptom:** moving the onboarding generation onto `JobRunner` would have re-called the model on any failure, breaking "exactly one model call per generation".
@@ -317,6 +329,7 @@ before anything else. The fix is a fresh token in Settings (written to
 
 ## Session Notes
 
+- 2026-11-01 — L05 PR Brief (server): only model-call errors keep provider text; JobRunner-wall deadline for the single brief call.
 - 2026-11-01 — L05 Onboarding Tour: new `modules/onboarding`, repo-intel facade reads + `countIndexedFiles`, incremental coverage fixes; one-shot LLM job on JobRunner with a never-throwing handler.
 
 - 2026-09-16 — per-run cost (L01): `agent_runs.cost_usd` via migration `0010`,

@@ -21,6 +21,22 @@ export class BlastService {
     if (!pull) throw new NotFoundError('Pull request not found');
 
     const paths = (await this.deps.pulls.getPrFiles(pull.id)).map((f) => f.path);
+    return this.forResolvedPull(pull, paths, log, startedAt);
+  }
+
+  /**
+   * The blast radius of a PR the caller has ALREADY resolved through a
+   * workspace-scoped read, with its changed paths already loaded — so a
+   * consumer that holds both (the PR brief, L05) does not read the PR and its
+   * patches a second time. Never call it with an id taken from a request.
+   */
+  async forResolvedPull(
+    pull: { id: string; repoId: string },
+    paths: string[],
+    log?: BlastLogger,
+    startedAt = Date.now(),
+  ): Promise<BlastRadius> {
+    const prId = pull.id;
     const [facade, index] = await Promise.all([
       this.deps.repoIntel.getBlastRadius(pull.repoId, paths),
       this.deps.repoIntel.getIndexState(pull.repoId),

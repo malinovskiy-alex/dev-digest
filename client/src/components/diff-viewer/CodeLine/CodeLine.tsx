@@ -33,6 +33,18 @@ function FindingLineLabel({ severity }: { severity: Severity }) {
   );
 }
 
+/** The hover "+" that opens the inline composer. Its own component so only the
+ *  hovered line pays for `useTranslations` (see FindingLineLabel). */
+function AddCommentButton({ onClick }: { onClick: () => void }) {
+  const t = useTranslations("shell");
+  const label = t("diffViewer.addComment");
+  return (
+    <button type="button" title={label} aria-label={label} onClick={onClick} style={cs.addBtn}>
+      +
+    </button>
+  );
+}
+
 export function CodeLine({
   ln,
   path,
@@ -40,6 +52,8 @@ export function CodeLine({
   commenting,
   findings = NO_FINDINGS,
   renderFinding,
+  highlighted = false,
+  rowRef,
 }: {
   ln: Line;
   path: string;
@@ -48,6 +62,10 @@ export function CodeLine({
   /** Review findings anchored to this line (always shown, unlike comments). */
   findings?: FindingRecord[];
   renderFinding?: DiffFindingApi["renderFinding"];
+  /** The line a PR Brief reference navigated to: highlighted, focusable, `aria-current` (R-54). */
+  highlighted?: boolean;
+  /** Ref to the line row, given only to the highlighted line (scroll + focus live in FileCard). */
+  rowRef?: React.Ref<HTMLDivElement>;
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -65,6 +83,7 @@ export function CodeLine({
   const showAdd = hover && !!target && !composing;
   const top = topSeverity(findings);
   const sev = top ? SEV[top] : null;
+  const rowStyle = sev ? { ...lineRowFor(ln.kind), ...findingBarFor(sev.c) } : lineRowFor(ln.kind);
 
   return (
     <div
@@ -72,19 +91,14 @@ export function CodeLine({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={sev ? { ...lineRowFor(ln.kind), ...findingBarFor(sev.c) } : lineRowFor(ln.kind)}>
+      <div
+        ref={highlighted ? rowRef : undefined}
+        tabIndex={highlighted ? -1 : undefined}
+        aria-current={highlighted ? "location" : undefined}
+        style={highlighted ? { ...rowStyle, ...s.lineHighlight } : rowStyle}
+      >
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
-          {showAdd && target && (
-            <button
-              type="button"
-              title="Add a comment on this line"
-              aria-label="Add a comment on this line"
-              onClick={() => setComposing(true)}
-              style={cs.addBtn}
-            >
-              +
-            </button>
-          )}
+          {showAdd && target && <AddCommentButton onClick={() => setComposing(true)} />}
           {ln.newNo ?? ln.oldNo ?? ""}
         </span>
         <span className="mono" style={lineSignFor(ln.kind)}>

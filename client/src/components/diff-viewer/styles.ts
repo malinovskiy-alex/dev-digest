@@ -66,6 +66,24 @@ export const s = {
     userSelect: "none",
     flexShrink: 0,
   } satisfies CSSProperties,
+  /** The file a PR Brief reference navigated to (D-33). */
+  fileFocused: { outline: "2px solid var(--accent)", outlineOffset: -2 } satisfies CSSProperties,
+  /** The new-side line a PR Brief reference navigated to (R-54). */
+  lineHighlight: {
+    boxShadow: "inset 3px 0 0 var(--accent)",
+    background: "var(--accent-bg)",
+    outline: "none",
+  } satisfies CSSProperties,
+  /** "Line N is not in the changed lines of this file" at the top of the file body (R-57). */
+  lineNotice: {
+    margin: "0 12px 8px",
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "1px solid var(--warn)",
+    background: "var(--warn-bg)",
+    color: "var(--warn)",
+    fontSize: 12.5,
+  } satisfies CSSProperties,
   lineText: {
     flex: 1,
     whiteSpace: "pre-wrap",

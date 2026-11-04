@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { Button, Icon, IconBtn, Kbd, TextInput, FormField } from "@devdigest/ui";
 import { useAddRepo } from "@/lib/hooks";
 import { ApiError } from "@/lib/api";
+import { API_KEYS_HREF } from "@/lib/settings-urls";
 
 export function AddRepoView() {
   const router = useRouter();
@@ -79,10 +80,10 @@ export function AddRepoView() {
           Paste a GitHub repository URL — DevDigest clones it locally and imports open PRs.
           API keys aren’t needed here; set them once in{" "}
           <a
-            href="/settings/api-keys"
+            href={API_KEYS_HREF}
             onClick={(e) => {
               e.preventDefault();
-              router.push("/settings/api-keys");
+              router.push(API_KEYS_HREF);
             }}
             style={{ color: "var(--accent-text)" }}
           >

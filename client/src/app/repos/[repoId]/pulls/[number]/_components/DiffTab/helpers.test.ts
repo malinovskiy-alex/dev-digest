@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FindingRecord, PrFile, ReviewRecord, SmartDiff } from "@devdigest/shared";
-import { diffTotals, inlineFindings, resolveGroups } from "./helpers";
+import { diffFocusHref, diffTotals, inlineFindings, parseDiffFocus, parsePositiveInt, resolveGroups, tabHref } from "./helpers";
 
 const finding = (id: string): FindingRecord => ({
   id,
@@ -118,5 +118,46 @@ describe("diffTotals", () => {
       deletions: 9,
     });
     expect(diffTotals([])).toEqual({ files: 0, additions: 0, deletions: 0 });
+  });
+});
+
+// ---- L05 PR Brief: the focus URL (plan steps 20, 25g; R-53, R-55, R-59, R-77, D-32, F-03) ----
+
+describe("diffFocusHref / tabHref / parseDiffFocus", () => {
+  const base = "/repos/r1/pulls/7";
+
+  it("R-53 — a focus opens ?tab=diff&file=<path>&line=<line>, keeping other params", () => {
+    const href = diffFocusHref(base, new URLSearchParams("tab=overview&trace=run-1"), "src/a b.ts", 61);
+    const [path, query] = href.split("?");
+    expect(path).toBe(base);
+    const sp = new URLSearchParams(query);
+    expect(sp.get("tab")).toBe("diff");
+    expect(sp.get("file")).toBe("src/a b.ts");
+    expect(sp.get("line")).toBe("61");
+    expect(sp.get("trace")).toBe("run-1");
+  });
+
+  it("R-55 — a focus without a line drops any old line", () => {
+    const sp = new URLSearchParams(diffFocusHref(base, new URLSearchParams("tab=diff&file=x.ts&line=9"), "y.ts", null).split("?")[1]);
+    expect(sp.get("file")).toBe("y.ts");
+    expect(sp.has("line")).toBe(false);
+  });
+
+  it("R-77, D-32 — a tab click sets the tab and drops file and line", () => {
+    const sp = new URLSearchParams(tabHref(base, new URLSearchParams("tab=diff&file=x.ts&line=9&trace=t"), "overview").split("?")[1]);
+    expect(sp.get("tab")).toBe("overview");
+    expect(sp.has("file")).toBe(false);
+    expect(sp.has("line")).toBe(false);
+    expect(sp.get("trace")).toBe("t");
+  });
+
+  it("R-59 — a reloaded URL gives the same focus back; a bad line becomes null; no file → no focus", () => {
+    const href = diffFocusHref(base, new URLSearchParams(), "src/x.ts", 12);
+    expect(parseDiffFocus(new URLSearchParams(href.split("?")[1]))).toEqual({ path: "src/x.ts", line: 12 });
+    for (const bad of ["0", "-3", "2.5", "abc", ""]) {
+      expect(parseDiffFocus(new URLSearchParams({ file: "a.ts", line: bad }))).toEqual({ path: "a.ts", line: null });
+    }
+    expect(parseDiffFocus(new URLSearchParams("line=4"))).toBeNull();
+    expect(parsePositiveInt("1")).toBe(1);
   });
 });

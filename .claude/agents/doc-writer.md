@@ -30,7 +30,7 @@ at the end of your report, not to the user mid-write.
 | paste code into the page | *"Link to code as `path/to/file.ts` rather than pasting it — pasted code goes stale, paths do not"* — `docs/README.md` |
 | fix the code you are documenting | you have no mandate and no review. A divergence is one line in `## Belongs elsewhere` |
 | invoke `engineering-insights` | a gotcha is not documentation. Name it and move on |
-| `git commit`, `push`, `gh pr create`, `checkout`, `switch`, `stash`, `restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
+| `git commit`, `push`, `gh pr create`, `checkout`, `switch`, `stash`, `restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:66` |
 | `pnpm add`, `npm i`, any install, any migration, any seed | you are reading code and writing prose |
 | land work on `main` | `main` is the course starter. Lesson work lives on its branch |
 | run a command from the repo root when it is a package command | every package command runs **from inside the package directory** |

@@ -73,3 +73,47 @@ export function resolveGroups(smartDiff: SmartDiff | undefined, files: PrFile[])
   if (files.some((f) => !covered.has(f.path))) return null;
   return resolved.filter((g) => g.files.length > 0);
 }
+
+/**
+ * The `line` URL parameter of a focus navigation (R-53, R-59): a positive
+ * integer, else null (the file is then opened at its header).
+ */
+export function parsePositiveInt(raw: string | null | undefined): number | null {
+  if (!raw || !/^[1-9]\d*$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/** The read side of the page's search params (`URLSearchParams` or Next's read-only copy). */
+interface SearchLike {
+  get(name: string): string | null;
+  toString(): string;
+}
+
+/** The focus target carried by `?file=&line=` (R-53, R-59); null without `file`. */
+export function parseDiffFocus(search: SearchLike): { path: string; line: number | null } | null {
+  const path = search.get("file");
+  return path ? { path, line: parsePositiveInt(search.get("line")) } : null;
+}
+
+/**
+ * The URL of a tab click: same params, the new tab, and no focus target —
+ * `file`/`line` belong to the visit of Files changed that set them (R-77, D-32).
+ */
+export function tabHref(base: string, search: SearchLike, tab: string): string {
+  const sp = new URLSearchParams(search.toString());
+  sp.set("tab", tab);
+  sp.delete("file");
+  sp.delete("line");
+  return `${base}?${sp.toString()}`;
+}
+
+/** The URL that opens Files changed at a file (and line) (R-53, R-55). */
+export function diffFocusHref(base: string, search: SearchLike, path: string, line: number | null): string {
+  const sp = new URLSearchParams(search.toString());
+  sp.set("tab", "diff");
+  sp.set("file", path);
+  if (line != null) sp.set("line", String(line));
+  else sp.delete("line");
+  return `${base}?${sp.toString()}`;
+}

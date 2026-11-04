@@ -16,6 +16,8 @@ export function VerdictBanner({
   findingsCount,
   blockers,
   agentName,
+  notes,
+  summarySlot,
 }: {
   verdict: Verdict;
   summary: string | null;
@@ -23,6 +25,11 @@ export function VerdictBanner({
   findingsCount: number;
   blockers: number;
   agentName?: string | null;
+  /** Rendered between the title row and the summary (PR Brief banner notes). */
+  notes?: React.ReactNode;
+  /** When not `undefined`, replaces the summary paragraph (a skeleton, or the
+   *  brief's summary). A `<div>` cannot nest inside the summary `<p>`. */
+  summarySlot?: React.ReactNode;
 }) {
   const t = useTranslations("prReview");
   const m = VERDICT_META[verdict] ?? VERDICT_META.comment;
@@ -45,7 +52,8 @@ export function VerdictBanner({
             </Badge>
           )}
         </div>
-        {summary && <p style={s.summary}>{summary}</p>}
+        {notes != null && <div style={s.notes}>{notes}</div>}
+        {summarySlot !== undefined ? summarySlot : summary && <p style={s.summary}>{summary}</p>}
       </div>
       {score != null && (
         <div style={s.scoreCol}>

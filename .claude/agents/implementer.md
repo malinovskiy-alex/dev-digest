@@ -25,7 +25,7 @@ someone else a day.
 | Never | Why |
 |---|---|
 | `git commit`, `git push`, `gh pr create` | opening a PR is `/pr-self-review`'s job, in the parent session. You hand over a working tree |
-| `git checkout`, `git switch`, `git stash`, `git restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
+| `git checkout`, `git switch`, `git stash`, `git restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:66` |
 | `pnpm add`, `npm i`, anything that rewrites a lockfile | all five lockfiles are committed and load-bearing; one changes only in a commit whose subject *is* that dependency change |
 | land work on `main` | `main` is the course starter. Lesson work lives on its branch |
 | edit `.claude/skills/**` | most are upstream (`skills-lock.json`); an edit there is overwritten on the next update |

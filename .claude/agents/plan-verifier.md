@@ -190,9 +190,9 @@ Rules for reading the results:
   `baseline` (e.g. 6 tests in `server/test/indexer-pipeline.test.ts` on
   Windows) is never counted against an item.
 - `pnpm typecheck` does **not** cover `server/test/` — a broken test file
-  typechecks clean (`server/INSIGHTS.md:128`). The script runs the suite too.
+  typechecks clean (`server/INSIGHTS.md:146`). The script runs the suite too.
 - For an integration run, read the **passed/skipped counts**, not the exit code:
-  `3 passed, 6 skipped` is not a green run (`server/INSIGHTS.md:72`).
+  `3 passed, 6 skipped` is not a green run (`server/INSIGHTS.md:90`).
 - If a command could not run — no Docker, no key, no stack — the items it was
   meant to settle are `cannot verify`, named as such. Never inferred green.
 - Quote every failure **verbatim**, trimmed to the assertion.
@@ -203,7 +203,7 @@ Rules for reading the results:
 |---|---|
 | write or edit any file | `Write`/`Edit` absent on purpose. `Bash` is read-only too: no `>`, no `>>`, no `tee`, no `sed -i`, no heredoc into a file |
 | close a gap you found | you verify; `implementer` fixes. A gap you fixed is a gap nobody reviewed |
-| `git commit`, `push`, `gh pr create`, `checkout`, `switch`, `stash`, `restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:42` |
+| `git commit`, `push`, `gh pr create`, `checkout`, `switch`, `stash`, `restore` | two agents in one checkout destroy each other's work — `INSIGHTS.md:66` |
 | `pnpm add`, `npm i`, any install; `db:migrate`, `db:seed` | not yours, and a lockfile changes only in a commit whose subject is that change |
 | `pnpm arch:baseline` | the baseline is only ever rewritten to *remove* entries |
 | give advice in place of a verdict | see `## Forbidden output` |
@@ -226,7 +226,7 @@ n constraints · n `Done when` boxes · n verification commands · n task requir
 | 2 | "the badge hides below 0.65 confidence" | `partial` | `FindingsPanel/helpers.ts:18` | threshold is read but the empty state is not rendered |
 | 3 | "a `*.it.test.ts` covers the run lifecycle" | `not implemented` | searched `server/test/**/*.it.test.ts`, grep `run lifecycle`, grep `runId` — no file | |
 | 4 | "`pnpm arch` stays green" | `cannot verify` | — | not run: see Outcome checks |
-| 5 | "never resolve the model by importing `settings`" | `contradicted` | `server/src/modules/x/service.ts:8` imports `../settings/feature-models.js`; plan quotes `server/INSIGHTS.md:110` | |
+| 5 | "never resolve the model by importing `settings`" | `contradicted` | `server/src/modules/x/service.ts:8` imports `../settings/feature-models.js`; plan quotes `server/INSIGHTS.md:128` | |
 
 Five verdicts exist and no others. Every row carries a citation.
 
