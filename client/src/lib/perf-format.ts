@@ -12,10 +12,17 @@ export function isSmallSample(decided: number): boolean {
   return decided > 0 && decided < SMALL_SAMPLE_DECIDED;
 }
 
-/** The whole percent a 0..1 rate is displayed as; null stays null (unknown, R-11). */
-export function acceptPercent(rate: number | null | undefined): number | null {
+/**
+ * The whole percent a 0..1 rate is displayed as; null (or NaN) stays null —
+ * unknown, never "0%" (R-11). One rule for every rate on these screens: the
+ * accept rate and the skill pull frequency (L08 skill-stats R-37, R-75).
+ */
+export function ratePercent(rate: number | null | undefined): number | null {
   return rate == null || Number.isNaN(rate) ? null : Math.round(rate * 100);
 }
+
+/** The accept rate's whole percent — `ratePercent` under the name its callers use. */
+export const acceptPercent = ratePercent;
 
 /** Milliseconds as seconds with one decimal ("6.2s"); unknown → "—" (R-54). */
 export function formatDurationSec(ms: number | null | undefined): string {

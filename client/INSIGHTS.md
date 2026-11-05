@@ -19,6 +19,12 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-11-05 — A time window in a query key, anchored in page state, refetches on every dynamic-segment change
+**Symptom:** on `/skills/[id]`, every click on another skill in the rail sent a new `GET /skills/pull-frequency` and every card flashed its placeholder; tests with a mocked `router.push` never showed it.
+**Cause:** the App Router keys a dynamic segment's subtree by its value, so `/skills/s1 → /skills/s2` remounts the page; a `useState(() => new Date())` anchor resets, `from`/`to` move by seconds, and the query key is new — `staleTime` cannot help.
+**Rule:** keep a rolling window out of the query key: key by what selects the data (here `["skills","pull-frequency",tz]`), compute the window inside `queryFn`, and refresh by invalidation (`staleTime: Infinity`). Test with a real unmount/remount over one `QueryClient`, not a mocked push.
+**Where:** `client/src/lib/hooks/skill-stats.ts:72` (`useSkillsPullFrequency`)
+
 ### 2026-11-05 — An urgent `setState` next to `router.replace` fires a fetch for a range nobody chose
 **Symptom:** clicking "1 day" on `/agent-performance` sent two `GET /agents/performance`: first 30 days ending *now*, then 1 day. Same on the agent Stats tab.
 **Cause:** Next 15 runs `router.replace` inside `startTransition` (`next/dist/client/components/app-router-instance.js`), so an urgent `setAppliedAt(new Date())` commits first: one render sees the new apply time with the old search params, the query key changes, and TanStack fetches it. `api.get` takes no `AbortSignal`, so it is never cancelled.
@@ -178,6 +184,12 @@ the stderr of `pnpm test`, not just its exit code.
 
 ## Codebase Patterns
 
+### 2026-11-05 — Skill-derived queries live under the `["skills", …]` prefix; agent-side writes invalidate it too
+**Symptom:** after toggling a skill, attaching/detaching it on an agent, or deleting an agent, the skill cards showed a new `agent_count` next to a stale pull frequency, and the skill Stats tab kept old `used_by` until a reload.
+**Cause:** every skill mutation invalidates the `["skills"]` prefix, but the new keys started `["skill-stats"]` / `["skills-pull-frequency"]`; and agent-side hooks (`useSetAgentSkills`, `useDeleteAgent`) only invalidated agent keys although skill figures are computed from the *current* agent↔skill attachment.
+**Rule:** put any query whose data depends on skills under `["skills", …]` (single-skill reads under `["skill", id]`), and make every mutation that changes attachment or deletes an agent invalidate both `["skills"]` and `["skill"]`.
+**Where:** `client/src/lib/hooks/skill-stats.ts:18,22` (key builders), `client/src/lib/hooks/agents.ts:97,151` (`useDeleteAgent`, `useSetAgentSkills`)
+
 ### 2026-09-17 — overlays are in-tree `position: fixed`; there is no portal anywhere
 **Symptom:** an absolutely-positioned panel inside a PR-list row is clipped — the
 list's `s.tableCard` sets `overflow: hidden`.
@@ -271,6 +283,7 @@ the shorthand/longhand mix React warns about — the existing comment claiming
 
 ## Session Notes
 
+- 2026-11-05 — L08 Skill Stats (client): skill Stats tab, shared Findings widget, RangeCaption, card pull freq; remount-driven refetch and missing ["skills"] invalidations fixed.
 - 2026-11-05 — L08 Agent Performance (client): dashboard + agent Stats tab, shared `RangeControl`/`usePerfRange`; stray fetch from setState+router.replace; stopping a backgrounded `pnpm dev` left `next dev` on :3000 again (see the Recurring entry — check the port before every build).
 - 2026-11-01 — L05 PR Brief (client): `pnpm build` failed on lint after a green verify (eslint is not in verify.mjs); orphaned `next dev` on :3000; polling gated on query status.
 - 2026-11-01 — L05 Onboarding Tour via spec → plan (+ Sonnet cross-model review) → /run-plan: 4 pre-PR rounds; tour prose links made inert at render after regex scrubbing kept leaking.

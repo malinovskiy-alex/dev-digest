@@ -115,4 +115,17 @@ describe("AgentPerformanceView", () => {
     expect(bucket).toBe("hour");
     expect(range.to.getTime() - range.from.getTime()).toBe(24 * 3_600_000);
   });
+
+  it("shows the applied-window caption beside the range control with data, not while loading (L08 skill-stats C3, R-32)", () => {
+    state({});
+    renderWithPerfIntl(<AgentPerformanceView />);
+    expect(screen.queryByText(/30 days ·/)).not.toBeInTheDocument();
+    cleanup();
+
+    state({ data: report() });
+    renderWithPerfIntl(<AgentPerformanceView />);
+    const caption = screen.getByText("30 days · Oct 6, 12:00 – Nov 5, 12:00");
+    // Beside the control: both in the header.
+    expect(caption.closest("header")).toBe(screen.getByRole("group", { name: "Range" }).closest("header"));
+  });
 });

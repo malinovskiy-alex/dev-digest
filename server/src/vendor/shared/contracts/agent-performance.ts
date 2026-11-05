@@ -4,6 +4,7 @@ import { z } from 'zod';
  * L08 — Agent Performance. One aggregation, two reads:
  *   GET /agents/:id/stats?from&to&tz   → AgentStatsReport
  *   GET /agents/performance?from&to&tz → AgentPerformanceReport
+ * GET /skills/:id/stats, GET /skills/pull-frequency → contracts/skill-stats.ts (same counted-run rule)
  * Counted run = this workspace, status 'done', from <= ran_at < to. Every cost is a
  * DevDigest estimate (agent_runs.cost_usd); a run without a stored cost is never added in.
  * The previous window is [from − (to − from), from), counted by the same rules.
@@ -14,6 +15,12 @@ import { z } from 'zod';
 const TZ_SHAPE = /^[A-Za-z][A-Za-z0-9_+\-/]{0,63}$/;
 /** Earliest instant either window may start at: 1970-01-01T00:00:00Z (keeps every bound inside what Postgres accepts). */
 const MIN_WINDOW_START_MS = 0;
+/**
+ * Latest instant the range may end at: 9999-12-31T23:59:59.999Z. A later `to` (e.g.
+ * `9999-12-31T23:59:59-14:00`) normalises to year +10000, which Postgres cannot hold
+ * (`time zone displacement out of range` → 500). Mirror of the 1970 bound (F-02).
+ */
+const MAX_WINDOW_END_MS = Date.UTC(9999, 11, 31, 23, 59, 59, 999);
 function isTimeZone(tz: string): boolean {
   if (!TZ_SHAPE.test(tz)) return false;
   try {
@@ -37,6 +44,10 @@ export const PerfRangeQuery = z
   .refine((q) => 2 * Date.parse(q.from) - Date.parse(q.to) >= MIN_WINDOW_START_MS, {
     message: 'range starts too early: the previous window must not start before 1970-01-01',
     path: ['from'],
+  })
+  .refine((q) => Date.parse(q.to) <= MAX_WINDOW_END_MS, {
+    message: 'range ends too late: to must not be after 9999-12-31T23:59:59.999Z',
+    path: ['to'],
   });
 export type PerfRangeQuery = z.infer<typeof PerfRangeQuery>;
 
@@ -92,6 +103,31 @@ export const PerfModelCost = z.object({
 });
 export type PerfModelCost = z.infer<typeof PerfModelCost>;
 
+const count = () => z.number().int().nonnegative();
+
+/** Findings per category (R-14): a stored value outside FindingCategory counts as `other`. */
+export const FindingCategoryCounts = z.object({
+  security: count(), bug: count(), perf: count(), style: count(), test: count(), other: count(),
+});
+export type FindingCategoryCounts = z.infer<typeof FindingCategoryCounts>;
+
+/** Findings per severity (R-15): a stored value outside Severity counts as `other`. */
+export const FindingSeverityCounts = z.object({
+  CRITICAL: count(), WARNING: count(), SUGGESTION: count(), other: count(),
+});
+export type FindingSeverityCounts = z.infer<typeof FindingSeverityCounts>;
+
+/**
+ * Every finding of the counted runs in the current window, any kind, any state (BQ-3).
+ * total = Σ by_category = Σ by_severity = accepted + dismissed + pending.
+ */
+export const FindingsBreakdown = z.object({
+  total: count(),
+  by_category: FindingCategoryCounts,
+  by_severity: FindingSeverityCounts,
+});
+export type FindingsBreakdown = z.infer<typeof FindingsBreakdown>;
+
 export const AgentStatsReport = z.object({
   range: AppliedRange,
   agent: z.object({ id: z.string(), name: z.string() }),
@@ -99,6 +135,8 @@ export const AgentStatsReport = z.object({
   comparison: PerfComparison,
   /** cost desc, then label asc. */
   cost_by_model: z.array(PerfModelCost),
+  /** This agent's findings per category and severity (L08 skill-stats R-26). */
+  findings: FindingsBreakdown,
 });
 export type AgentStatsReport = z.infer<typeof AgentStatsReport>;
 

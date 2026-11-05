@@ -3,6 +3,7 @@ import {
   ACCEPT_BAND_COLOR,
   acceptBand,
   acceptPercent,
+  ratePercent,
   formatCostDelta,
   formatDurationSec,
   isCostUnchanged,
@@ -16,6 +17,10 @@ describe("perf-format", () => {
     expect(formatDurationSec(null)).toBe("—");
     expect(acceptPercent(0.674)).toBe(67);
     expect(acceptPercent(null)).toBeNull();
+    // ratePercent is the same rule for the skill pull frequency (L08 skill-stats F-12).
+    expect(ratePercent(1 / 3)).toBe(33);
+    expect(ratePercent(Number.NaN)).toBeNull();
+    expect(ratePercent(null)).toBeNull();
     expect(isSmallSample(4)).toBe(true);
     expect(isSmallSample(5)).toBe(false);
     expect(isSmallSample(0)).toBe(false);

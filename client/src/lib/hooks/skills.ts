@@ -3,7 +3,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type {
   ContextDocLinkInput,
   Skill,
@@ -25,6 +25,9 @@ export function useSkill(id: string | null | undefined) {
     queryKey: ["skill", id],
     queryFn: () => api.get<Skill>(`/skills/${id}`),
     enabled: !!id,
+    // A 404 (the skill is gone) will not heal on retry, so the page shows its
+    // not-found state at once instead of after the default retry (L08 skill-stats F-08).
+    retry: (count, err) => !(err instanceof ApiError && err.status === 404) && count < 1,
   });
 }
 

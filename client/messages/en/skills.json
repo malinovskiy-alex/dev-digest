@@ -48,7 +48,11 @@
       "extracted": "Extracted",
       "community": "Community"
     },
-    "agentCount": "{count, plural, =0 {Used by no agents} one {Used by # agent} other {Used by # agents}}"
+    "agents": "{count, plural, one {# agent} other {# agents}}",
+    "pullFreq": "{pct}% pull freq",
+    "pullFreqUnknown": "— pull freq",
+    "pullFreqLoading": "Loading pull frequency",
+    "pullFreqHint": "PRs reviewed in the last 30 days with an agent that uses this skill"
   },
   "preview": {
     "enabled": "Enabled",
@@ -112,6 +116,7 @@
     "tabs": {
       "config": "Config",
       "preview": "Preview",
+      "stats": "Stats",
       "versions": "Versioning",
       "context": "Context"
     },
@@ -145,5 +150,31 @@
     "serializesNone": "Nothing attached — this skill adds no project context.",
     "saved": "Context documents updated",
     "saveError": "Couldn’t save the documents: {message}"
+  },
+  "stats": {
+    "heading": "Stats",
+    "loadError": "Could not load skill stats",
+    "offNote": "This skill is off — no agent sends it, so no run is attributed to it",
+    "attributionNote": "Figures cover the agents that use this skill now. Findings come from their runs and are not traced to the skill itself.",
+    "kpi": {
+      "usedBy": "Used by",
+      "usedByValue": "{count, plural, one {# agent} other {# agents}}",
+      "ranInPeriod": "{count} ran in period",
+      "pullFreq": "Pull frequency",
+      "pullFreqValue": "{pct}% ({n}/{d} PRs)",
+      "pullFreqCaption": "PRs reviewed in the period",
+      "pullFreqUnknown": "No reviewed PRs in {range}",
+      "accept": "Accept rate",
+      "findings": "Findings"
+    },
+    "agents": {
+      "title": "Agents using this skill",
+      "open": "Open",
+      "openLabel": "Open {name}",
+      "disabled": "Disabled",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "none": "No agent uses this skill",
+      "noneHint": "Attach it on an agent's Skills tab"
+    }
   }
 }

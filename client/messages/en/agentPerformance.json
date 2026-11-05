@@ -24,6 +24,10 @@
       "oneDay": "the last day",
       "thirtyDays": "the last 30 days",
       "custom": "{start} – {end}"
+    },
+    "caption": {
+      "preset": "{choice} · {start} – {end}",
+      "custom": "{start} – {end}"
     }
   },
   "estimate": {
@@ -103,5 +107,27 @@
     "dismissed": "Dismissed",
     "pending": "Pending",
     "lastRun": "Last run"
+  },
+  "findings": {
+    "title": "Findings by category",
+    "chartLabel": "Findings by category",
+    "severityLabel": "Findings by severity",
+    "entry": "{count} · {pct}%",
+    "smallSample": "Small sample",
+    "empty": "No findings in {range}",
+    "category": {
+      "security": "security",
+      "bug": "bug",
+      "perf": "perf",
+      "style": "style",
+      "test": "test",
+      "other": "other"
+    },
+    "severity": {
+      "CRITICAL": "CRITICAL",
+      "WARNING": "WARNING",
+      "SUGGESTION": "SUGGESTION",
+      "other": "other"
+    }
   }
 }

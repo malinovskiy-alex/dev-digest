@@ -22,3 +22,9 @@ export const PRESET_LABEL_KEYS: Record<PerfPreset, { short: string; sentence: st
 
 /** How a custom range's dates are written in its label (D-9). */
 export const RANGE_DATE_FORMAT = { day: "numeric", month: "short", year: "numeric" } as const;
+
+/** How a preset caption writes its start and end instants: "Nov 4, 10:37" (L08 skill-stats D-9). */
+export const CAPTION_PRESET_FORMAT = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
+
+/** How a custom caption writes its first and last day: "Nov 1"; the year is added only when needed (OQ-4 A). */
+export const CAPTION_DAY_FORMAT = { month: "short", day: "numeric" } as const;

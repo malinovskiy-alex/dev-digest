@@ -1,6 +1,8 @@
 /* /skills/:id — the Skill editor. Left: every skill in the workspace, with its
-   global kill-switch. Right: the selected skill's Config / Preview / Versions.
-   Tab state lives in `?tab=`, mirroring the agent editor. */
+   global kill-switch and its pull frequency. Right: the selected skill's
+   Config / Preview / Stats / Versions / Context. Tab state lives in `?tab=`,
+   mirroring the agent editor; switching tab or skill keeps every other key of
+   the address — the Stats tab's range among them (L08 skill-stats R-29, R-53). */
 "use client";
 
 import React from "react";
@@ -9,12 +11,13 @@ import { useTranslations } from "next-intl";
 import { Badge, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { useSkill, useSkills, useUpdateSkill } from "@/lib/hooks/skills";
-import { filterSkills, typeColor } from "@/lib/skills";
+import { useSkillsPullFrequency } from "@/lib/hooks/skill-stats";
+import { filterSkills, skillEditorHref, typeColor } from "@/lib/skills";
 import { ApiError } from "@/lib/api";
 import { AddSkillButton } from "../_components/AddSkillButton";
 import { CreateSkillModal } from "../_components/CreateSkillModal";
 import { ImportSkillDrawer } from "../_components/ImportSkillDrawer";
-import { SkillCard } from "../_components/SkillCard";
+import { SkillCard, toCardPullFreq } from "../_components/SkillCard";
 import { SkillEditor, SKILL_EDITOR_TABS } from "./_components/SkillEditor";
 import { s } from "./styles";
 
@@ -29,17 +32,15 @@ export default function SkillEditorPage() {
   const { data: skills } = useSkills();
   const { data: skill, isLoading, isError, error, refetch } = useSkill(id);
   const update = useUpdateSkill();
+  // One read for every card in the rail, over the 30 days ending at mount (R-73, R-74).
+  const pullFreq = useSkillsPullFrequency();
   const [creating, setCreating] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
   const [query, setQuery] = React.useState("");
 
   const requested = search.get("tab") ?? "";
   const tab = VALID_TABS.includes(requested) ? requested : "config";
-  const setTab = (next: string) => {
-    const sp = new URLSearchParams(search.toString());
-    sp.set("tab", next);
-    router.replace(`/skills/${id}?${sp.toString()}`);
-  };
+  const setTab = (next: string) => router.replace(skillEditorHref(id, next, search));
 
   const list = filterSkills(skills ?? [], query);
   const crumb = [
@@ -107,7 +108,8 @@ export default function SkillEditorPage() {
                 key={sk.id}
                 skill={sk}
                 active={sk.id === id}
-                onClick={() => router.push(`/skills/${sk.id}?tab=${tab}`)}
+                pullFrequency={toCardPullFreq(pullFreq, sk.id)}
+                onClick={() => router.push(skillEditorHref(sk.id, tab, search))}
                 onToggle={(enabled) => update.mutate({ id: sk.id, patch: { enabled } })}
                 // Deleting the skill this page is describing leaves nothing to
                 // describe; deleting any other one just drops it from the rail.

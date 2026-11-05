@@ -16,14 +16,17 @@ export interface EditorTab {
 }
 
 /**
- * Editor tabs. The mockup also shows a `Stats` tab; it stays unbuilt for the
- * same reason the agent editor's does — there is no per-skill usage data behind
- * it yet, and a tab with no screen behind it is a trap for the next reader.
+ * Editor tabs, in display order. `stats` (L08 skill-stats R-34) sits between
+ * Preview and Versions: the figures of the agents that use the skill now.
  */
 export const TABS: readonly EditorTab[] = [
   { key: "config", labelKey: "editor.tabs.config", icon: "Settings" },
   { key: "preview", labelKey: "editor.tabs.preview", icon: "FileText" },
+  { key: "stats", labelKey: "editor.tabs.stats", icon: "Activity" },
   { key: "versions", labelKey: "editor.tabs.versions", icon: "GitBranch" },
   // L05 — project-context documents every agent with this skill inherits.
   { key: "context", labelKey: "editor.tabs.context", icon: "FileText" },
 ];
+
+/** Placeholder height, px, while the Stats tab's code loads. */
+export const STATS_LOADING_HEIGHT = 200;

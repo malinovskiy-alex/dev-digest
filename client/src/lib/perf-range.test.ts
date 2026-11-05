@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   bucketFor,
+  captionNeedsYear,
+  captionWindow,
   fillBuckets,
+  lastThirtyDays,
+  perfRangeQuery,
   parseRangeParams,
   resolveRange,
   statsHref,
@@ -158,5 +162,56 @@ describe("bucketFor and fillBuckets (R-90, R-91, D-18)", () => {
     // 25 real hours (local midnight to midnight), but only 24 distinct local hour keys.
     expect(hours).toHaveLength(24);
     expect(hours.reduce((a, b) => a + b, 0)).toBe(2);
+  });
+});
+
+describe("caption window and the skill cards' range (L08 skill-stats R-31, R-33, R-73)", () => {
+  it("lastThirtyDays is the 720 hours ending at the given moment; the query string carries from/to/tz/bucket", () => {
+    const r = lastThirtyDays(NOW);
+    expect(r.to.getTime()).toBe(NOW.getTime());
+    expect(r.to.getTime() - r.from.getTime()).toBe(720 * HOUR);
+
+    const q = new URLSearchParams(perfRangeQuery(r, "Europe/Kyiv", "day"));
+    expect(q.get("from")).toBe(r.from.toISOString());
+    expect(q.get("to")).toBe(r.to.toISOString());
+    expect(q.get("tz")).toBe("Europe/Kyiv");
+    expect(q.get("bucket")).toBe("day");
+  });
+
+  it("names the APPLIED instants, never the client's range (L6): a preset's start/end, a custom range's last day = to − 1 ms", () => {
+    // The client's choice is "1 day" now, but the response on screen was for an older window.
+    const applied = { from: "2026-11-01T08:00:00.000Z", to: "2026-11-02T08:00:00.000Z" };
+    expect(captionWindow({ kind: "preset", preset: "1d", at: null }, applied)).toEqual({
+      kind: "preset",
+      preset: "1d",
+      start: new Date(applied.from),
+      end: new Date(applied.to),
+    });
+
+    const custom = { kind: "custom", start: "2026-11-01", end: "2026-11-03" } as const;
+    const w = captionWindow(custom, { from: "2026-11-01T00:00:00.000Z", to: "2026-11-04T00:00:00.000Z" });
+    expect(w).toEqual({
+      kind: "custom",
+      start: new Date("2026-11-01T00:00:00.000Z"),
+      lastDay: new Date("2026-11-03T23:59:59.999Z"),
+    });
+
+    // A custom range over the EU fall-back day (25 h): the last day is still the end date in that zone.
+    const dst = captionWindow(
+      { kind: "custom", start: "2026-10-25", end: "2026-10-25" },
+      { from: "2026-10-24T22:00:00.000Z", to: "2026-10-25T23:00:00.000Z" },
+    );
+    expect(dst.kind === "custom" && dst.lastDay.toISOString()).toBe("2026-10-25T22:59:59.999Z");
+    expect(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(dst.kind === "custom" ? dst.lastDay : 0)).toBe(
+      "2026-10-25",
+    );
+  });
+
+  it("needs a year only when a date is outside the current year in the zone (OQ-4 A)", () => {
+    const now = new Date("2026-11-05T12:00:00.000Z");
+    expect(captionNeedsYear([new Date("2026-01-01T00:00:00.000Z"), new Date("2026-11-03T00:00:00.000Z")], now, "UTC")).toBe(false);
+    expect(captionNeedsYear([new Date("2025-12-30T00:00:00.000Z"), new Date("2026-01-02T00:00:00.000Z")], now, "UTC")).toBe(true);
+    // 2025-12-31T23:30Z is already 2026 in Kyiv.
+    expect(captionNeedsYear([new Date("2025-12-31T23:30:00.000Z")], now, "Europe/Kyiv")).toBe(false);
   });
 });

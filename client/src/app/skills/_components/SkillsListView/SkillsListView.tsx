@@ -12,10 +12,11 @@ import { EmptyState, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { AppShell } from "@/components/app-shell";
 import { useSkills, useUpdateSkill } from "@/lib/hooks/skills";
+import { useSkillsPullFrequency } from "@/lib/hooks/skill-stats";
 import { AddSkillButton } from "../AddSkillButton";
 import { CreateSkillModal } from "../CreateSkillModal";
 import { ImportSkillDrawer } from "../ImportSkillDrawer";
-import { SkillCard } from "../SkillCard";
+import { SkillCard, toCardPullFreq } from "../SkillCard";
 import { SKELETON_COUNT } from "./constants";
 import { filterSkills } from "@/lib/skills";
 import { s } from "./styles";
@@ -24,6 +25,8 @@ export function SkillsListView(): React.JSX.Element {
   const t = useTranslations("skills");
   const { data: skills, isLoading, isError, refetch } = useSkills();
   const update = useUpdateSkill();
+  // One read for every card on the page, over the 30 days ending at mount (R-73, R-74).
+  const pullFreq = useSkillsPullFrequency();
   const [creating, setCreating] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -90,6 +93,7 @@ export function SkillsListView(): React.JSX.Element {
               <SkillCard
                 key={skill.id}
                 skill={skill}
+                pullFrequency={toCardPullFreq(pullFreq, skill.id)}
                 onClick={() => open(skill, "config")}
                 onToggle={(enabled) => update.mutate({ id: skill.id, patch: { enabled } })}
               />

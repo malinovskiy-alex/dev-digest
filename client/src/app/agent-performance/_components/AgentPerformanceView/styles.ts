@@ -2,6 +2,7 @@
 export const cx = {
   page: "mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-7 py-6",
   header: "flex flex-wrap items-start justify-between gap-4",
+  controls: "flex flex-col items-end gap-1",
   title: "m-0 text-[22px] font-bold text-[var(--text-primary)]",
   subtitle: "m-0 mt-1 text-[13.5px] text-[var(--text-secondary)]",
   body: "flex flex-col gap-5",

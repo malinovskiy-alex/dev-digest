@@ -240,3 +240,50 @@ export function fillBuckets(
   const runs = new Map(buckets.map((b) => [b.key, b.runs]));
   return keys.map((k) => runs.get(k) ?? 0);
 }
+
+/**
+ * The query string every range read sends (`from`, `to`, `tz`, `bucket`, D-19).
+ * The stats reads ignore `bucket`; it is sent anyway so the server sees one shape.
+ */
+export function perfRangeQuery(range: PerfRange, tz: string, bucket: PerfBucketUnit): string {
+  return [
+    `from=${encodeURIComponent(range.from.toISOString())}`,
+    `to=${encodeURIComponent(range.to.toISOString())}`,
+    `tz=${encodeURIComponent(tz)}`,
+    `bucket=${encodeURIComponent(bucket)}`,
+  ].join("&");
+}
+
+/** The 30 × 24 hours ending at `now` — the skill cards' fixed pull-frequency window (L08 skill-stats R-73). */
+export function lastThirtyDays(now: Date): PerfRange {
+  return resolveRange(DEFAULT_CHOICE, now);
+}
+
+/**
+ * The window a range caption names (L08 skill-stats R-31, R-33). Read off the
+ * APPLIED range of the response whose figures are on screen, never off the
+ * client's current range: a preset names its start and end instants; a custom
+ * range names its first and its last day — `lastDay` is `to − 1 ms`, because
+ * `to` is the midnight after the end date (both days included, G-02).
+ */
+export type CaptionWindow =
+  | { kind: "preset"; preset: PerfPreset; start: Date; end: Date }
+  | { kind: "custom"; start: Date; lastDay: Date };
+
+export function captionWindow(choice: PerfRangeChoice, applied: { from: string; to: string }): CaptionWindow {
+  const start = new Date(applied.from);
+  const end = new Date(applied.to);
+  if (choice.kind === "preset") return { kind: "preset", preset: choice.preset, start, end };
+  return { kind: "custom", start, lastDay: new Date(end.getTime() - 1) };
+}
+
+/** The year of `d` in `tz`. */
+function yearIn(d: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric" }).format(d);
+}
+
+/** True when any of `dates` falls outside the current year of `now` in `tz` — the custom caption then shows years (OQ-4 A). */
+export function captionNeedsYear(dates: readonly Date[], now: Date, tz: string): boolean {
+  const current = yearIn(now, tz);
+  return dates.some((d) => yearIn(d, tz) !== current);
+}

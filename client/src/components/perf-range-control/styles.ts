@@ -9,4 +9,6 @@ export const cx = {
   input:
     "rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-2 py-1 text-[12.5px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]",
   error: "text-[12px] text-[var(--crit)]",
+  /** The applied-window caption under the control (L08 skill-stats R-31). */
+  caption: "m-0 tnum text-[11.5px] text-[var(--text-muted)]",
 } as const;

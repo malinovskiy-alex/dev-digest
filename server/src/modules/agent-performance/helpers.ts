@@ -1,16 +1,32 @@
+import { FindingCategory, Severity } from '@devdigest/shared';
 import type {
   AgentPerfFigures,
   AgentPerfTableRow,
   AgentPerformanceReport,
   AgentStatsReport,
   AppliedRange,
+  FindingsBreakdown,
   PerfAgentCost,
   PerfComparison,
   PerfModelCost,
   PerfRangeQuery,
+  PullFrequency,
+  SkillFindingFigures,
+  SkillStatsReport,
+  SkillsPullFrequencyReport,
 } from '@devdigest/shared';
 import { COST_DELTA_STEP_USD, DELETED_AGENTS_SORT_LABEL, UNKNOWN_MODEL_SORT_LABEL } from './constants.js';
-import type { FindingTally, PerfAgentRef, PerfRange, PerfWindow, RunBucket, RunGroup } from './types.js';
+import type {
+  AgentRunCount,
+  BreakdownRow,
+  FindingTally,
+  PerfAgentRef,
+  PerfRange,
+  PerfSkillRef,
+  PerfWindow,
+  RunBucket,
+  RunGroup,
+} from './types.js';
 
 /**
  * agent-performance — Ring 1. Every figure on both reads is built here, by the
@@ -220,6 +236,7 @@ export function buildStats(
   agent: PerfAgentRef,
   groups: RunGroup[],
   tallies: FindingTally[],
+  breakdown: BreakdownRow[] = [],
 ): AgentStatsReport {
   const g = splitByWindow(groups.filter((x) => x.agentId === agent.id));
   const t = splitByWindow(tallies.filter((x) => x.agentId === agent.id));
@@ -231,6 +248,7 @@ export function buildStats(
     figures,
     comparison: compare(figures, previous),
     cost_by_model: foldModelCosts(g.current),
+    findings: foldBreakdown(breakdown.filter((r) => r.agentId === agent.id && r.win === 'current')),
   };
 }
 
@@ -322,5 +340,99 @@ export function buildDashboard(
     agents: rows,
     cost_by_agent,
     cost_by_model: foldModelCosts(g.current),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// L08 follow-up — Skill Stats. Same counted runs, attributed to the agents that
+// use a skill now (D-4 … D-8). Pure folds over the repository's grouped rows.
+// ---------------------------------------------------------------------------
+
+const CATEGORY_KEYS: readonly string[] = FindingCategory.options;
+const SEVERITY_KEYS: readonly string[] = Severity.options;
+
+type CategoryKey = keyof FindingsBreakdown['by_category'];
+type SeverityKey = keyof FindingsBreakdown['by_severity'];
+
+/**
+ * Findings per category and severity (R-12, R-14, R-15). An exact match against
+ * the contract enums counts in its own bucket; any other stored value is `other`.
+ * total = Σ by_category = Σ by_severity = accepted + dismissed + pending.
+ */
+export function foldBreakdown(rows: BreakdownRow[]): FindingsBreakdown {
+  const out: FindingsBreakdown = {
+    total: 0,
+    by_category: { security: 0, bug: 0, perf: 0, style: 0, test: 0, other: 0 },
+    by_severity: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0, other: 0 },
+  };
+  for (const r of rows) {
+    const n = r.accepted + r.dismissed + r.pending;
+    const cat = (CATEGORY_KEYS.includes(r.category) ? r.category : 'other') as CategoryKey;
+    const sev = (SEVERITY_KEYS.includes(r.severity) ? r.severity : 'other') as SeverityKey;
+    out.total += n;
+    out.by_category[cat] += n;
+    out.by_severity[sev] += n;
+  }
+  return out;
+}
+
+/**
+ * A skill's accept figures — `foldFigures` itself over the breakdown rows (each is a
+ * `FindingTally`), so an agent and a skill share one fold (R-13, R-16, D-6, F-13).
+ */
+export function skillFigures(rows: BreakdownRow[]): SkillFindingFigures {
+  const { accepted, dismissed, pending, decided, accept_rate } = foldFigures([], rows);
+  return { accepted, dismissed, pending, decided, accept_rate };
+}
+
+/**
+ * Share of reviewed PRs with a run of a using agent; null when nothing was reviewed (R-10).
+ * The two counts come from separate statements, so a run landing between them can make
+ * the numerator exceed the denominator. Clamping it here keeps `rate` structurally ≤ 1
+ * (the response schema caps it at 1) and the reported counts consistent with it (F-22).
+ */
+export function pullFrequency(withSkill: number, reviewed: number): PullFrequency {
+  const prsWithSkill = Math.min(withSkill, reviewed);
+  return { prs_with_skill: prsWithSkill, prs_reviewed: reviewed, rate: reviewed === 0 ? null : prsWithSkill / reviewed };
+}
+
+/**
+ * GET /skills/:id/stats — `agents` keep the order given (name asc, then id; R-42).
+ * `rows` are the current-window breakdown of exactly these agents
+ * (`findingBreakdown(…, agentIds)`), so they are folded as given (F-14).
+ */
+export function buildSkillStats(
+  range: PerfRange,
+  skill: PerfSkillRef,
+  agents: PerfAgentRef[],
+  runCounts: AgentRunCount[],
+  rows: BreakdownRow[],
+  reviewed: number,
+  withSkill: number,
+): SkillStatsReport {
+  const runsById = new Map(runCounts.map((r) => [r.agentId, r.runs]));
+  const list = agents.map((a) => ({ id: a.id, name: a.name, enabled: a.enabled, runs: runsById.get(a.id) ?? 0 }));
+  return {
+    range: appliedRange(range),
+    skill: { id: skill.id, name: skill.name, enabled: skill.enabled },
+    used_by: list.length,
+    ran_in_period: list.filter((a) => a.runs > 0).length,
+    pull_frequency: pullFrequency(withSkill, reviewed),
+    figures: skillFigures(rows),
+    findings: foldBreakdown(rows),
+    agents: list,
+  };
+}
+
+/** GET /skills/pull-frequency — one entry per skill id, in the order given; absent numerator → 0 (R-20). */
+export function buildSkillsPullFrequency(
+  range: PerfRange,
+  skillIds: string[],
+  reviewed: number,
+  withSkill: Map<string, number>,
+): SkillsPullFrequencyReport {
+  return {
+    range: appliedRange(range),
+    skills: skillIds.map((id) => ({ skill_id: id, pull_frequency: pullFrequency(withSkill.get(id) ?? 0, reviewed) })),
   };
 }

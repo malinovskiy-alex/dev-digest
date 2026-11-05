@@ -2,6 +2,7 @@
 export const cx = {
   wrap: "flex max-w-[1040px] flex-col gap-4",
   header: "flex flex-wrap items-start justify-between gap-3",
+  controls: "flex flex-col items-end gap-1",
   h2: "m-0 text-[18px] font-bold text-[var(--text-primary)]",
   grid: "grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3",
   tile: "flex min-w-0 flex-col gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4",

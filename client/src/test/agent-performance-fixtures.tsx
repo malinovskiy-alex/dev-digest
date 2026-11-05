@@ -1,6 +1,7 @@
-/* Test-only fixtures for the Agent Performance dashboard and the agent Stats
-   tab (L08): contract-shaped builders plus an intl wrapper with the
-   `agentPerformance` namespace, a fixed `now` and UTC. */
+/* Test-only fixtures for the Agent Performance dashboard, the agent Stats tab
+   (L08) and the skill Stats tab (L08 skill-stats): contract-shaped builders plus
+   intl wrappers — `agentPerformance`, or `skills` + `agentPerformance` — with a
+   fixed `now` and UTC. */
 import React from "react";
 import { render, type RenderResult } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
@@ -9,9 +10,12 @@ import type {
   AgentPerfTableRow,
   AgentPerformanceReport,
   AgentStatsReport,
+  FindingsBreakdown,
   PerfComparison,
+  SkillStatsReport,
 } from "@devdigest/shared";
 import agentPerformance from "../../messages/en/agentPerformance.json";
+import skills from "../../messages/en/skills.json";
 
 export const NOW = new Date("2026-11-05T12:00:00.000Z");
 
@@ -126,6 +130,26 @@ export function report(over: Partial<AgentPerformanceReport> = {}): AgentPerform
   };
 }
 
+/**
+ * A findings breakdown (L08 skill-stats). The default adds up to 13 — the
+ * accepted + dismissed + pending of `figures()` — on both axes.
+ */
+export function findingsBreakdown(over: Partial<FindingsBreakdown> = {}): FindingsBreakdown {
+  return {
+    total: 13,
+    by_category: { security: 5, bug: 4, perf: 2, style: 1, test: 1, other: 0 },
+    by_severity: { CRITICAL: 3, WARNING: 6, SUGGESTION: 4, other: 0 },
+    ...over,
+  };
+}
+
+/** A breakdown with no finding at all. */
+export const EMPTY_FINDINGS: FindingsBreakdown = {
+  total: 0,
+  by_category: { security: 0, bug: 0, perf: 0, style: 0, test: 0, other: 0 },
+  by_severity: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0, other: 0 },
+};
+
 export function statsReport(over: Partial<AgentStatsReport> = {}): AgentStatsReport {
   return {
     range: RANGE,
@@ -133,8 +157,36 @@ export function statsReport(over: Partial<AgentStatsReport> = {}): AgentStatsRep
     figures: figures(),
     comparison: comparison(),
     cost_by_model: [{ provider: "openai", model: "gpt-4.1", runs: 10, cost_usd: 0.4 }],
+    findings: findingsBreakdown(),
     ...over,
   };
+}
+
+/** A skill Stats report (L08 skill-stats): two agents using the skill, one ran. */
+export function skillStatsReport(over: Partial<SkillStatsReport> = {}): SkillStatsReport {
+  return {
+    range: RANGE,
+    skill: { id: "s1", name: "OWASP Top 10", enabled: true },
+    used_by: 2,
+    ran_in_period: 1,
+    pull_frequency: { prs_with_skill: 2, prs_reviewed: 2, rate: 1 },
+    figures: { accepted: 8, dismissed: 2, pending: 3, decided: 10, accept_rate: 0.8 },
+    findings: findingsBreakdown(),
+    agents: [
+      { id: "a1", name: "Security Reviewer", enabled: true, runs: 1 },
+      { id: "a3", name: "Test Quality Reviewer", enabled: false, runs: 0 },
+    ],
+    ...over,
+  };
+}
+
+/** Render under the `skills` and `agentPerformance` namespaces with a fixed clock and zone. */
+export function renderWithSkillsIntl(ui: React.ReactElement): RenderResult {
+  return render(
+    <NextIntlClientProvider locale="en" timeZone="UTC" now={NOW} messages={{ skills, agentPerformance }}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
 }
 
 /** Render under the `agentPerformance` namespace with a fixed clock and zone. */

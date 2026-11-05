@@ -60,6 +60,34 @@ export interface PerfAgentRef {
   enabled: boolean;
 }
 
+/**
+ * One `GROUP BY win, agent_runs.agent_id, findings.category, findings.severity` row
+ * over the findings of counted runs (L08 skill-stats D-5). A `FindingTally` split
+ * further by category and severity, so it folds through `foldFigures` unchanged
+ * (F-11, F-13). `category` / `severity` are the stored text, folded to the contract
+ * enums in `helpers.ts`.
+ */
+export interface BreakdownRow extends FindingTally {
+  category: string;
+  severity: string;
+}
+
+/** Which windows a breakdown read spans: the skill reads need only the current one. */
+export type BreakdownWindows = 'current' | 'both';
+
+/** Counted runs of one agent in the current window (L08 skill-stats R-06, R-79). */
+export interface AgentRunCount {
+  agentId: string;
+  runs: number;
+}
+
+/** An existing workspace skill, as far as this module reads it. */
+export interface PerfSkillRef {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
 /** The reads the service needs. `PerformanceRepository` implements it; tests may pass a fake. */
 export interface PerformanceReadSource {
   /** Rejects with a `ValidationError` (422) when Postgres does not know `tz`; reads nothing. */
@@ -72,6 +100,32 @@ export interface PerformanceReadSource {
   findingTallies(workspaceId: string, range: PerfRange, agentId?: string): Promise<FindingTally[]>;
   /** Current window only; non-empty buckets, key asc. */
   runBuckets(workspaceId: string, range: PerfRange): Promise<RunBucket[]>;
+  /** A skill of this workspace, or undefined (unknown or foreign id). */
+  getSkill(workspaceId: string, skillId: string): Promise<PerfSkillRef | undefined>;
+  /** Every skill id of this workspace, name asc then id. */
+  listSkillIds(workspaceId: string): Promise<string[]>;
+  /** Agents using the skill now (active-skill gate, both workspace checks), name asc then id (D-4). */
+  usingAgents(workspaceId: string, skillId: string): Promise<PerfAgentRef[]>;
+  /** Current window only; agents without a counted run are absent. `[]` ids → `[]`, no query. */
+  runCountsByAgent(workspaceId: string, range: PerfRange, agentIds: string[]): Promise<AgentRunCount[]>;
+  /**
+   * Per window, agent, category, severity — the current window only unless `windows`
+   * is 'both' (the agent Stats read, which also needs the previous window's tallies).
+   * `[]` ids → `[]`, no query.
+   */
+  findingBreakdown(
+    workspaceId: string,
+    range: PerfRange,
+    agentIds: string[],
+    windows?: BreakdownWindows,
+  ): Promise<BreakdownRow[]>;
+  /** Current window only: distinct non-null PRs with a counted run, deleted agents included (R-07). */
+  reviewedPrCount(workspaceId: string, range: PerfRange): Promise<number>;
+  /**
+   * Current window only: per skill id, distinct non-null PRs with a counted run of an
+   * agent using the skill now (R-08). Skills without such a PR are absent.
+   */
+  prsWithSkill(workspaceId: string, range: PerfRange, skillId?: string): Promise<Map<string, number>>;
 }
 
 export interface AgentPerformanceDeps {

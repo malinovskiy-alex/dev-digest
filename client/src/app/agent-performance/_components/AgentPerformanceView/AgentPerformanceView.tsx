@@ -8,7 +8,8 @@
    - agents but no counted run → "No agent runs in <range>", the hint, and
      "Go to Pull Requests" when a repository is active (R-73, R-104, R-105);
    - data → KPI cards, the billing note, the agents table, the cost breakdown.
-   Every request here is a GET (R-74). */
+   Every request here is a GET (R-74). The caption under the range control
+   names the window of the figures on screen (L08 skill-stats R-32). */
 "use client";
 
 import React from "react";
@@ -18,7 +19,13 @@ import { ErrorState, Skeleton } from "@devdigest/ui";
 import type { AgentPerformanceReport } from "@devdigest/shared";
 import { AppShell } from "@/components/app-shell";
 import { CostEstimateNote } from "@/components/cost-estimate-note";
-import { RangeControl, usePerfRange, useRangeLabels, type RangeLabels } from "@/components/perf-range-control";
+import {
+  RangeCaption,
+  RangeControl,
+  usePerfRange,
+  useRangeLabels,
+  type RangeLabels,
+} from "@/components/perf-range-control";
 import { ApiError } from "@/lib/api";
 import { useAgentPerformance } from "@/lib/hooks/agent-performance";
 import { bucketFor, type PerfRange, type PerfRangeChoice } from "@/lib/perf-range";
@@ -43,7 +50,10 @@ export function AgentPerformanceView(): React.JSX.Element {
             <h1 className={cx.title}>{t("title")}</h1>
             <p className={cx.subtitle}>{t("subtitle")}</p>
           </div>
-          <RangeControl choice={choice} onApply={apply} />
+          <div className={cx.controls}>
+            <RangeControl choice={choice} onApply={apply} />
+            <RangeCaption choice={choice} applied={q.isError ? undefined : q.data?.range} />
+          </div>
         </header>
         {q.isError ? (
           <ErrorState

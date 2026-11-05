@@ -80,7 +80,9 @@ describe("StatsTab", () => {
         "Reconciled billing is not connected — costs are DevDigest estimates from token counts and model prices.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    // No sparkline, no ring (R-112): the only chart is the Findings widget's ring (L08 skill-stats R-69).
+    const chart = screen.getByRole("img", { name: "Findings by category" });
+    expect(screen.getAllByRole("img").every((el) => chart.contains(el))).toBe(true);
   });
 
   it("hides delta and trend when unknown, stays neutral on a small sample, dashes an unknown cost (R-81, R-82, R-108, R-110, R-111)", () => {
@@ -147,5 +149,36 @@ describe("StatsTab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "1 day" }));
     expect(replace).toHaveBeenCalledWith("/agents/a1?tab=stats&range=1d", { scroll: false });
+  });
+
+  it("shows the Findings widget after the last tile and before the estimate note, and the applied-window caption (L08 skill-stats C7, R-32, R-68, R-69)", () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    state({ data: statsReport() });
+    renderWithPerfIntl(<StatsTab agent={AGENT} />);
+
+    const widget = screen.getByRole("region", { name: "Findings by category" });
+    const lastTile = tile("Last run");
+    const note = screen.getByText(/Reconciled billing is not connected/);
+    // DOM order: last tile → widget → estimate note.
+    expect(lastTile.compareDocumentPosition(widget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(widget.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The total is accepted + dismissed + pending of the same report: 8 + 2 + 3.
+    expect(within(screen.getByRole("img", { name: "Findings by category" })).getByText("13")).toBeInTheDocument();
+    // The caption names the response's window, in its zone.
+    expect(screen.getByText("30 days · Oct 6, 12:00 – Nov 5, 12:00")).toBeInTheDocument();
+    // The widget reads the tab's own report: one hook, no request of its own (R-70).
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows no caption while loading or on error (R-33)", () => {
+    state({});
+    renderWithPerfIntl(<StatsTab agent={AGENT} />);
+    expect(screen.queryByText(/30 days ·/)).not.toBeInTheDocument();
+    cleanup();
+    state({ isError: true, error: new ApiError("boom", 500), data: statsReport() });
+    renderWithPerfIntl(<StatsTab agent={AGENT} />);
+    expect(screen.queryByText(/30 days ·/)).not.toBeInTheDocument();
   });
 });

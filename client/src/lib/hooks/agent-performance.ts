@@ -12,16 +12,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { AgentPerformanceReport, AgentStatsReport } from "@devdigest/shared";
 import { api } from "@/lib/api";
-import { browserTimeZone, type PerfBucketUnit, type PerfRange } from "@/lib/perf-range";
-
-function rangeQuery(range: PerfRange, tz: string, bucket: PerfBucketUnit): string {
-  return [
-    `from=${encodeURIComponent(range.from.toISOString())}`,
-    `to=${encodeURIComponent(range.to.toISOString())}`,
-    `tz=${encodeURIComponent(tz)}`,
-    `bucket=${encodeURIComponent(bucket)}`,
-  ].join("&");
-}
+import { browserTimeZone, perfRangeQuery, type PerfBucketUnit, type PerfRange } from "@/lib/perf-range";
 
 export const agentPerformanceKey = (from: string, to: string, tz: string, bucket: PerfBucketUnit) =>
   ["agent-performance", from, to, tz, bucket] as const;
@@ -36,7 +27,7 @@ export function useAgentPerformance(range: PerfRange, bucket: PerfBucketUnit) {
   const to = range.to.toISOString();
   return useQuery({
     queryKey: agentPerformanceKey(from, to, tz, bucket),
-    queryFn: () => api.get<AgentPerformanceReport>(`/agents/performance?${rangeQuery(range, tz, bucket)}`),
+    queryFn: () => api.get<AgentPerformanceReport>(`/agents/performance?${perfRangeQuery(range, tz, bucket)}`),
   });
 }
 
@@ -48,7 +39,7 @@ export function useAgentStats(agentId: string, range: PerfRange) {
   return useQuery({
     queryKey: agentStatsKey(agentId, from, to, tz),
     queryFn: () =>
-      api.get<AgentStatsReport>(`/agents/${encodeURIComponent(agentId)}/stats?${rangeQuery(range, tz, "day")}`),
+      api.get<AgentStatsReport>(`/agents/${encodeURIComponent(agentId)}/stats?${perfRangeQuery(range, tz, "day")}`),
     enabled: !!agentId,
   });
 }

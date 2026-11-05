@@ -3,7 +3,9 @@
    formatters (R-77): house cost format, "6.2s", the accept rate with its
    denominator, band colour and trend arrow (R-109…R-111), the cost delta
    (R-107, R-108), relative Last run. No sparkline, no ring, no colour marker
-   (R-112, D-28). The range lives in the address next to `?tab=stats` (R-84). */
+   (R-112, D-28). The range lives in the address next to `?tab=stats` (R-84).
+   L08 skill-stats: the applied-window caption beside the range control (R-32)
+   and the Findings widget between the tiles and the estimate note (R-69). */
 "use client";
 
 import React from "react";
@@ -13,8 +15,15 @@ import type { Agent, AgentStatsReport } from "@devdigest/shared";
 import { AcceptRateValue } from "@/components/accept-rate-value";
 import { CostDelta } from "@/components/cost-delta";
 import { CostEstimateNote } from "@/components/cost-estimate-note";
+import { FindingsWidget } from "@/components/findings-widget";
 import { LastRunTime } from "@/components/last-run-time";
-import { RangeControl, usePerfRange, useRangeLabels } from "@/components/perf-range-control";
+import {
+  RangeCaption,
+  RangeControl,
+  usePerfRange,
+  useRangeLabels,
+  type RangeLabels,
+} from "@/components/perf-range-control";
 import { ApiError } from "@/lib/api";
 import { formatCostUsd } from "@/lib/format-cost";
 import { useAgentStats } from "@/lib/hooks/agent-performance";
@@ -32,7 +41,10 @@ export function StatsTab({ agent }: { agent: Agent }): React.JSX.Element {
     <div className={cx.wrap}>
       <div className={cx.header}>
         <h2 className={cx.h2}>{t("stats.tabLabel")}</h2>
-        <RangeControl choice={choice} onApply={apply} />
+        <div className={cx.controls}>
+          <RangeControl choice={choice} onApply={apply} />
+          <RangeCaption choice={choice} applied={q.isError ? undefined : q.data?.range} />
+        </div>
       </div>
       {q.isError ? (
         <ErrorState
@@ -52,16 +64,16 @@ export function StatsTab({ agent }: { agent: Agent }): React.JSX.Element {
       ) : q.data.figures.runs === 0 ? (
         <p className={cx.empty}>{t("stats.noRuns", { name: agent.name, range: labels.sentence })}</p>
       ) : (
-        <StatsFigures report={q.data} rangeShort={labels.short} />
+        <StatsFigures report={q.data} labels={labels} />
       )}
     </div>
   );
 }
 
-function StatsFigures({ report, rangeShort }: { report: AgentStatsReport; rangeShort: string }): React.JSX.Element {
+function StatsFigures({ report, labels }: { report: AgentStatsReport; labels: RangeLabels }): React.JSX.Element {
   const t = useTranslations("agentPerformance");
   const f = report.figures;
-  const range = { range: rangeShort };
+  const range = { range: labels.short };
   const estimate = <span className={cx.caption}>{t("estimate.label")}</span>;
   return (
     <>
@@ -101,6 +113,7 @@ function StatsFigures({ report, rangeShort }: { report: AgentStatsReport; rangeS
           <LastRunTime iso={f.last_run_at} />
         </Tile>
       </div>
+      <FindingsWidget findings={report.findings} emptyLabel={t("findings.empty", { range: labels.sentence })} />
       <CostEstimateNote />
     </>
   );
