@@ -21,6 +21,15 @@ spawning `spec-creator`, list every visible element of the target design and ask
 the user about all of them in **one** batch — in the L05 PR Brief banner run the
 run line and the Review focus card arrived mid-run, as 4 follow-ups.
 
+Two relay rules for that by-hand stage. **Every** proposal an agent hands back
+(UX-xx include/defer, Q-xx, OQ-xx) is its own selectable option — split across
+questions or calls when there are more than four; never list some only in the
+question text. In L08 UX-07 (the findings widget) was mentioned but not offered,
+became "deferred" without a choice, and the user asked for it later. And never run
+`spec-creator` and `implementation-planner` at the same time: finish the spec edit,
+then resume the planner with the new IDs — in L08 the planner re-read the
+requirements while R-106…R-112 were still being written and needed one more resume.
+
 ## 0. Preflight
 
 `$ARGUMENTS`, token by token:
@@ -89,11 +98,21 @@ exception for small late rounds there). Its
 
 ### review
 
-Spawn **both in one message** — read-only, so they may run in parallel:
+Spawn **all of them in one message** — read-only, so they may run in parallel:
 
 - `architecture-reviewer` — the open change.
 - `plan-verifier` — the plan path. Without `--test-writer`: a **full** pass.
   With it: the *gap* pass (test items not graded yet).
+- a **security lens** — the `security` skill plus
+  `docs/agent-prompts/security-reviewer.md`, with `zod` / `fastify-best-practices`
+  / `drizzle-orm-patterns` when `server/` changed.
+- **`/code-review`** for correctness bugs, run by an agent on the open change.
+- the frontend lenses the plan names, when `client/` changed.
+
+The security lens and `/code-review` belong here, not only at the `pr` gate: in
+L08 they first ran at `/pr-self-review` and found 5 WARNINGs (F-08, F-09, F-11,
+F-12, F-13) after the loop had exited — two extra fix rounds and a second
+smoke/build cycle. The `pr` gate then confirms instead of discovering.
 
 Every reviewer prompt — these two, a frontend lens, `/code-review`, any other
 lens agent — names `findings.md` and the plan's `## Decisions` (and the
@@ -109,7 +128,7 @@ grep `client/node_modules/next/dist/compiled/react/cjs/react.development.js`;
 lens recommended `useEffectEvent` (B-05), it typechecked, and every PR page
 crashed (B-06; `client/INSIGHTS.md`, 2026-11-02).
 
-Merge both into `findings.md` (§4) and run the loop.
+Merge every report into `findings.md` (§4) and run the loop.
 
 ### tests — only with `--test-writer`
 
@@ -132,6 +151,13 @@ skip the step. A failure is a finding: Sev `CRITICAL`, source `browser-smoke` �
 fix loop → smoke again. In L05 PR Brief every automated gate was green and
 `plan-verifier` graded complete while every PR page crashed (B-06, caught only
 by a manual browser check).
+
+Starting and stopping dev servers yourself: stop one by the PID listening on its
+port (`netstat -ano | grep ":3000 .*LISTENING"` → `taskkill /PID <pid> /F`), not
+by `TaskStop` on the background shell — that stops the bash wrapper and leaves
+`next dev` holding :3000. Re-check the port before every `pnpm build` (the
+`.next` clash in `client/INSIGHTS.md`). In L08 a `TaskStop` left PID 828 on :3000
+and the first in-place build had to be redone.
 
 ### pr
 
@@ -207,6 +233,12 @@ Never decide for the user.
    re-pays the whole accumulated context for a one-line change. In L05 PR Brief
    the server stream reached 100 requests / 20.37M input after 4 rounds, and its
    round-2 fix was one line.
+
+   The same applies from round 2 on whenever the stream is already large (more
+   than ~100 requests or ~15M input in its last report), however many findings
+   there are: give a fresh implementer the plan path, the findings path and the
+   list of files the stream changed. In L08 the client stream was resumed for two
+   rounds and reached 132 requests / 28.72M input — most of it re-paid context.
 2. **Ledger.** `fixed` with the resolution, or `disputed` with the reason. A new
    failure in its `verify.mjs` output is a new `test` row.
 3. **Disputes** → one `AskUserQuestion` for all of them: *keep the finding*

@@ -86,7 +86,7 @@ There is no `lint` script anywhere in the repo — do not invent one.
 ### `pnpm arch` is the cheap one
 
 `onion-architecture` ships `server/.dependency-cruiser.cjs` where every rule is
-`error`, with the 25 existing violations parked in
+`error`, with the 21 existing violations parked in
 `.dependency-cruiser-known-violations.json`:
 
 ```sh

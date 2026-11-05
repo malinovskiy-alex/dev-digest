@@ -58,7 +58,7 @@ then crashed (B-06; `client/INSIGHTS.md`, 2026-11-02).
 | Situation | Ours |
 |---|---|
 | `pnpm arch` fails on a **new** boundary violation | CRITICAL, `category: bug` — machine-verified, no judgement involved |
-| in the 25 grandfathered entries of `.dependency-cruiser-known-violations.json` | not reported |
+| in the 21 grandfathered entries of `.dependency-cruiser-known-violations.json` | not reported |
 | business rule moved into `routes.ts` with no import to betray it (invisible to the graph) | WARNING |
 | a service that would need Postgres to unit-test | WARNING |
 | ring shape the skill would prefer, no rule broken | SUGGESTION |

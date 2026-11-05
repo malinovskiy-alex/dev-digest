@@ -81,7 +81,7 @@ No baseline yet → run the same commands once on the merge-base and write it, o
 report `tests: unknown` and do not block on test failures this run.
 
 `pnpm arch` (server) is the cheapest backend check that exists: `onion-architecture`
-ships `server/.dependency-cruiser.cjs` with 25 grandfathered violations in
+ships `server/.dependency-cruiser.cjs` with 21 grandfathered violations in
 `.dependency-cruiser-known-violations.json`, so it fails **only on a new**
 boundary violation. A failure there is a CRITICAL, and it needs no model.
 
@@ -129,7 +129,7 @@ Every finding, before it counts:
    confirmed attacker-controlled input = HIGH = blocks; pattern with an unclear
    source = MEDIUM = WARNING.
 4. **Check [do-not-flag.md](references/do-not-flag.md).** Deliberate starter
-   gaps, the twice-vendored `shared`, `server/clones/`, the 25 grandfathered
+   gaps, the twice-vendored `shared`, `server/clones/`, the 21 grandfathered
    boundary violations and `// dd-ignore:` lines with a stated reason are not
    findings.
 
