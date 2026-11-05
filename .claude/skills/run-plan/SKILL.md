@@ -30,6 +30,11 @@ became "deferred" without a choice, and the user asked for it later. And never r
 then resume the planner with the new IDs — in L08 the planner re-read the
 requirements while R-106…R-112 were still being written and needed one more resume.
 
+Phrase a multi-select by the action to take — *"mark what to FIX"*, *"mark what
+to CHANGE"* — with the default stated in each option, or ask one single-select
+per item. Never *"mark where you want the alternative"*: in L08 Skill Stats the
+user ticked all 16 G-items meaning "agree", and it took a confirmation call.
+
 ## 0. Preflight
 
 `$ARGUMENTS`, token by token:
@@ -106,8 +111,15 @@ Spawn **all of them in one message** — read-only, so they may run in parallel:
 - a **security lens** — the `security` skill plus
   `docs/agent-prompts/security-reviewer.md`, with `zod` / `fastify-best-practices`
   / `drizzle-orm-patterns` when `server/` changed.
-- **`/code-review`** for correctness bugs, run by an agent on the open change.
-- the frontend lenses the plan names, when `client/` changed.
+- **`/code-review`** for correctness bugs — one `general-purpose` agent that runs
+  the `code-review` skill itself and returns the verified findings. Do not wrap it
+  in an agent whose only job is to spawn another: in L08 Skill Stats each wrapper
+  (~0.4M) started a nested `/code-review` agent (2.9M / 3.4M input).
+- the frontend lenses the plan names, when `client/` changed. When a finding is a
+  UI fix that changes layout or interaction, the lens's prompt also asks for the
+  fix's side effects (layout shift, first-load growth, hover/focus reach) in the
+  same review — in L08 Skill Stats one tooltip took three rounds (F-18 → F-19 →
+  F-20), each fix revealing the next.
 
 The security lens and `/code-review` belong here, not only at the `pr` gate: in
 L08 they first ran at `/pr-self-review` and found 5 WARNINGs (F-08, F-09, F-11,
@@ -165,6 +177,10 @@ Invoke `/pr-self-review` yourself. Each surviving CRITICAL → a finding (source
 `pr-self-review`) → fix loop → `/pr-self-review` again. Do **not** let it open
 the PR.
 
+Start the final `plan-verifier` pass only after the `pr` gate has closed — a fix
+round that follows makes it stale. In L08 Skill Stats a final pass was stopped
+after 0.89M input when the gate's `/code-review` triggered round 5.
+
 ### wrap-up
 
 1. `/engineering-insights`.
@@ -207,6 +223,12 @@ Never decide for the user.
 - Dedupe on *where + rule*: one defect from two sources is one row naming both.
   IDs are never renumbered.
 - `cannot verify` is not a finding — it goes to the final report.
+- **Every user decision is written down when it is made** — the chosen option's
+  text in the row's Resolution *and* a `decision` line in `state.md` — also when
+  it narrows or reinterprets a requirement. The final `plan-verifier` reads files,
+  not this conversation: in L08 Skill Stats the user's F-18 choice ("badge hover
+  only") lived only in the chat, R-82 was graded `partial`, and the spec had to
+  be amended after the run.
 
 ### What blocks
 
@@ -250,6 +272,10 @@ Never decide for the user.
      `reopened`. New → a new row with this iteration number.
    - `plan-verifier`: only if the round had a `gap` row — *"Re-grade items
      <n, m> only."*
+   - a scoped bug pass (`/code-review` on the files this round changed) whenever
+     the round changed behaviour, not only style. In L08 Skill Stats F-22 (a 500
+     created by F-03's schema bound) and F-23 (the invalidation gap F-06/F-16
+     left in `useDeleteAgent`) were found only at the `pr` gate.
 5. **Exit** when no must-fix row is `open` or `reopened`.
 
 ### The cap

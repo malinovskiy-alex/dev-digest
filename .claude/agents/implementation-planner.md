@@ -379,6 +379,13 @@ What this plan deliberately does not judge, and where to look:
 | does the model still reject `temperature`? | 4 | `researcher` |
 ````
 
+Two design shapes always get a `## Risks` row when the plan prescribes them,
+because review caught both in L08 Skill Stats only after the plan mandated them:
+a query key built from a time anchor held in component state (an App Router
+dynamic-segment change remounts the page and refetches — F-04), and an
+interactive or tooltip element inside a `role="button"` container (it joins the
+button's accessible name — F-05).
+
 Every requirement ID from the requirements file appears in `## Requirements
 check` — none silently dropped. One that the plan does not cover says why.
 
