@@ -19,6 +19,12 @@ and the five sibling files beside it
 
 ## What Doesn't Work
 
+### 2026-11-05 — An urgent `setState` next to `router.replace` fires a fetch for a range nobody chose
+**Symptom:** clicking "1 day" on `/agent-performance` sent two `GET /agents/performance`: first 30 days ending *now*, then 1 day. Same on the agent Stats tab.
+**Cause:** Next 15 runs `router.replace` inside `startTransition` (`next/dist/client/components/app-router-instance.js`), so an urgent `setAppliedAt(new Date())` commits first: one render sees the new apply time with the old search params, the query key changes, and TanStack fetches it. `api.get` takes no `AbortSignal`, so it is never cancelled.
+**Rule:** don't pair an urgent state update with a router navigation that both feed one query key. Key derived state by the address it belongs to — `usePerfRange` stores apply times per choice key (bounded map) and resolves each render at the time of the choice it *sees*. Wrapping both in your own `startTransition` was rejected: it relies on React batching ours with Next's transition, which Next does not promise. Lock it with a test whose mocked `replace` updates the address a tick later.
+**Where:** `client/src/components/perf-range-control/usePerfRange.ts:78` (`apply`), test `usePerfRange.test.tsx`
+
 ### 2026-11-02 — Newer React APIs pass vitest but crash the App Router: `React.useEffectEvent is not a function`
 **Symptom:** all 473 client tests, typecheck and lint were green, yet every PR page crashed in `pnpm dev` with `TypeError: react__WEBPACK_IMPORTED_MODULE_0___default(...).useEffectEvent is not a function at useWhenActiveRunsEnd`.
 **Cause:** the Next 15 App Router renders with its own bundled `next/dist/compiled/react`, which has no stable `useEffectEvent`; vitest (and `@types/react`) resolve `react` 19.2 from `node_modules`, where it exists. The tests exercise a different React than the app.
@@ -265,6 +271,7 @@ the shorthand/longhand mix React warns about — the existing comment claiming
 
 ## Session Notes
 
+- 2026-11-05 — L08 Agent Performance (client): dashboard + agent Stats tab, shared `RangeControl`/`usePerfRange`; stray fetch from setState+router.replace; stopping a backgrounded `pnpm dev` left `next dev` on :3000 again (see the Recurring entry — check the port before every build).
 - 2026-11-01 — L05 PR Brief (client): `pnpm build` failed on lint after a green verify (eslint is not in verify.mjs); orphaned `next dev` on :3000; polling gated on query status.
 - 2026-11-01 — L05 Onboarding Tour via spec → plan (+ Sonnet cross-model review) → /run-plan: 4 pre-PR rounds; tour prose links made inert at render after regex scrubbing kept leaking.
 

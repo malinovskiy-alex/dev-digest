@@ -3,8 +3,8 @@
 /** Error code of a generation rejected for a missing key (R-39, D-8). */
 export const NO_KEY_CODE = "brief_no_api_key";
 
-/** How often "Generated … ago" re-renders, so the relative time keeps moving. */
-export const NOW_TICK_MS = 60_000;
+/** How often "Generated … ago" re-renders, so the relative time keeps moving — one shared value (L08 F-15). */
+export { NOW_TICK_MS } from "@/lib/now-tick";
 
 /** Missing-input reasons with a label in `brief.missingReason.*` (D-17). */
 export const KNOWN_MISSING_REASONS = [

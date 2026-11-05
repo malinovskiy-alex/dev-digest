@@ -13,10 +13,10 @@ import { AddAgentButton } from "../_components/AddAgentButton";
 import { CreateAgentModal } from "../_components/CreateAgentModal";
 import { AgentEditor } from "./_components/AgentEditor";
 import { useAgents, useAgent, useUpdateAgent } from "@/lib/hooks/agents";
-import { filterAgents } from "@/lib/agents";
+import { agentEditorHref, filterAgents } from "@/lib/agents";
 import { ApiError } from "@/lib/api";
 
-const VALID_TABS = ["config", "skills", "context"];
+const VALID_TABS = ["config", "skills", "context", "stats"];
 
 export default function AgentEditorPage() {
   const t = useTranslations("agents");
@@ -33,11 +33,8 @@ export default function AgentEditorPage() {
   const list = filterAgents(agents ?? [], query);
 
   const tab = VALID_TABS.includes(search.get("tab") ?? "") ? search.get("tab")! : "config";
-  const setTab = (t: string) => {
-    const sp = new URLSearchParams(search.toString());
-    sp.set("tab", t);
-    router.replace(`/agents/${id}?${sp.toString()}`);
-  };
+  // Both keep the rest of the address, so the Stats tab's range survives (R-84, F-13).
+  const setTab = (t: string) => router.replace(agentEditorHref(id, t, search));
 
   const crumb = [
     { label: t("list.breadcrumbLab") },
@@ -116,7 +113,7 @@ export default function AgentEditorPage() {
                 key={a.id}
                 ag={a}
                 active={a.id === id}
-                onClick={() => router.push(`/agents/${a.id}?tab=${tab}`)}
+                onClick={() => router.push(agentEditorHref(a.id, tab, search))}
                 onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
               />
             ))}
