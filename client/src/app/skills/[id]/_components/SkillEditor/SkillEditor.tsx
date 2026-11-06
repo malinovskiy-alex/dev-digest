@@ -5,15 +5,24 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
-import { Tabs } from "@devdigest/ui";
+import { Skeleton, Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { ConfigTab } from "./_components/ConfigTab";
 import { PreviewTab } from "./_components/PreviewTab";
 import { VersionsTab } from "./_components/VersionsTab";
 import { ContextTab } from "./_components/ContextTab";
-import { TABS } from "./constants";
+import { STATS_LOADING_HEIGHT, TABS } from "./constants";
 import { s } from "./styles";
+
+/**
+ * The Stats tab carries recharts (the Findings ring), which no other tab of the
+ * editor needs: it is loaded only when the tab is opened (L08 skill-stats F-09).
+ */
+const StatsTab = dynamic(() => import("./_components/StatsTab").then((m) => m.StatsTab), {
+  loading: () => <Skeleton height={STATS_LOADING_HEIGHT} />,
+});
 
 export function SkillEditor({
   skill,
@@ -36,6 +45,7 @@ export function SkillEditor({
       </div>
       <div style={s.body}>
         {tab === "preview" && <PreviewTab skill={skill} />}
+        {tab === "stats" && <StatsTab skill={skill} />}
         {tab === "versions" && <VersionsTab skill={skill} />}
         {tab === "context" && <ContextTab skill={skill} />}
         {tab === "config" && <ConfigTab skill={skill} onDeleted={onDeleted} />}

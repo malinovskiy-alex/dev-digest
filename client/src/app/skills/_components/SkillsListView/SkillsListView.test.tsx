@@ -42,10 +42,25 @@ function jsonResponse(body: unknown, status = 200) {
   } as Response);
 }
 
+/**
+ * The page's one pull-frequency read (L08 skill-stats R-74) is answered here, by
+ * URL, so each case's `fetchMock` keeps describing the skills endpoints only.
+ */
+const pullFreqMock = vi.fn();
+let pullFreqBody: unknown = { range: {}, skills: [] };
+
 beforeEach(() => {
   fetchMock.mockReset();
+  pullFreqMock.mockReset();
+  pullFreqBody = { range: {}, skills: [] };
   push.mockReset();
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+    if (new URL(url).pathname === "/skills/pull-frequency") {
+      pullFreqMock(url, init);
+      return jsonResponse(pullFreqBody);
+    }
+    return fetchMock(url, init);
+  });
 });
 
 afterEach(() => {
@@ -53,8 +68,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderList() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+function newClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+}
+
+/** `qc` is shared across renders when a test simulates the App Router remounting the page. */
+function renderList(qc: QueryClient = newClient()) {
   return render(
     <QueryClientProvider client={qc}>
       <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
@@ -136,5 +155,88 @@ describe("SkillsListView", () => {
       expect(put).toBeDefined();
       expect(JSON.parse(String((put?.[1] as RequestInit).body))).toEqual({ enabled: false });
     });
+  });
+
+  it("asks for every card's pull frequency in one GET and shows each card's percentage (L08 skill-stats C9, R-71, R-74)", async () => {
+    const skills: Skill[] = [
+      { ...SKILL, agent_count: 2 },
+      { ...SKILL, id: "sk2", name: "over-mocking-gate", agent_count: 1 },
+      { ...SKILL, id: "sk3", name: "flaky-test-gate", agent_count: 0 },
+    ];
+    pullFreqBody = {
+      range: {},
+      skills: [
+        { skill_id: "sk1", pull_frequency: { prs_with_skill: 2, prs_reviewed: 2, rate: 1 } },
+        { skill_id: "sk2", pull_frequency: { prs_with_skill: 1, prs_reviewed: 2, rate: 0.5 } },
+        { skill_id: "sk3", pull_frequency: { prs_with_skill: 0, prs_reviewed: 2, rate: 0 } },
+      ],
+    };
+    fetchMock.mockImplementation(() => jsonResponse(skills));
+    renderList();
+
+    expect(await screen.findByText("2 agents · 100% pull freq")).toBeInTheDocument();
+    expect(screen.getByText("1 agent · 50% pull freq")).toBeInTheDocument();
+    expect(screen.getByText("0 agents · 0% pull freq")).toBeInTheDocument();
+    expect(pullFreqMock).toHaveBeenCalledTimes(1);
+    const [url, init] = pullFreqMock.mock.calls[0]! as [string, RequestInit | undefined];
+    expect(init?.method ?? "GET").toBe("GET");
+    const q = new URL(url).searchParams;
+    expect(Date.parse(q.get("to")!) - Date.parse(q.get("from")!)).toBe(720 * 3_600_000);
+  });
+
+  it("shows the cards with the count only when the pull-frequency read fails (R-77)", async () => {
+    pullFreqBody = undefined;
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) =>
+      new URL(url).pathname === "/skills/pull-frequency"
+        ? jsonResponse({ error: { code: "boom", message: "boom" } }, 500)
+        : fetchMock(url, init),
+    );
+    fetchMock.mockImplementation(() => jsonResponse([{ ...SKILL, agent_count: 2 }]));
+    renderList();
+
+    expect(await screen.findByText("2 agents")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Loading pull frequency")).not.toBeInTheDocument());
+    expect(screen.queryByText(/pull freq/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the cards' pull frequency across a page remount — no second GET, no placeholder (F-04, R-73, R-74)", async () => {
+    pullFreqBody = {
+      range: {},
+      skills: [{ skill_id: "sk1", pull_frequency: { prs_with_skill: 2, prs_reviewed: 2, rate: 1 } }],
+    };
+    fetchMock.mockImplementation(() => jsonResponse([{ ...SKILL, agent_count: 2 }]));
+    const qc = newClient();
+    const first = renderList(qc);
+    expect(await screen.findByText(/· 100% pull freq/)).toBeInTheDocument();
+
+    // A rail click on /skills/[id] unmounts the page and mounts a new one over the same QueryClient.
+    first.unmount();
+    renderList(qc);
+    expect(screen.getByText(/· 100% pull freq/)).toBeInTheDocument();
+    expect(screen.queryByText("Loading pull frequency")).not.toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(pullFreqMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-reads the pull frequency after a skill is toggled (F-06)", async () => {
+    pullFreqBody = {
+      range: {},
+      skills: [{ skill_id: "sk1", pull_frequency: { prs_with_skill: 2, prs_reviewed: 2, rate: 1 } }],
+    };
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === "PUT" ? jsonResponse({ ...SKILL, enabled: false }) : jsonResponse([SKILL]),
+    );
+    renderList();
+    expect(await screen.findByText(/· 100% pull freq/)).toBeInTheDocument();
+    expect(pullFreqMock).toHaveBeenCalledTimes(1);
+
+    pullFreqBody = {
+      range: {},
+      skills: [{ skill_id: "sk1", pull_frequency: { prs_with_skill: 0, prs_reviewed: 2, rate: 0 } }],
+    };
+    fireEvent.click(screen.getByRole("switch"));
+    expect(await screen.findByText(/· 0% pull freq/)).toBeInTheDocument();
+    expect(pullFreqMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,6 +1,7 @@
 /* SkillCard — one skill in the /skills grid and in the editor's left rail:
    type badge, name, description, the global enable toggle, the current version,
-   how many agents send it, and delete. Props mirror AgentCard so the two grids
+   how many agents send it with the skill's pull frequency over the last 30 days
+   (L08 skill-stats R-71), and delete. Props mirror AgentCard so the two grids
    stay one system. */
 "use client";
 
@@ -13,6 +14,8 @@ import { useDeleteSkill } from "@/lib/hooks/skills";
 import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { typeColor } from "@/lib/skills";
+import { PullFreqBadge, type CardPullFreq } from "./_components/PullFreqBadge";
+import { PullFreqHint } from "./_components/PullFreqHint";
 import { needsVetting } from "./helpers";
 import { s } from "./styles";
 
@@ -22,6 +25,7 @@ export function SkillCard({
   onClick,
   onToggle,
   onDeleted,
+  pullFrequency,
 }: {
   skill: Skill;
   active?: boolean;
@@ -33,12 +37,19 @@ export function SkillCard({
   onToggle?: (enabled: boolean) => void;
   /** Lets the caller leave a screen that is about to describe a deleted row. */
   onDeleted?: (skill: Skill) => void;
+  /** This skill's slice of the page's one pull-frequency read (D-11); absent → the agent count only. */
+  pullFrequency?: CardPullFreq;
 }): React.JSX.Element {
   const t = useTranslations("skills");
   const toast = useToast();
   const del = useDeleteSkill();
   const [confirming, setConfirming] = React.useState(false);
   const color = typeColor(skill.type);
+  const hintId = React.useId();
+  // The hint is the card's description: keyboard focus lands on the card root (R-83).
+  const showHint = pullFrequency?.status === "ready";
+  // Escape hides the hint until the pointer or focus leaves the card (WCAG 1.4.13).
+  const [hintDismissed, setHintDismissed] = React.useState(false);
 
   /**
    * The question cannot quote the count it is about to invalidate — the card
@@ -78,11 +89,23 @@ export function SkillCard({
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onClick?.();
+          } else if (e.key === "Escape") {
+            setHintDismissed(true);
           }
+        }}
+        onMouseLeave={() => setHintDismissed(false)}
+        onBlur={(e) => {
+          // `blur` bubbles in React: focus moving to the card's own Toggle or
+          // delete button has not left the card, so Escape still holds (F-17).
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setHintDismissed(false);
         }}
         role="button"
         tabIndex={0}
         aria-pressed={!!active}
+        aria-describedby={showHint ? hintId : undefined}
+        // `group` drives the pull-frequency hint: badge hover and keyboard focus (R-82, F-18).
+        className="group"
         style={s.card(!!active, skill.enabled)}
       >
         <div style={s.headerRow}>
@@ -121,9 +144,7 @@ export function SkillCard({
           <Badge color="var(--text-secondary)" mono>
             {t("preview.version", { version: skill.version })}
           </Badge>
-          <Badge color="var(--text-secondary)" icon="Cpu">
-            {t("listItem.agentCount", { count: skill.agent_count })}
-          </Badge>
+          <PullFreqBadge agentCount={skill.agent_count} pullFrequency={pullFrequency} />
           {needsVetting(skill) && (
             <span title={t("listItem.vettingTitle")}>
               <Badge color="var(--warn)" bg="var(--warn-bg)" icon="AlertTriangle">
@@ -132,6 +153,10 @@ export function SkillCard({
             </span>
           )}
         </div>
+        {/* Reserved whenever a pull frequency is passed, so the card's height
+            never changes when the read lands (F-20); it describes the card and
+            can show only once the read is `ready`. */}
+        {pullFrequency && <PullFreqHint id={hintId} dismissed={hintDismissed} reserveOnly={!showHint} />}
       </div>
     </>
   );

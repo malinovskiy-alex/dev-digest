@@ -40,7 +40,7 @@ built from scratch (root `INSIGHTS.md`, 2026-09-16).
 
 ## Already-decided architecture debt
 
-The 25 entries in `server/.dependency-cruiser-known-violations.json` are known,
+The 21 entries in `server/.dependency-cruiser-known-violations.json` are known,
 written down in `server/specs/onion-debt.md`, and deliberately not fixed on
 `main`. `pnpm arch` ignores them; so does this skill. Only a **new** violation is
 a finding.

@@ -219,6 +219,25 @@ cors / rate-limit / the error handler does not inherit them.
 
 ## Tool & Library Notes
 
+### 2026-11-05 — A response-schema bound turns a cross-statement race into a 500
+**Symptom:** `PullFrequency.rate` got `.max(1)` in the contract; a run turning `done` between the two count statements (`reviewedPrCount`, then `prsWithSkill`) could yield `rate > 1`, and the response failed serialization → 500 on `/skills/pull-frequency` for the whole Skills page.
+**Cause:** `app.ts:81` installs zod's `serializerCompiler`, so every 200 response is validated; the module's reads are separate statements without a shared snapshot (accepted in the plans), so "numerator ⊆ denominator" holds per statement, not across them.
+**Rule:** when you tighten a response schema, make the invariant structural in the pure fold (clamp, or read both counts in one statement) — never rely on two separate reads agreeing.
+**Where:** `server/src/modules/agent-performance/helpers.ts:394` (`pullFrequency`, `Math.min`), `server/src/app.ts:81`
+
+### 2026-11-05 — A `tz` that Node's `Intl` accepts is not one Postgres `AT TIME ZONE` reads the same way
+**Symptom:** `tz=+05` passed the contract's `Intl.DateTimeFormat` check and returned 200, but the sparkline buckets were 10 h off: Postgres reads `'+05'` as a POSIX offset with the sign inverted (UTC−5). `tz=+0530` and `tz=US/Pacific-New` (both accepted by Node 24 ICU) made pg16 throw `time zone "…" not recognized` (SQLSTATE `22023`) → 500.
+**Cause:** Node uses ICU's zone list, Postgres its own tzdata plus POSIX offset parsing; the two sets overlap but are not equal, and an `Intl` probe says nothing about what the database will do.
+**Rule:** validate a browser zone name in two layers — the contract requires a letter first (`TZ_SHAPE`, rejects every offset string), and the service probes Postgres once with `select now() at time zone $tz` (bound parameter) before any read, mapping `22023` to a 422 `ValidationError`. Never rely on the data query to surface the bad zone: with zero rows it never evaluates `AT TIME ZONE` and silently returns 200.
+**Where:** `server/src/vendor/shared/contracts/agent-performance.ts:14` (`TZ_SHAPE`), `server/src/modules/agent-performance/repository.ts:134` (`assertTimeZoneKnown`)
+
+### 2026-11-05 — zod `.datetime()` accepts year `0000`; Postgres `timestamptz` does not
+**Symptom:** `GET /agents/performance?from=0000-01-01T00:00:00Z…` passed validation and returned 500 `date/time field value out of range`; a long but valid custom range also 500'd because the derived previous window (`from − (to − from)`) became a negative year (`'-001826-…'` → `time zone displacement out of range`).
+**Cause:** the `datetime` regex accepts any 4-digit year and JS `Date` happily goes below year 0; Postgres rejects both. Any value *derived* from a validated date needs its own bound.
+**Rule:** bound the earliest instant a request can make the server compute, not just the raw inputs — here `2·from − to ≥ 1970-01-01T00:00:00Z` as a contract refine, mirrored by the client's URL parsing so the UI never sends it.
+**Where:** `server/src/vendor/shared/contracts/agent-performance.ts:37` (refine on `MIN_WINDOW_START_MS`)
+**Correction (2026-11-05):** incomplete — the same gap exists at the top. `to=9999-12-31T23:59:59-14:00` passes `.datetime()`, normalises to `+010000-01-01T13:59:59Z` and pg16 rejects it → 500. Bound both ends; the upper refine is `MAX_WINDOW_END_MS` at `agent-performance.ts:23,48`.
+
 ### 2026-09-19 — dependency-cruiser group references are `$1`, not `\1`
 **Symptom:** the "a module must not import a sibling module" rule reported 61
 violations, nearly all of them imports a module makes *inside itself*
@@ -329,6 +348,8 @@ before anything else. The fix is a fresh token in Settings (written to
 
 ## Session Notes
 
+- 2026-11-05 — L08 Skill Stats (server): skill reads added to `modules/agent-performance` (D-1); pr-gate found an upper date bound gap and a schema-bound race (clamp).
+- 2026-11-05 — L08 Agent Performance (server): new read-only `modules/agent-performance` (one fold for dashboard row and Stats, R-01); pr-gate found tz/date inputs Postgres rejects behind a green zod — probe + 1970 bound.
 - 2026-11-01 — L05 PR Brief (server): only model-call errors keep provider text; JobRunner-wall deadline for the single brief call.
 - 2026-11-01 — L05 Onboarding Tour: new `modules/onboarding`, repo-intel facade reads + `countIndexedFiles`, incremental coverage fixes; one-shot LLM job on JobRunner with a never-throwing handler.
 

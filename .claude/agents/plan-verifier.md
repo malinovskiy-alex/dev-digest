@@ -175,6 +175,10 @@ directory:
 node ../scripts/verify.mjs --baseline <slug>          # add --it when the plan has DB work
 ```
 
+Run it in the **foreground** with a long Bash `timeout` (the `--it` suite takes
+minutes). Never background it and then `sleep`/poll its output file — `sleep` is
+blocked here and `Monitor` is not among your tools; both failed in the L08 run.
+
 It runs that package's typecheck, `arch`, suite and (for `mcp/`) build, and
 labels each failure `baseline` or `new` against
 `.devdigest/cache/verify/<slug>.<pkg>.json`, written by `implementer` before the

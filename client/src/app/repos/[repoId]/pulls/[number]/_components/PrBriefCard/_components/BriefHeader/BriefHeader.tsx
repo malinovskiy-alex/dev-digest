@@ -13,7 +13,7 @@ import { formatCostUsd } from "@/lib/format-cost";
 import { shortSha } from "@/lib/short-sha";
 import { NOW_TICK_MS } from "../../constants";
 import { formatTokensK, generatedAt, isTrimmed, trimLines } from "../../helpers";
-import { HoverNote } from "../HoverNote";
+import { HoverNote } from "@/components/hover-note";
 import { cx } from "./styles";
 
 export function BriefHeader({

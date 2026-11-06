@@ -93,6 +93,7 @@ export type MultiAgentRun = z.infer<typeof MultiAgentRun>;
 export const StatPoint = z.object({ label: z.string(), value: z.number() });
 export type StatPoint = z.infer<typeof StatPoint>;
 
+/** @deprecated unused — see contracts/agent-performance.ts (L08). */
 export const AgentStats = z.object({
   agent_id: z.string(),
   agent_name: z.string(),

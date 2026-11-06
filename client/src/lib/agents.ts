@@ -11,3 +11,14 @@ export function filterAgents(agents: Agent[], search: string): Agent[] {
   if (!q) return agents;
   return agents.filter((a) => `${a.name} ${a.description}`.toLowerCase().includes(q));
 }
+
+/**
+ * The agent editor's address for `agentId` on `tab`, keeping every other key of
+ * the current address — the Stats tab's `range`/`start`/`end`/`at` among them —
+ * so switching tab or switching agent keeps the applied range (L08 R-84, F-13).
+ */
+export function agentEditorHref(agentId: string, tab: string, current: { toString(): string }): string {
+  const sp = new URLSearchParams(current.toString());
+  sp.set("tab", tab);
+  return `/agents/${encodeURIComponent(agentId)}?${sp.toString()}`;
+}

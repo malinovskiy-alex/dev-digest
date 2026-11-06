@@ -77,6 +77,16 @@ export function useUpdateAgent() {
   });
 }
 
+/**
+ * Deleting an agent cascades its `agent_skills` rows away, so the skill side
+ * moves exactly as on a detach (F-23, same keys as `useSetAgentSkills`):
+ * `agent_count` on the list and on one skill, the Stats tab and the cards'
+ * pull frequency (`staleTime: Infinity` — only an invalidation re-reads it).
+ *
+ * `useCreateAgent` needs none of this: `POST /agents` takes no skills
+ * (`CreateAgentBody` in `server/src/modules/agents/routes.ts`), a new agent has
+ * none until `useSetAgentSkills` attaches them.
+ */
 export function useDeleteAgent() {
   const qc = useQueryClient();
   return useMutation({
@@ -84,6 +94,8 @@ export function useDeleteAgent() {
     onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["agents"] });
       qc.removeQueries({ queryKey: ["agent", id] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skill"] });
     },
   });
 }
@@ -120,6 +132,12 @@ export interface AgentSkillEntry {
  *
  * This does not touch `agents.version`; the agent queries are invalidated
  * because `skill_count` rides on the DTO and the cards render it.
+ *
+ * The skill side moves too (F-16): `agent_count` on the skill list and on one
+ * skill (`["skill", id]`, the editor's "Used by" badge), and every key under the
+ * `["skills"]` prefix — the list, the Stats tab (`["skills","stats",…]`) and the
+ * cards' pull frequency (`["skills","pull-frequency",tz]`, see
+ * `hooks/skill-stats.ts`), whose figures follow the current attachment.
  */
 export function useSetAgentSkills() {
   const qc = useQueryClient();
@@ -130,6 +148,8 @@ export function useSetAgentSkills() {
       qc.setQueryData(["agent-skills", agentId], data);
       qc.invalidateQueries({ queryKey: ["agent", agentId] });
       qc.invalidateQueries({ queryKey: ["agents"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skill"] });
     },
   });
 }

@@ -30,7 +30,8 @@ export interface NavGroup {
  * `g c` shortcuts below, and the WORKSPACE "Project Context" item (L05,
  * `/repos/:repoId/context`, no shortcut) and the WORKSPACE "Onboarding Tour"
  * item between Pull Requests and Project Context (L05,
- * `/repos/:repoId/tour`, no shortcut).
+ * `/repos/:repoId/tour`, no shortcut), and the GLOBAL group with
+ * "Agent Performance" (L08, `/agent-performance`, repo-independent, no shortcut).
  */
 export const NAV: NavGroup[] = [
   {
@@ -48,6 +49,10 @@ export const NAV: NavGroup[] = [
       { key: "agents", label: "Agents", icon: "Cpu", href: "/agents", gKey: "a" },
       { key: "conventions", label: "Conventions", icon: "ListChecks", href: "/repos/:repoId/conventions", gKey: "c" },
     ],
+  },
+  {
+    section: "GLOBAL",
+    items: [{ key: "agent-performance", label: "Agent Performance", icon: "Activity", href: "/agent-performance" }],
   },
 ];
 

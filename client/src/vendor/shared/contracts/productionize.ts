@@ -170,7 +170,10 @@ export const PerfCostSegment = z.object({
 });
 export type PerfCostSegment = z.infer<typeof PerfCostSegment>;
 
-/** Response of GET /agents/performance. */
+/**
+ * Response of GET /agents/performance.
+ * @deprecated unused — see contracts/agent-performance.ts (L08).
+ */
 export const AgentPerf = z.object({
   summary: z.object({
     runs: z.number().int(),

@@ -147,8 +147,9 @@ never `approve` while reporting a CRITICAL.
 ## Count the baseline, do not quote it
 
 `server/.dependency-cruiser-known-violations.json` holds **21** entries as of this
-writing, while `do-not-flag.md`, `gates.md` and `severity-map.md` all say **25**
-and the `onion-architecture` skill says 21.
+writing; `do-not-flag.md`, `gates.md`, `severity-map.md` and the
+`onion-architecture` skill say 21 too (the references said 25 until `e746aec`).
+The number drifts whenever a violation is fixed or grandfathered.
 
 So: **count the file yourself** and report the number you counted.
 

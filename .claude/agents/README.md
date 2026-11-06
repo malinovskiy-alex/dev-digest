@@ -77,7 +77,9 @@ the first edit. Only `implementer` passes `--save-baseline`.
 
 **`/run-plan <plan>` runs everything after the plan**
 ([`../skills/run-plan/SKILL.md`](../skills/run-plan/SKILL.md)). `spec-creator` and
-`implementation-planner` are run by hand first. By default `implementer` also writes
+`implementation-planner` are run by hand first — one after the other, never at the
+same time on the same requirements (a planner that re-reads a spec mid-edit misses
+the new IDs). By default `implementer` also writes
 the plan's tests (one agent that already holds the code is cheaper than a second
 one re-reading it) — `--test-writer` brings `test-writer` back, `--docs` adds
 `doc-writer`. It keeps the findings ledger and the review → fix loop, and resumes

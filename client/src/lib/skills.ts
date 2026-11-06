@@ -31,3 +31,15 @@ const TYPE_COLOR: Record<SkillType, string> = {
 export function typeColor(type: SkillType): string {
   return TYPE_COLOR[type];
 }
+
+/**
+ * The skill editor's address for `skillId` on `tab`, keeping every other key of
+ * the current address — the Stats tab's `range`/`start`/`end`/`at` among them —
+ * so switching tab or switching skill keeps the applied range (L08 skill-stats
+ * R-29, R-53). The twin of `agentEditorHref` in `lib/agents.ts`.
+ */
+export function skillEditorHref(skillId: string, tab: string, current: { toString(): string }): string {
+  const sp = new URLSearchParams(current.toString());
+  sp.set("tab", tab);
+  return `/skills/${encodeURIComponent(skillId)}?${sp.toString()}`;
+}
